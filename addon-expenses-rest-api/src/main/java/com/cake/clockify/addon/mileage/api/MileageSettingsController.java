@@ -2,6 +2,7 @@ package com.cake.clockify.addon.mileage.api;
 
 import com.cake.clockify.addon.core.auth.NormalizedClaims;
 import com.cake.clockify.addon.core.auth.RequestAttributes;
+import com.cake.clockify.addon.db.service.AddonInstallationService;
 import com.cake.clockify.addon.mileage.api.model.MileageCategoryOptionsResponse;
 import com.cake.clockify.addon.mileage.api.model.MileageDiagnosticsResponse;
 import com.cake.clockify.addon.mileage.api.model.MileageSettingsRequest;
@@ -17,20 +18,25 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 @RestController
 public class MileageSettingsController {
     private final MileageSettingsService settingsService;
     private final ClockifyExpenseGateway gateway;
     private final MileageAuthorizationService authorizationService;
+    private final AddonInstallationService installationService;
 
     public MileageSettingsController(
             MileageSettingsService settingsService,
             ClockifyExpenseGateway gateway,
-            MileageAuthorizationService authorizationService) {
+            MileageAuthorizationService authorizationService,
+            AddonInstallationService installationService) {
         this.settingsService = settingsService;
         this.gateway = gateway;
         this.authorizationService = authorizationService;
+        this.installationService = installationService;
     }
 
     @GetMapping("/api/mileage/settings")
@@ -59,11 +65,16 @@ public class MileageSettingsController {
     public ResponseEntity<MileageDiagnosticsResponse> diagnostics(HttpServletRequest request) {
         NormalizedClaims claims = adminClaims(request);
         MileageSettingsResponse settings = settingsService.getEffectiveSettings(claims.workspaceId());
+        boolean installationAvailable = installationService.isInstalled(claims.workspaceId());
+        List<String> warnings = new ArrayList<>(settings.diagnostics());
+        if (!installationAvailable) {
+            warnings.add(0, "installation record is missing; reinstall the add-on before publishing or testing native conversion");
+        }
         return ResponseEntity.ok(new MileageDiagnosticsResponse(
-                true,
+                installationAvailable,
                 settings.completeForAddonCreate(),
                 settings.completeForNativeConversion(),
-                settings.diagnostics()));
+                List.copyOf(warnings)));
     }
 
     private NormalizedClaims adminClaims(HttpServletRequest request) {

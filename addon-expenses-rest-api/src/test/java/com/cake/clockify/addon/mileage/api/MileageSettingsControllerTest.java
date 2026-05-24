@@ -2,6 +2,7 @@ package com.cake.clockify.addon.mileage.api;
 
 import com.cake.clockify.addon.core.auth.NormalizedClaims;
 import com.cake.clockify.addon.core.auth.RequestAttributes;
+import com.cake.clockify.addon.db.service.AddonInstallationService;
 import com.cake.clockify.addon.mileage.clockify.ClockifyCategoryOption;
 import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseGateway;
 import com.cake.clockify.addon.mileage.security.MileageAuthorizationService;
@@ -33,16 +34,19 @@ class MileageSettingsControllerTest {
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
     private MileageSettingsService settingsService;
     private ClockifyExpenseGateway gateway;
+    private AddonInstallationService installationService;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         settingsService = mock(MileageSettingsService.class);
         gateway = mock(ClockifyExpenseGateway.class);
+        installationService = mock(AddonInstallationService.class);
         MileageSettingsController controller = new MileageSettingsController(
                 settingsService,
                 gateway,
-                new MileageAuthorizationService());
+                new MileageAuthorizationService(),
+                installationService);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new MileageExceptionHandler(objectMapper))
                 .build();
@@ -101,6 +105,7 @@ class MileageSettingsControllerTest {
     void diagnosticsReportsMissingSettings() throws Exception {
         when(settingsService.getEffectiveSettings("ws-admin")).thenReturn(settingsResponse(List.of(
                 "rate is required", "outputCategoryId is required")));
+        when(installationService.isInstalled("ws-admin")).thenReturn(true);
 
         mockMvc.perform(get("/api/mileage/diagnostics")
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("ADMIN")))
@@ -109,6 +114,18 @@ class MileageSettingsControllerTest {
                 .andExpect(jsonPath("$.settingsComplete").value(true))
                 .andExpect(jsonPath("$.nativeConversionReady").value(false))
                 .andExpect(jsonPath("$.warnings[0]").value("rate is required"));
+    }
+
+    @Test
+    void diagnosticsReportsMissingInstallation() throws Exception {
+        when(settingsService.getEffectiveSettings("ws-admin")).thenReturn(settingsResponse(List.of()));
+        when(installationService.isInstalled("ws-admin")).thenReturn(false);
+
+        mockMvc.perform(get("/api/mileage/diagnostics")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.installationAvailable").value(false))
+                .andExpect(jsonPath("$.warnings[0]").value("installation record is missing; reinstall the add-on before publishing or testing native conversion"));
     }
 
     private static com.cake.clockify.addon.mileage.api.model.MileageSettingsResponse settingsResponse(List<String> diagnostics) {
