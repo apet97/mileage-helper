@@ -100,6 +100,8 @@ Live sacrificial Clockify checks may use shell environment variables such as `CL
 
 ## Verification Expectations
 
+Before claiming pre-publish readiness, complete `addon-expenses-rest-api/docs/PRE_PUBLISH_CHECKLIST.md` and paste the exact command outputs into the session summary.
+
 For documentation-only changes:
 
 ```bash

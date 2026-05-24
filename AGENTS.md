@@ -50,6 +50,8 @@ mvn -pl addon-expenses-rest-api -am clean test
 docker compose -f addon-expenses-rest-api/docker-compose.yml build
 ```
 
+Before Marketplace submission, also complete [addon-expenses-rest-api/docs/PRE_PUBLISH_CHECKLIST.md](addon-expenses-rest-api/docs/PRE_PUBLISH_CHECKLIST.md).
+
 If local port `5432` is already in use, keep Postgres internal while running the Docker stack:
 
 ```bash
