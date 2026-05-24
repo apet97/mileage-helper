@@ -188,6 +188,33 @@
     });
   }
 
+  function appendOption(select, value, label) {
+    select.appendChild(new Option(label, value || ""));
+  }
+
+  function loadProjects() {
+    return apiFetch("/api/mileage/options/projects").then(data => {
+      const project = document.getElementById("field-project");
+      project.replaceChildren();
+      appendOption(project, "", "No project");
+      (data.projects || []).forEach(item => appendOption(project, item.id, item.name));
+    }).catch(error => toast(error.message, "error"));
+  }
+
+  function loadTasks(projectId) {
+    const task = document.getElementById("field-task");
+    task.replaceChildren();
+    appendOption(task, "", "No task");
+    task.disabled = !projectId;
+    if (!projectId) {
+      return Promise.resolve();
+    }
+    return apiFetch("/api/mileage/options/tasks?projectId=" + encodeURIComponent(projectId)).then(data => {
+      (data.tasks || []).forEach(item => appendOption(task, item.id, item.name));
+      task.disabled = false;
+    }).catch(error => toast(error.message, "error"));
+  }
+
   function loadSettings() {
     Promise.all([apiFetch("/api/mileage/settings"), loadCategories()])
       .then(([settings]) => {
@@ -277,7 +304,12 @@
   document.getElementById("settings-form").addEventListener("submit", saveSettings);
   document.getElementById("btn-refresh-conversions").addEventListener("click", loadConversions);
   document.getElementById("btn-refresh-diagnostics").addEventListener("click", loadDiagnostics);
+  const projectSelect = document.getElementById("field-project");
+  if (projectSelect) {
+    projectSelect.addEventListener("change", () => loadTasks(projectSelect.value));
+  }
 
   applyRoleGate();
+  loadProjects();
   renderSessionRows();
 })();

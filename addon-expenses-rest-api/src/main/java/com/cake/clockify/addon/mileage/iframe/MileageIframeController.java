@@ -36,8 +36,8 @@ public class MileageIframeController {
                     <form id="mileage-form" class="form-grid">
                       <label><span>Date</span><input id="field-date" name="date" type="date" required></label>
                       <input id="field-user" name="userId" type="hidden" required>
-                      <label><span>Project ID</span><input id="field-project" name="projectId" autocomplete="off"></label>
-                      <label><span>Task ID</span><input id="field-task" name="taskId" autocomplete="off"></label>
+                      <label><span>Project</span><select id="field-project" name="projectId"><option value="">No project</option></select></label>
+                      <label><span>Task</span><select id="field-task" name="taskId" disabled><option value="">No task</option></select></label>
                       <label><span>Miles</span><input id="field-miles" name="miles" inputmode="decimal" required></label>
                       <label><span>Rate override</span><input id="field-rate" name="rate" inputmode="decimal"></label>
                       <label class="wide"><span>Notes</span><textarea id="field-notes" name="notes" rows="4"></textarea></label>

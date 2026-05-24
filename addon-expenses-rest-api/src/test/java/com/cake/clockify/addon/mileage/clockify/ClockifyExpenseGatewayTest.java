@@ -4,6 +4,8 @@ import com.cake.clockify.addon.db.service.ClockifyClientFactory;
 import com.cake.clockify.client.ClockifyClient;
 import com.cake.clockify.client.ClockifyPageRequest;
 import com.cake.clockify.client.domains.ExpensesClient;
+import com.cake.clockify.client.domains.ProjectsClient;
+import com.cake.clockify.client.domains.TasksClient;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -27,6 +29,8 @@ class ClockifyExpenseGatewayTest {
     private ClockifyClientFactory clientFactory;
     private ClockifyClient client;
     private ExpensesClient expensesClient;
+    private ProjectsClient projectsClient;
+    private TasksClient tasksClient;
     private ClockifyExpenseGateway gateway;
 
     @BeforeEach
@@ -34,8 +38,12 @@ class ClockifyExpenseGatewayTest {
         clientFactory = mock(ClockifyClientFactory.class);
         client = mock(ClockifyClient.class);
         expensesClient = mock(ExpensesClient.class);
+        projectsClient = mock(ProjectsClient.class);
+        tasksClient = mock(TasksClient.class);
         when(clientFactory.getClient("ws-gateway")).thenReturn(client);
         when(client.expenses()).thenReturn(expensesClient);
+        when(client.projects()).thenReturn(projectsClient);
+        when(client.tasks()).thenReturn(tasksClient);
         gateway = new ClockifyExpenseGateway(clientFactory, objectMapper);
     }
 
@@ -132,6 +140,32 @@ class ClockifyExpenseGatewayTest {
         assertThat(gateway.listCategories("ws-gateway"))
                 .extracting(ClockifyCategoryOption::type)
                 .containsExactly("UNIT", "FLAT");
+    }
+
+    @Test
+    void listProjectsSkipsArchivedProjects() throws Exception {
+        var projects = objectMapper.createArrayNode();
+        projects.addObject().put("id", "project-1").put("name", "Client Visit").put("archived", false);
+        projects.addObject().put("id", "project-archived").put("name", "Old Client").put("archived", true);
+        when(projectsClient.getProjects(eq("ws-gateway"), any(ClockifyPageRequest.class))).thenReturn(projects);
+
+        assertThat(gateway.listProjects("ws-gateway"))
+                .containsExactly(new ClockifyProjectOption("project-1", "Client Visit"));
+    }
+
+    @Test
+    void listTasksReturnsEmptyWhenProjectIsBlank() throws Exception {
+        assertThat(gateway.listTasks("ws-gateway", "")).isEmpty();
+    }
+
+    @Test
+    void listTasksMapsTaskOptions() throws Exception {
+        var tasks = objectMapper.createArrayNode();
+        tasks.addObject().put("id", "task-1").put("name", "Onsite work");
+        when(tasksClient.getTasks(eq("ws-gateway"), eq("project-1"), any(ClockifyPageRequest.class))).thenReturn(tasks);
+
+        assertThat(gateway.listTasks("ws-gateway", "project-1"))
+                .containsExactly(new ClockifyTaskOption("task-1", "Onsite work"));
     }
 
     @Test
