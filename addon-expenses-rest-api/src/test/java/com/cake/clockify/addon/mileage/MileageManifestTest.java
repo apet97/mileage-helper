@@ -87,6 +87,23 @@ class MileageManifestTest {
         assertThat(manifest.getSchemaVersion()).isEqualTo("1.5");
     }
 
+    @Test
+    void manifestIconAssetIsPackaged() throws Exception {
+        String body = mockMvc.perform(get("/manifest"))
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+
+        JsonNode manifestJson = objectMapper.readTree(body);
+        String iconPath = manifestJson.path("iconPath").asText();
+        Path asset = Path.of("src/main/resources/static" + iconPath);
+
+        assertThat(iconPath).isEqualTo("/assets/mileage/icon.png");
+        assertThat(asset).exists().isRegularFile();
+        assertThat(Files.size(asset)).isGreaterThan(1024L);
+    }
+
     private static Set<String> values(JsonNode array) {
         Set<String> out = new HashSet<>();
         array.forEach(item -> out.add(item.asText()));
