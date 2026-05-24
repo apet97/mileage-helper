@@ -19,7 +19,7 @@ spring:
 addon:
   key: ${ADDON_KEY:mileage-for-clockify}
   name: ${ADDON_NAME:Mileage for Clockify}
-  description: ${ADDON_DESCRIPTION:Create and convert precise mileage reimbursements into real Clockify flat expenses.}
+  description: ${ADDON_DESCRIPTION:Create and convert precise mileage reimbursements in Clockify.}
   base-url: ${ADDON_BASE_URL}
   enable-hsts: ${ADDON_ENABLE_HSTS:true}
   crypto:

@@ -100,17 +100,57 @@ class MileageConversionServiceTest {
 
         ArgumentCaptor<UpdateFlatExpenseCommand> command = ArgumentCaptor.forClass(UpdateFlatExpenseCommand.class);
         verify(gateway).updateFlatExpense(eq("ws-native"), eq("exp-1"), command.capture());
-        assertThat(command.getValue().categoryId()).isEqualTo("cat-output");
+        assertThat(command.getValue().categoryId()).isEqualTo("cat-mileage");
         assertThat(command.getValue().userId()).isEqualTo("user-1");
         assertThat(command.getValue().date()).isEqualTo("2026-05-24T12:00:00Z");
         assertThat(command.getValue().projectId()).isEqualTo("project-1");
         assertThat(command.getValue().taskId()).isEqualTo("task-1");
         assertThat(command.getValue().billable()).isTrue();
-        assertThat(command.getValue().amount()).isEqualByComparingTo(new BigDecimal("24.50"));
+        assertThat(command.getValue().amount()).isEqualByComparingTo(new BigDecimal("37.4"));
+        assertThat(command.getValue().amountIsQuantity()).isTrue();
     }
 
     @Test
-    void conversionAppendsMarker() throws Exception {
+    void distinctCategoryConversionSendsRoundedExpenseAmount() throws Exception {
+        when(settingsService.validateForNativeConversion("ws-native")).thenReturn(distinctCategorySettings(false));
+        when(conversionRepository.findByWorkspaceIdAndExpenseId("ws-native", "exp-1")).thenReturn(Optional.empty());
+        when(gateway.getExpense("ws-native", "exp-1")).thenReturn(distinctInputExpense("exp-1"));
+        when(gateway.updateFlatExpense(eq("ws-native"), eq("exp-1"), any(UpdateFlatExpenseCommand.class)))
+                .thenReturn(objectMapper.createObjectNode().put("id", "exp-1"));
+
+        service.convertIfEligible(claims(), "exp-1", MileageConversionSource.WEBHOOK_CREATED, "EXPENSE_CREATED");
+
+        ArgumentCaptor<UpdateFlatExpenseCommand> command = ArgumentCaptor.forClass(UpdateFlatExpenseCommand.class);
+        verify(gateway).updateFlatExpense(eq("ws-native"), eq("exp-1"), command.capture());
+        assertThat(command.getValue().categoryId()).isEqualTo("cat-output");
+        assertThat(command.getValue().amount()).isEqualByComparingTo(new BigDecimal("24.50"));
+        assertThat(command.getValue().amountIsQuantity()).isFalse();
+    }
+
+    @Test
+    void conversionReplacesNativeNoteWithCleanExactGeneratedNote() throws Exception {
+        when(settingsService.validateForNativeConversion("ws-native")).thenReturn(new MileageSettingsValidation(
+                "ws-native", true, true, new BigDecimal("0.725"), "mile",
+                "cat-mileage", "cat-mileage", RoundingMode.HALF_UP, true, true, false, false, false, null, List.of()));
+        when(conversionRepository.findByWorkspaceIdAndExpenseId("ws-native", "exp-1")).thenReturn(Optional.empty());
+        when(gateway.getExpense("ws-native", "exp-1")).thenReturn(new ClockifyExpenseSnapshot(
+                "exp-1", "ws-native", "user-1", "2026-05-24T12:00:00Z", "project-1", "task-1",
+                "cat-mileage", "Native mileage", new BigDecimal("1"), true, null, null, false));
+        when(gateway.updateFlatExpense(eq("ws-native"), eq("exp-1"), any(UpdateFlatExpenseCommand.class)))
+                .thenReturn(objectMapper.createObjectNode().put("id", "exp-1"));
+
+        service.convertIfEligible(claims(), "exp-1", MileageConversionSource.WEBHOOK_CREATED, "EXPENSE_CREATED");
+
+        ArgumentCaptor<UpdateFlatExpenseCommand> command = ArgumentCaptor.forClass(UpdateFlatExpenseCommand.class);
+        verify(gateway).updateFlatExpense(eq("ws-native"), eq("exp-1"), command.capture());
+        assertThat(command.getValue().amount()).isEqualByComparingTo(new BigDecimal("1"));
+        assertThat(command.getValue().amountIsQuantity()).isTrue();
+        assertThat(command.getValue().notes())
+                .isEqualTo("Mileage reimbursement: 1 mile x 0.725 = 0.725. Created/converted by Mileage for Clockify.");
+    }
+
+    @Test
+    void singleCategoryMileageExpenseDoesNotSkipAsAlreadyOutputCategory() throws Exception {
         when(settingsService.validateForNativeConversion("ws-native")).thenReturn(settings(false));
         when(conversionRepository.findByWorkspaceIdAndExpenseId("ws-native", "exp-1")).thenReturn(Optional.empty());
         when(gateway.getExpense("ws-native", "exp-1")).thenReturn(inputExpense("exp-1"));
@@ -121,8 +161,7 @@ class MileageConversionServiceTest {
 
         ArgumentCaptor<UpdateFlatExpenseCommand> command = ArgumentCaptor.forClass(UpdateFlatExpenseCommand.class);
         verify(gateway).updateFlatExpense(eq("ws-native"), eq("exp-1"), command.capture());
-        assertThat(command.getValue().notes()).contains("[MileageAddon:converted:v1");
-        assertThat(command.getValue().notes()).contains("Native mileage");
+        assertThat(command.getValue().categoryId()).isEqualTo("cat-mileage");
     }
 
     @Test
@@ -153,7 +192,7 @@ class MileageConversionServiceTest {
 
     @Test
     void outputCategoryPreventsSecondUpdate() throws Exception {
-        when(settingsService.validateForNativeConversion("ws-native")).thenReturn(settings(false));
+        when(settingsService.validateForNativeConversion("ws-native")).thenReturn(distinctCategorySettings(false));
         when(conversionRepository.findByWorkspaceIdAndExpenseId("ws-native", "exp-1")).thenReturn(Optional.empty());
         when(gateway.getExpense("ws-native", "exp-1")).thenReturn(outputExpense("exp-1"));
 
@@ -257,11 +296,21 @@ class MileageConversionServiceTest {
     }
 
     private static MileageSettingsValidation settings(boolean dryRun) {
-        return new MileageSettingsValidation("ws-native", true, true, new BigDecimal("0.655"), "mi",
-                "cat-input", "cat-output", RoundingMode.HALF_UP, true, true, true, dryRun, false, null, List.of());
+        return new MileageSettingsValidation("ws-native", true, true, new BigDecimal("0.655"), "mile",
+                "cat-mileage", "cat-mileage", RoundingMode.HALF_UP, true, true, false, dryRun, false, null, List.of());
+    }
+
+    private static MileageSettingsValidation distinctCategorySettings(boolean dryRun) {
+        return new MileageSettingsValidation("ws-native", true, true, new BigDecimal("0.655"), "mile",
+                "cat-input", "cat-output", RoundingMode.HALF_UP, true, true, false, dryRun, false, null, List.of());
     }
 
     private static ClockifyExpenseSnapshot inputExpense(String id) {
+        return new ClockifyExpenseSnapshot(id, "ws-native", "user-1", "2026-05-24T12:00:00Z", "project-1", "task-1",
+                "cat-mileage", "Native mileage", new BigDecimal("37.4"), true, null, null, false);
+    }
+
+    private static ClockifyExpenseSnapshot distinctInputExpense(String id) {
         return new ClockifyExpenseSnapshot(id, "ws-native", "user-1", "2026-05-24T12:00:00Z", "project-1", "task-1",
                 "cat-input", "Native mileage", new BigDecimal("37.4"), true, null, null, false);
     }

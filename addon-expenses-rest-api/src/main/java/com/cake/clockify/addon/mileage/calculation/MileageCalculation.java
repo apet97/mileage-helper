@@ -19,7 +19,7 @@ public record MileageCalculation(
     }
 
     public String calculatedAmountText() {
-        return calculatedAmount.toPlainString();
+        return calculatedAmount.stripTrailingZeros().toPlainString();
     }
 
     public String roundedAmountText() {

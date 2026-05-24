@@ -26,12 +26,12 @@ class MileageNoteServiceTest {
     }
 
     @Test
-    void appendsHumanFormulaAndMarkerToBlankNote() {
+    void rendersExactCleanNoteWithoutVisibleMarkerOrExpenseAmountLine() {
         String note = service.buildConvertedNote("", calculation, "mi", conversionId, true, null);
 
-        assertThat(note).contains("Mileage reimbursement: 37.4 mi x 0.655 = 24.4970.");
-        assertThat(note).contains("Expense amount: 24.50.");
-        assertThat(note).contains(service.marker(conversionId));
+        assertThat(note).isEqualTo("Mileage reimbursement: 37.4 miles x 0.655 = 24.497. Created/converted by Mileage for Clockify.");
+        assertThat(note).doesNotContain("Expense amount");
+        assertThat(note).doesNotContain("[MileageAddon");
     }
 
     @Test
@@ -39,14 +39,28 @@ class MileageNoteServiceTest {
         String note = service.buildConvertedNote("", calculation, "mi", conversionId, true,
                 "{{calculatedAmount}} / {{roundedAmount}} / {{amount}} / {{marker}}");
 
-        assertThat(note).contains("24.4970 / 24.50 / 24.50 / " + service.marker(conversionId));
+        assertThat(note).contains("24.497 / 24.50 / 24.50 / " + service.marker(conversionId));
+    }
+
+    @Test
+    void usesSingularMileForOneMileAndExactCalculatedAmount() {
+        MileageCalculation oneMile = new MileageCalculation(
+                new BigDecimal("1"),
+                new BigDecimal("0.725"),
+                new BigDecimal("0.725"),
+                new BigDecimal("0.73"),
+                RoundingMode.HALF_UP);
+
+        String note = service.buildConvertedNote("Native note that should be replaced", oneMile, "mile", conversionId, true, null);
+
+        assertThat(note).isEqualTo("Mileage reimbursement: 1 mile x 0.725 = 0.725. Created/converted by Mileage for Clockify.");
     }
 
     @Test
     void preservesOriginalNoteWhenConfigured() {
         String note = service.buildConvertedNote("Client site visit", calculation, "mi", conversionId, true, null);
 
-        assertThat(note).startsWith("Client site visit\n\nMileage reimbursement");
+        assertThat(note).isEqualTo("Mileage reimbursement: 37.4 miles x 0.655 = 24.497. Created/converted by Mileage for Clockify.");
     }
 
     @Test

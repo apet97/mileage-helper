@@ -192,6 +192,41 @@ class MileageSecurityTest {
         assertThat(javascript).contains("Expense amount: \" + roundedAmount");
     }
 
+    @Test
+    void settingsIframeUsesSingleMileageCategorySetupAndHidesLegacyControls() {
+        String html = new MileageIframeController().settings(requestWithRole("OWNER")).getBody();
+
+        assertThat(html).contains("id=\"settings-mileage-category\"");
+        assertThat(html).contains("id=\"btn-setup-mileage-category\"");
+        assertThat(html).doesNotContain("id=\"settings-unit\"");
+        assertThat(html).doesNotContain("id=\"settings-input-category\"");
+        assertThat(html).doesNotContain("id=\"settings-output-category\"");
+        assertThat(html).doesNotContain("id=\"settings-rounding\"");
+        assertThat(html).doesNotContain("id=\"settings-template\"");
+        assertThat(html).doesNotContain("id=\"settings-dry-run\"");
+    }
+
+    @Test
+    void mileageJavascriptUsesReadableNamesDatesSourcesAndSingleCategorySettings() throws Exception {
+        String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
+
+        assertThat(javascript).contains("userName");
+        assertThat(javascript).contains("sourceLabel");
+        assertThat(javascript).contains("formatDate");
+        assertThat(javascript).contains("Intl.DateTimeFormat(\"en-US\"");
+        assertThat(javascript).contains("mileageCategoryId");
+        assertThat(javascript).contains("/api/mileage/settings/mileage-category");
+    }
+
+    @Test
+    void mileageCssHidesEmptyPreviewAndWarningsContainers() throws Exception {
+        String css = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.css"));
+
+        assertThat(css).contains(".result-strip:empty");
+        assertThat(css).contains(".warnings:empty");
+        assertThat(css).contains("display: none");
+    }
+
     private static MockHttpServletRequest requestWithRole(String role) {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setAttribute(com.cake.clockify.addon.core.auth.RequestAttributes.NORMALIZED_CLAIMS, claims(role));

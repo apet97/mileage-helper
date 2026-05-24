@@ -29,7 +29,7 @@ services:
       SPRING_DATASOURCE_PASSWORD: password
       ADDON_KEY: mileage-for-clockify
       ADDON_NAME: Mileage for Clockify
-      ADDON_DESCRIPTION: Create and convert precise mileage reimbursements into real Clockify flat expenses.
+      ADDON_DESCRIPTION: Create and convert precise mileage reimbursements in Clockify.
       ADDON_BASE_URL: http://localhost:8080
       # Secret key for encrypting data at rest (AES-GCM-256 requires 32 bytes hex = 64 characters)
       ADDON_CRYPTO_KEY_K1: 00000000000000000000000000000000000000000000000000000000000000aa

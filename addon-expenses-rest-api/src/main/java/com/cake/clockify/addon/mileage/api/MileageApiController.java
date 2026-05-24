@@ -38,6 +38,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
@@ -131,10 +132,11 @@ public class MileageApiController {
                 LocalDate.parse(required("date", request.date())),
                 blankToNull(request.projectId()),
                 null,
-                calculation.roundedAmount(),
+                clockifyExpenseAmount(settings, calculation),
                 billableOrDefault(request.billable()),
                 note,
-                settings.roundingMode());
+                settings.roundingMode(),
+                singleMileageCategory(settings));
         JsonNode response = createClockifyExpense(workspaceId, command, file);
         String expenseId = response.path("id").asText(null);
         if (expenseId == null || expenseId.isBlank()) {
@@ -187,6 +189,19 @@ public class MileageApiController {
                 ? requestedRate
                 : settings.rate().toPlainString();
         return calculator.calculate(miles, rate, settings.roundingMode());
+    }
+
+    private static java.math.BigDecimal clockifyExpenseAmount(
+            MileageSettingsValidation settings,
+            MileageCalculation calculation) {
+        if (singleMileageCategory(settings)) {
+            return calculation.miles();
+        }
+        return calculation.roundedAmount();
+    }
+
+    private static boolean singleMileageCategory(MileageSettingsValidation settings) {
+        return Objects.equals(settings.inputCategoryId(), settings.outputCategoryId());
     }
 
     private static CreateMileageExpenseRequest requestFromMultipart(Map<String, String> params) {

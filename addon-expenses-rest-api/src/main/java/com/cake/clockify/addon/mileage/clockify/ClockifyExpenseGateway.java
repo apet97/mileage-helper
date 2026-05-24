@@ -3,6 +3,7 @@ package com.cake.clockify.addon.mileage.clockify;
 import com.cake.clockify.addon.db.service.ClockifyClientFactory;
 import com.cake.clockify.client.ClockifyClient;
 import com.cake.clockify.client.ClockifyPageRequest;
+import com.cake.clockify.client.models.User;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -19,6 +20,9 @@ import java.util.List;
 public class ClockifyExpenseGateway {
     private static final int CATEGORY_PAGE_SIZE = 200;
     private static final int PROJECT_PAGE_SIZE = 200;
+    private static final int USER_PAGE_SIZE = 200;
+    private static final String MILEAGE_CATEGORY_NAME = "Mileage";
+    private static final String MILEAGE_UNIT = "mile";
 
     private final ClockifyClientFactory clientFactory;
     private final ObjectMapper objectMapper;
@@ -70,7 +74,7 @@ public class ClockifyExpenseGateway {
         if (command.billable() != null) {
             body.put("billable", command.billable());
         }
-        body.put("amount", amountText(command.amount(), command.roundingMode()));
+        body.put("amount", amountText(command.amount(), command.roundingMode(), command.amountIsQuantity()));
         body.put("notes", command.notes() == null ? "" : command.notes());
         body.put("changeFields", "CATEGORY,AMOUNT,NOTES");
         return client(workspaceId).expenses().updateExpense(workspaceId, expenseId, body);
@@ -82,16 +86,30 @@ public class ClockifyExpenseGateway {
         List<ClockifyCategoryOption> out = new ArrayList<>();
         if (categories instanceof ArrayNode array) {
             for (JsonNode item : array) {
-                boolean hasUnitPrice = item.path("hasUnitPrice").asBoolean(false);
-                out.add(new ClockifyCategoryOption(
-                        text(item, "id"),
-                        text(item, "name"),
-                        hasUnitPrice ? "UNIT" : "FLAT",
-                        text(item, "unit"),
-                        decimal(item.get("priceInCents"))));
+                out.add(categoryOption(item));
             }
         }
         return out;
+    }
+
+    public ClockifyCategoryOption createOrRepairMileageCategory(String workspaceId, BigDecimal rate)
+            throws IOException, InterruptedException {
+        BigDecimal priceInCents = rate == null
+                ? BigDecimal.ZERO
+                : rate.movePointRight(2).setScale(0, RoundingMode.HALF_UP);
+        ObjectNode body = mileageCategoryBody(priceInCents);
+        ClockifyCategoryOption existing = listCategories(workspaceId).stream()
+                .filter(category -> MILEAGE_CATEGORY_NAME.equalsIgnoreCase(category.name()))
+                .findFirst()
+                .orElse(null);
+        JsonNode response = existing == null
+                ? client(workspaceId).expenses().createCategory(workspaceId, body)
+                : client(workspaceId).expenses().updateCategory(workspaceId, existing.id(), body);
+        ClockifyCategoryOption option = categoryOption(response);
+        if (option.id() == null && existing != null) {
+            return existing;
+        }
+        return option;
     }
 
     public List<ClockifyProjectOption> listProjects(String workspaceId) throws IOException, InterruptedException {
@@ -104,6 +122,15 @@ public class ClockifyExpenseGateway {
                     out.add(new ClockifyProjectOption(text(item, "id"), text(item, "name")));
                 }
             }
+        }
+        return out;
+    }
+
+    public List<ClockifyUserOption> listUsers(String workspaceId) throws IOException, InterruptedException {
+        List<User> users = client(workspaceId).users().getUsersOfWorkspace(workspaceId, new ClockifyPageRequest(1, USER_PAGE_SIZE));
+        List<ClockifyUserOption> out = new ArrayList<>();
+        for (User user : users) {
+            out.add(new ClockifyUserOption(user.id(), displayName(user), user.email()));
         }
         return out;
     }
@@ -121,7 +148,7 @@ public class ClockifyExpenseGateway {
         }
         putIfPresent(body, "projectId", command.projectId());
         putIfPresent(body, "taskId", command.taskId());
-        body.put("amount", amountText(command.amount(), command.roundingMode()));
+        body.put("amount", amountText(command.amount(), command.roundingMode(), command.amountIsQuantity()));
         if (command.billable() != null) {
             body.put("billable", command.billable());
         }
@@ -129,7 +156,19 @@ public class ClockifyExpenseGateway {
         return body;
     }
 
-    private static String amountText(BigDecimal amount, RoundingMode roundingMode) {
+    private ObjectNode mileageCategoryBody(BigDecimal priceInCents) {
+        ObjectNode body = objectMapper.createObjectNode();
+        body.put("name", MILEAGE_CATEGORY_NAME);
+        body.put("hasUnitPrice", true);
+        body.put("priceInCents", priceInCents.toBigIntegerExact());
+        body.put("unit", MILEAGE_UNIT);
+        return body;
+    }
+
+    private static String amountText(BigDecimal amount, RoundingMode roundingMode, boolean amountIsQuantity) {
+        if (amountIsQuantity) {
+            return amount.stripTrailingZeros().toPlainString();
+        }
         RoundingMode mode = roundingMode == null ? RoundingMode.HALF_UP : roundingMode;
         return amount.setScale(2, mode).toPlainString();
     }
@@ -145,6 +184,26 @@ public class ClockifyExpenseGateway {
             return null;
         }
         return node.get(field).asText();
+    }
+
+    private static ClockifyCategoryOption categoryOption(JsonNode item) {
+        boolean hasUnitPrice = item != null && item.path("hasUnitPrice").asBoolean(false);
+        return new ClockifyCategoryOption(
+                text(item, "id"),
+                text(item, "name"),
+                hasUnitPrice ? "UNIT" : "FLAT",
+                text(item, "unit"),
+                decimal(item == null ? null : item.get("priceInCents")));
+    }
+
+    private static String displayName(User user) {
+        if (user.name() != null && !user.name().isBlank()) {
+            return user.name();
+        }
+        if (user.email() != null && !user.email().isBlank()) {
+            return user.email();
+        }
+        return user.id();
     }
 
     private static BigDecimal decimal(JsonNode node) {

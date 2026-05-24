@@ -91,6 +91,7 @@ public class MileageLifecycleHandler implements AddonLifecycleHandler {
                 values.get("unit"),
                 values.get("inputCategoryId"),
                 values.get("outputCategoryId"),
+                values.get("mileageCategoryId"),
                 values.get("roundingMode"),
                 bool(values.get("convertOnCreate")),
                 bool(values.get("convertOnUpdate")),
@@ -111,6 +112,7 @@ public class MileageLifecycleHandler implements AddonLifecycleHandler {
             case "unit", "mileageunit" -> "unit";
             case "inputcategoryid", "mileageinputcategoryid" -> "inputCategoryId";
             case "outputcategoryid", "mileageoutputcategoryid" -> "outputCategoryId";
+            case "mileagecategoryid" -> "mileageCategoryId";
             case "roundingmode", "mileageroundingmode" -> "roundingMode";
             case "convertoncreate" -> "convertOnCreate";
             case "convertonupdate" -> "convertOnUpdate";

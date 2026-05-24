@@ -8,6 +8,8 @@ import com.cake.clockify.addon.mileage.api.model.MileageConversionRetryResponse;
 import com.cake.clockify.addon.mileage.audit.MileageConversion;
 import com.cake.clockify.addon.mileage.audit.MileageConversionRepository;
 import com.cake.clockify.addon.mileage.audit.MileageConversionStatus;
+import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseGateway;
+import com.cake.clockify.addon.mileage.clockify.ClockifyUserOption;
 import com.cake.clockify.addon.mileage.conversion.MileageConversionService;
 import com.cake.clockify.addon.mileage.security.MileageAuthorizationService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -27,8 +29,13 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.nio.charset.StandardCharsets;
+import java.io.IOException;
 import java.time.Instant;
+import java.util.Collection;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @RestController
 public class MileageConversionController {
@@ -36,19 +43,22 @@ public class MileageConversionController {
     private static final int CSV_PAGE_SIZE = 5_000;
     private static final Sort VISIBLE_LIST_SORT = Sort.by(Sort.Direction.DESC, "updatedAt");
     private static final MediaType CSV_MEDIA_TYPE = new MediaType("text", "csv", StandardCharsets.UTF_8);
-    private static final String CSV_HEADER = "expense_id,source,status,user_id,project_id,miles,rate,calculated_amount,expense_amount,rounding_mode,updated_at,converted_at,note_marker";
+    private static final String CSV_HEADER = "expense_id,source,source_label,status,user_id,user_name,project_id,miles,rate,calculated_amount,expense_amount,rounding_mode,updated_at,converted_at,note_marker";
 
     private final MileageConversionRepository conversionRepository;
     private final MileageConversionService conversionService;
     private final MileageAuthorizationService authorizationService;
+    private final ClockifyExpenseGateway gateway;
 
     public MileageConversionController(
             MileageConversionRepository conversionRepository,
             MileageConversionService conversionService,
-            MileageAuthorizationService authorizationService) {
+            MileageAuthorizationService authorizationService,
+            ClockifyExpenseGateway gateway) {
         this.conversionRepository = conversionRepository;
         this.conversionService = conversionService;
         this.authorizationService = authorizationService;
+        this.gateway = gateway;
     }
 
     @GetMapping("/api/mileage/conversions")
@@ -62,7 +72,9 @@ public class MileageConversionController {
         Page<MileageConversion> conversions = status == null
                 ? conversionRepository.findAllByWorkspaceId(claims.workspaceId(), pageRequest)
                 : conversionRepository.findAllByWorkspaceIdAndStatus(claims.workspaceId(), status, pageRequest);
-        return ResponseEntity.ok(MileageConversionListResponse.from(conversions));
+        return ResponseEntity.ok(MileageConversionListResponse.from(
+                conversions,
+                userNamesById(claims.workspaceId(), conversions.getContent())));
     }
 
     @GetMapping("/api/mileage/mine")
@@ -87,7 +99,9 @@ public class MileageConversionController {
         Page<MileageConversion> conversions = conversionRepository.findAllByWorkspaceId(
                 claims.workspaceId(),
                 pageRequest(page, pageSize));
-        return ResponseEntity.ok(MileageConversionListResponse.from(conversions));
+        return ResponseEntity.ok(MileageConversionListResponse.from(
+                conversions,
+                userNamesById(claims.workspaceId(), conversions.getContent())));
     }
 
     @GetMapping(value = "/api/mileage/mine.csv", produces = "text/csv;charset=UTF-8")
@@ -97,7 +111,7 @@ public class MileageConversionController {
                 claims.workspaceId(),
                 claims.userId(),
                 PageRequest.of(0, CSV_PAGE_SIZE, VISIBLE_LIST_SORT));
-        return csvResponse("mileage-mine.csv", conversions);
+        return csvResponse("mileage-mine.csv", conversions, Map.of());
     }
 
     @GetMapping(value = "/api/mileage/team.csv", produces = "text/csv;charset=UTF-8")
@@ -106,7 +120,7 @@ public class MileageConversionController {
         Page<MileageConversion> conversions = conversionRepository.findAllByWorkspaceId(
                 claims.workspaceId(),
                 PageRequest.of(0, CSV_PAGE_SIZE, VISIBLE_LIST_SORT));
-        return csvResponse("mileage-team.csv", conversions);
+        return csvResponse("mileage-team.csv", conversions, userNamesById(claims.workspaceId(), conversions.getContent()));
     }
 
     @GetMapping(value = "/api/mileage/conversions.csv", produces = "text/csv;charset=UTF-8")
@@ -115,7 +129,7 @@ public class MileageConversionController {
         Page<MileageConversion> conversions = conversionRepository.findAllByWorkspaceId(
                 claims.workspaceId(),
                 PageRequest.of(0, CSV_PAGE_SIZE, VISIBLE_LIST_SORT));
-        return csvResponse("mileage-conversions.csv", conversions);
+        return csvResponse("mileage-conversions.csv", conversions, userNamesById(claims.workspaceId(), conversions.getContent()));
     }
 
     @GetMapping("/api/mileage/conversions/{id}")
@@ -126,7 +140,9 @@ public class MileageConversionController {
         MileageConversion conversion = conversionRepository.findById(id)
                 .filter(row -> claims.workspaceId().equals(row.getWorkspaceId()))
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Mileage conversion was not found"));
-        return ResponseEntity.ok(MileageConversionDetailResponse.from(conversion));
+        return ResponseEntity.ok(MileageConversionDetailResponse.from(
+                conversion,
+                userNamesById(claims.workspaceId(), java.util.List.of(conversion)).get(conversion.getUserId())));
     }
 
     @PostMapping("/api/mileage/conversions/{id}/retry")
@@ -155,26 +171,31 @@ public class MileageConversionController {
         return PageRequest.of(Math.max(page, 0), Math.min(Math.max(pageSize, 1), MAX_PAGE_SIZE), VISIBLE_LIST_SORT);
     }
 
-    private static ResponseEntity<String> csvResponse(String filename, Page<MileageConversion> conversions) {
+    private static ResponseEntity<String> csvResponse(
+            String filename,
+            Page<MileageConversion> conversions,
+            Map<String, String> userNamesById) {
         return ResponseEntity.ok()
                 .contentType(CSV_MEDIA_TYPE)
                 .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment().filename(filename).build().toString())
-                .body(csv(conversions));
+                .body(csv(conversions, userNamesById));
     }
 
-    private static String csv(Page<MileageConversion> conversions) {
+    private static String csv(Page<MileageConversion> conversions, Map<String, String> userNamesById) {
         StringBuilder builder = new StringBuilder(CSV_HEADER).append('\n');
         for (MileageConversion conversion : conversions.getContent()) {
             appendCsvRow(builder,
                     conversion.getExpenseId(),
                     conversion.getSource(),
+                    MileageConversionDetailResponse.sourceLabel(conversion.getSource()),
                     conversion.getStatus(),
                     conversion.getUserId(),
+                    userName(conversion.getUserId(), userNamesById),
                     conversion.getProjectId(),
-                    conversion.getMiles(),
-                    conversion.getRate(),
-                    conversion.getCalculatedAmount(),
-                    conversion.getRoundedAmount(),
+                    decimalText(conversion.getMiles()),
+                    decimalText(conversion.getRate()),
+                    decimalText(conversion.getCalculatedAmount()),
+                    roundedText(conversion.getRoundedAmount()),
                     conversion.getRoundingMode(),
                     conversion.getUpdatedAt(),
                     conversion.getConvertedAt(),
@@ -197,13 +218,42 @@ public class MileageConversionController {
         if (value == null) {
             return "";
         }
-        if (value instanceof java.math.BigDecimal decimal) {
-            return decimal.toPlainString();
-        }
         if (value instanceof Instant instant) {
             return instant.toString();
         }
         return String.valueOf(value);
+    }
+
+    private Map<String, String> userNamesById(String workspaceId, Collection<MileageConversion> conversions) {
+        if (conversions.stream().map(MileageConversion::getUserId).filter(Objects::nonNull).findAny().isEmpty()) {
+            return Map.of();
+        }
+        try {
+            return gateway.listUsers(workspaceId).stream()
+                    .filter(user -> user.id() != null && !user.id().isBlank())
+                    .collect(Collectors.toMap(
+                            ClockifyUserOption::id,
+                            ClockifyUserOption::name,
+                            (left, right) -> left));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return Map.of();
+        } catch (IOException | RuntimeException e) {
+            return Map.of();
+        }
+    }
+
+    private static String userName(String userId, Map<String, String> userNamesById) {
+        String name = userNamesById.get(userId);
+        return name == null || name.isBlank() ? userId : name;
+    }
+
+    private static String decimalText(java.math.BigDecimal value) {
+        return value == null ? "" : value.stripTrailingZeros().toPlainString();
+    }
+
+    private static String roundedText(java.math.BigDecimal value) {
+        return value == null ? "" : value.toPlainString();
     }
 
     private static String escapeCsv(String value) {

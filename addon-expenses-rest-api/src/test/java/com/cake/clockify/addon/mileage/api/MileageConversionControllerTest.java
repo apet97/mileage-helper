@@ -6,6 +6,8 @@ import com.cake.clockify.addon.mileage.audit.MileageConversion;
 import com.cake.clockify.addon.mileage.audit.MileageConversionRepository;
 import com.cake.clockify.addon.mileage.audit.MileageConversionSource;
 import com.cake.clockify.addon.mileage.audit.MileageConversionStatus;
+import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseGateway;
+import com.cake.clockify.addon.mileage.clockify.ClockifyUserOption;
 import com.cake.clockify.addon.mileage.conversion.ConversionResult;
 import com.cake.clockify.addon.mileage.conversion.MileageConversionService;
 import com.cake.clockify.addon.mileage.security.MileageAuthorizationService;
@@ -41,16 +43,19 @@ class MileageConversionControllerTest {
     private static final UUID CONVERSION_ID = UUID.fromString("00000000-0000-0000-0000-000000000321");
     private MileageConversionRepository conversionRepository;
     private MileageConversionService conversionService;
+    private ClockifyExpenseGateway gateway;
     private MockMvc mockMvc;
 
     @BeforeEach
     void setUp() {
         conversionRepository = mock(MileageConversionRepository.class);
         conversionService = mock(MileageConversionService.class);
+        gateway = mock(ClockifyExpenseGateway.class);
         MileageConversionController controller = new MileageConversionController(
                 conversionRepository,
                 conversionService,
-                new MileageAuthorizationService());
+                new MileageAuthorizationService(),
+                gateway);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new MileageExceptionHandler(new ObjectMapper().findAndRegisterModules()))
                 .build();
@@ -77,7 +82,7 @@ class MileageConversionControllerTest {
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("MEMBER")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.conversions[0].expenseId").value("exp-1"))
-                .andExpect(jsonPath("$.conversions[0].calculatedAmount").value("24.4970"))
+                .andExpect(jsonPath("$.conversions[0].calculatedAmount").value("24.497"))
                 .andExpect(jsonPath("$.conversions[0].roundedAmount").value("24.50"));
 
         verify(conversionRepository).findAllByWorkspaceIdAndUserId(eq("ws-admin"), eq("user-claims"), any(Pageable.class));
@@ -94,12 +99,15 @@ class MileageConversionControllerTest {
     void adminCanListTeamMileageRows() throws Exception {
         when(conversionRepository.findAllByWorkspaceId(eq("ws-admin"), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(conversion("ws-admin"))));
+        when(gateway.listUsers("ws-admin")).thenReturn(List.of(new ClockifyUserOption("user-claims", "Ada Lovelace", "ada@example.test")));
 
         mockMvc.perform(get("/api/mileage/team")
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("ADMIN")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.conversions[0].userId").value("user-claims"))
-                .andExpect(jsonPath("$.conversions[0].calculatedAmount").value("24.4970"));
+                .andExpect(jsonPath("$.conversions[0].userName").value("Ada Lovelace"))
+                .andExpect(jsonPath("$.conversions[0].sourceLabel").value("Created through Expenses"))
+                .andExpect(jsonPath("$.conversions[0].calculatedAmount").value("24.497"));
     }
 
     @Test
@@ -110,6 +118,7 @@ class MileageConversionControllerTest {
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("ADMIN")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(CONVERSION_ID.toString()))
+                .andExpect(jsonPath("$.sourceLabel").value("Created through Expenses"))
                 .andExpect(jsonPath("$.roundedAmount").value("24.50"));
     }
 
@@ -134,7 +143,7 @@ class MileageConversionControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(content().contentType("text/csv;charset=UTF-8"))
                 .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION, containsString("mileage-mine.csv")))
-                .andExpect(content().string(containsString("expense_id,source,status,user_id,project_id,miles,rate,calculated_amount,expense_amount,rounding_mode,updated_at,converted_at,note_marker")))
+                .andExpect(content().string(containsString("expense_id,source,source_label,status,user_id,user_name,project_id,miles,rate,calculated_amount,expense_amount,rounding_mode,updated_at,converted_at,note_marker")))
                 .andExpect(content().string(containsString("\"project, \"\"north\"\"")))
                 .andExpect(content().string(containsString("\"[MileageAddon:converted:v1 id=quoted \"\"marker\"\"]\"")));
     }
@@ -153,18 +162,20 @@ class MileageConversionControllerTest {
     void adminCanExportTeamAndConversionCsv() throws Exception {
         when(conversionRepository.findAllByWorkspaceId(eq("ws-admin"), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(conversion("ws-admin"))));
+        when(gateway.listUsers("ws-admin")).thenReturn(List.of(new ClockifyUserOption("user-claims", "Ada Lovelace", "ada@example.test")));
 
         mockMvc.perform(get("/api/mileage/team.csv")
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("OWNER")))
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION, containsString("mileage-team.csv")))
-                .andExpect(content().string(containsString("24.4970,24.50")));
+                .andExpect(content().string(containsString("WEBHOOK_CREATED,Created through Expenses,CONVERTED,user-claims,Ada Lovelace")))
+                .andExpect(content().string(containsString("24.497,24.50")));
 
         mockMvc.perform(get("/api/mileage/conversions.csv")
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("OWNER")))
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION, containsString("mileage-conversions.csv")))
-                .andExpect(content().string(containsString("24.4970,24.50")));
+                .andExpect(content().string(containsString("24.497,24.50")));
     }
 
     @Test

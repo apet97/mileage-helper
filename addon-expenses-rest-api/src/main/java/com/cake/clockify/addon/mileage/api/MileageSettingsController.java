@@ -7,17 +7,22 @@ import com.cake.clockify.addon.mileage.api.model.MileageCategoryOptionsResponse;
 import com.cake.clockify.addon.mileage.api.model.MileageDiagnosticsResponse;
 import com.cake.clockify.addon.mileage.api.model.MileageSettingsRequest;
 import com.cake.clockify.addon.mileage.api.model.MileageSettingsResponse;
+import com.cake.clockify.addon.mileage.clockify.ClockifyCategoryOption;
 import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseGateway;
 import com.cake.clockify.addon.mileage.security.MileageAuthorizationService;
 import com.cake.clockify.addon.mileage.settings.MileageSettingsService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -42,7 +47,7 @@ public class MileageSettingsController {
     @GetMapping("/api/mileage/settings")
     public ResponseEntity<MileageSettingsResponse> getSettings(HttpServletRequest request) {
         NormalizedClaims claims = adminClaims(request);
-        return ResponseEntity.ok(settingsService.getEffectiveSettings(claims.workspaceId()));
+        return ResponseEntity.ok(enrichSettings(claims.workspaceId(), settingsService.getEffectiveSettings(claims.workspaceId())));
     }
 
     @PutMapping("/api/mileage/settings")
@@ -51,7 +56,23 @@ public class MileageSettingsController {
             @RequestBody MileageSettingsRequest body) {
         NormalizedClaims claims = adminClaims(request);
         settingsService.saveSettings(claims.workspaceId(), body, claims.userId());
-        return ResponseEntity.ok(settingsService.getEffectiveSettings(claims.workspaceId()));
+        return ResponseEntity.ok(enrichSettings(claims.workspaceId(), settingsService.getEffectiveSettings(claims.workspaceId())));
+    }
+
+    @PostMapping("/api/mileage/settings/mileage-category")
+    public ResponseEntity<MileageSettingsResponse> createOrRepairMileageCategory(HttpServletRequest request)
+            throws IOException, InterruptedException {
+        NormalizedClaims claims = adminClaims(request);
+        MileageSettingsResponse settings = settingsService.getEffectiveSettings(claims.workspaceId());
+        if (settings.rate() == null || settings.rate().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mileage rate is required before creating a category");
+        }
+        ClockifyCategoryOption category = gateway.createOrRepairMileageCategory(
+                claims.workspaceId(),
+                new BigDecimal(settings.rate()));
+        settingsService.saveMileageCategory(claims.workspaceId(), category.id(), claims.userId());
+        return ResponseEntity.ok(enrichSettings(claims.workspaceId(), settingsService.getEffectiveSettings(claims.workspaceId()))
+                .withMileageCategoryName(category.name()));
     }
 
     @GetMapping("/api/mileage/options/categories")
@@ -81,5 +102,24 @@ public class MileageSettingsController {
         NormalizedClaims claims = RequestAttributes.requireClaims(request);
         authorizationService.requireAdmin(claims);
         return claims;
+    }
+
+    private MileageSettingsResponse enrichSettings(String workspaceId, MileageSettingsResponse settings) {
+        if (settings.mileageCategoryId() == null || settings.mileageCategoryId().isBlank()) {
+            return settings;
+        }
+        try {
+            String name = gateway.listCategories(workspaceId).stream()
+                    .filter(category -> settings.mileageCategoryId().equals(category.id()))
+                    .map(ClockifyCategoryOption::name)
+                    .findFirst()
+                    .orElse(settings.mileageCategoryName());
+            return settings.withMileageCategoryName(name);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return settings;
+        } catch (IOException | RuntimeException e) {
+            return settings;
+        }
     }
 }

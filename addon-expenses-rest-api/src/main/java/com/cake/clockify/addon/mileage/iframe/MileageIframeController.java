@@ -128,7 +128,7 @@ public class MileageIframeController {
                               <button type="button" id="btn-export-mine">CSV</button>
                             </div>
                           </div>
-                          <div class="table-wrap"><table><thead><tr><th>Expense</th><th>Status</th><th>Miles</th><th>Rate</th><th>Amount</th><th>Updated</th></tr></thead><tbody id="mine-rows"></tbody></table></div>
+                          <div class="table-wrap"><table><thead><tr><th>Expense</th><th>Source</th><th>Status</th><th>Miles</th><th>Rate</th><th>Amount</th><th>Updated</th></tr></thead><tbody id="mine-rows"></tbody></table></div>
                         </section>
                       </section>
                 """.formatted(active ? " active" : "");
@@ -154,7 +154,7 @@ public class MileageIframeController {
                             <button type="button" id="btn-export-team">CSV</button>
                           </div>
                         </header>
-                        <div class="table-wrap"><table><thead><tr><th>Expense</th><th>User</th><th>Status</th><th>Miles</th><th>Rate</th><th>Amount</th><th>Updated</th></tr></thead><tbody id="team-rows"></tbody></table></div>
+                        <div class="table-wrap"><table><thead><tr><th>Expense</th><th>User</th><th>Source</th><th>Status</th><th>Miles</th><th>Rate</th><th>Amount</th><th>Updated</th></tr></thead><tbody id="team-rows"></tbody></table></div>
                       </section>
                 """.formatted(active ? " active" : "");
     }
@@ -165,25 +165,15 @@ public class MileageIframeController {
                         <header class="panel-heading"><h1>Workspace Settings</h1><span id="settings-status" class="status-text"></span></header>
                         <form id="settings-form" class="form-grid">
                           <fieldset class="wide settings-group">
-                            <legend>Manual mileage</legend>
+                            <legend>Mileage setup</legend>
                             <div class="form-grid compact">
                               <label><span>Rate</span><input id="settings-rate" name="rate" inputmode="decimal"></label>
-                              <label><span>Unit</span><input id="settings-unit" name="unit" autocomplete="off"></label>
-                              <label><span>Output category</span><select id="settings-output-category" name="outputCategoryId"></select></label>
-                              <label><span>Rounding</span><select id="settings-rounding" name="roundingMode"><option>HALF_UP</option><option>HALF_EVEN</option><option>DOWN</option><option>UP</option></select></label>
+                              <label><span>Mileage category</span><select id="settings-mileage-category" name="mileageCategoryId"></select></label>
+                              <div class="actions align-end"><button type="button" id="btn-setup-mileage-category">Create or Repair Mileage Category</button></div>
                               <label class="check-row"><input id="settings-enabled" name="enabled" type="checkbox"><span>Enabled</span></label>
-                              <label class="check-row"><input id="settings-rate-override" name="allowUserRateOverride" type="checkbox"><span>Allow rate override</span></label>
-                            </div>
-                          </fieldset>
-                          <fieldset class="wide settings-group">
-                            <legend>Native expense conversion</legend>
-                            <div class="form-grid compact">
-                              <label><span>Input category</span><select id="settings-input-category" name="inputCategoryId"></select></label>
                               <label class="check-row"><input id="settings-convert-create" name="convertOnCreate" type="checkbox"><span>Convert created native expenses</span></label>
                               <label class="check-row"><input id="settings-convert-update" name="convertOnUpdate" type="checkbox"><span>Convert updated native expenses</span></label>
-                              <label class="check-row"><input id="settings-preserve-notes" name="preserveOriginalNotes" type="checkbox"><span>Preserve notes</span></label>
-                              <label class="check-row"><input id="settings-dry-run" name="dryRunMode" type="checkbox"><span>Dry run</span></label>
-                              <label class="wide"><span>Note template</span><textarea id="settings-template" name="noteTemplate" rows="3"></textarea></label>
+                              <label class="check-row"><input id="settings-rate-override" name="allowUserRateOverride" type="checkbox"><span>Allow rate override</span></label>
                             </div>
                           </fieldset>
                           <div class="actions wide"><button type="submit">Save Settings</button></div>
@@ -205,7 +195,7 @@ public class MileageIframeController {
                             <button type="button" id="btn-export-conversions">CSV</button>
                           </div>
                         </header>
-                        <div class="table-wrap"><table><thead><tr><th>Expense</th><th>Source</th><th>Status</th><th>Miles</th><th>Rate</th><th>Amount</th><th>Updated</th></tr></thead><tbody id="conversion-rows"></tbody></table></div>
+                        <div class="table-wrap"><table><thead><tr><th>Expense</th><th>Source</th><th>User</th><th>Status</th><th>Miles</th><th>Rate</th><th>Amount</th><th>Updated</th></tr></thead><tbody id="conversion-rows"></tbody></table></div>
                       </section>
                 """.formatted(active ? " active" : "");
     }

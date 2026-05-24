@@ -18,8 +18,10 @@ import com.cake.clockify.client.ClockifyApiException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.io.IOException;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -116,9 +118,10 @@ public class MileageConversionService {
                     expense.projectId(),
                     expense.taskId(),
                     expense.billable(),
-                    calculation.roundedAmount(),
+                    clockifyExpenseAmount(settings, expense, calculation),
                     note,
-                    calculation.roundingMode()));
+                    calculation.roundingMode(),
+                    singleMileageCategory(settings)));
 
             conversion.setStatus(MileageConversionStatus.CONVERTED);
             conversion.setConvertedAt(Instant.now());
@@ -243,6 +246,20 @@ public class MileageConversionService {
                 .map(MileageConversion::getStatus)
                 .filter(status -> status == MileageConversionStatus.CONVERTED || status == MileageConversionStatus.CONVERTING)
                 .isPresent();
+    }
+
+    private static BigDecimal clockifyExpenseAmount(
+            MileageSettingsValidation settings,
+            ClockifyExpenseSnapshot expense,
+            MileageCalculation calculation) {
+        if (singleMileageCategory(settings)) {
+            return expense.quantity();
+        }
+        return calculation.roundedAmount();
+    }
+
+    private static boolean singleMileageCategory(MileageSettingsValidation settings) {
+        return Objects.equals(settings.inputCategoryId(), settings.outputCategoryId());
     }
 
     private static String blankToNull(String value) {

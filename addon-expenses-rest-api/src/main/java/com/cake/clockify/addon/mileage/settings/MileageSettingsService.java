@@ -12,7 +12,7 @@ import java.util.List;
 
 @Service
 public class MileageSettingsService {
-    public static final String DEFAULT_UNIT = "mi";
+    public static final String DEFAULT_UNIT = "mile";
     public static final RoundingMode DEFAULT_ROUNDING_MODE = RoundingMode.HALF_UP;
 
     private final MileageSettingsRepository repository;
@@ -21,11 +21,13 @@ public class MileageSettingsService {
         this.repository = repository;
     }
 
+    @Transactional
     public MileageSettingsResponse getEffectiveSettings(String workspaceId) {
-        MileageWorkspaceSettings settings = repository.findById(workspaceId).orElseGet(() -> defaults(workspaceId));
+        MileageWorkspaceSettings settings = getNormalizedSettings(workspaceId);
         MileageSettingsValidation addon = validate(settings, false);
         MileageSettingsValidation nativeValidation = validate(settings, true);
         List<String> diagnostics = new ArrayList<>(nativeValidation.diagnostics());
+        String mileageCategoryId = mileageCategoryId(settings);
         return new MileageSettingsResponse(
                 settings.isEnabled(),
                 decimalText(settings.getRate()),
@@ -41,34 +43,52 @@ public class MileageSettingsService {
                 settings.getNoteTemplate(),
                 addon.complete(),
                 nativeValidation.complete(),
-                diagnostics);
+                diagnostics,
+                mileageCategoryId,
+                null,
+                DEFAULT_UNIT,
+                DEFAULT_ROUNDING_MODE.name());
     }
 
     @Transactional
     public MileageWorkspaceSettings saveSettings(String workspaceId, MileageSettingsRequest request, String updatedByUserId) {
         MileageWorkspaceSettings settings = repository.findById(workspaceId).orElseGet(() -> defaults(workspaceId));
-        if (request.enabled() != null) settings.setEnabled(request.enabled());
-        if (request.rate() != null) settings.setRate(parsePositiveDecimal("rate", request.rate()));
-        if (request.unit() != null) settings.setUnit(blankToNull(request.unit()) == null ? DEFAULT_UNIT : request.unit().trim());
-        if (request.inputCategoryId() != null) settings.setInputCategoryId(blankToNull(request.inputCategoryId()));
-        if (request.outputCategoryId() != null) settings.setOutputCategoryId(blankToNull(request.outputCategoryId()));
-        if (request.roundingMode() != null) settings.setRoundingMode(parseRoundingMode(request.roundingMode()).name());
-        if (request.convertOnCreate() != null) settings.setConvertOnCreate(request.convertOnCreate());
-        if (request.convertOnUpdate() != null) settings.setConvertOnUpdate(request.convertOnUpdate());
-        if (request.preserveOriginalNotes() != null) settings.setPreserveOriginalNotes(request.preserveOriginalNotes());
-        if (request.dryRunMode() != null) settings.setDryRunMode(request.dryRunMode());
-        if (request.allowUserRateOverride() != null) settings.setAllowUserRateOverride(request.allowUserRateOverride());
-        if (request.noteTemplate() != null) settings.setNoteTemplate(blankToNull(request.noteTemplate()));
+        if (request != null) {
+            if (request.enabled() != null) settings.setEnabled(request.enabled());
+            if (request.rate() != null) settings.setRate(parsePositiveDecimal("rate", request.rate()));
+            String categoryId = firstNonBlank(request.mileageCategoryId(), request.inputCategoryId(), request.outputCategoryId());
+            if (categoryId != null) {
+                settings.setInputCategoryId(categoryId);
+                settings.setOutputCategoryId(categoryId);
+            }
+            if (request.convertOnCreate() != null) settings.setConvertOnCreate(request.convertOnCreate());
+            if (request.convertOnUpdate() != null) settings.setConvertOnUpdate(request.convertOnUpdate());
+            if (request.dryRunMode() != null) settings.setDryRunMode(request.dryRunMode());
+            if (request.allowUserRateOverride() != null) settings.setAllowUserRateOverride(request.allowUserRateOverride());
+            if (request.noteTemplate() != null) settings.setNoteTemplate(blankToNull(request.noteTemplate()));
+        }
+        normalize(settings);
+        settings.setUpdatedByUserId(updatedByUserId);
+        return repository.saveAndFlush(settings);
+    }
+
+    @Transactional
+    public MileageWorkspaceSettings saveMileageCategory(String workspaceId, String categoryId, String updatedByUserId) {
+        MileageWorkspaceSettings settings = repository.findById(workspaceId).orElseGet(() -> defaults(workspaceId));
+        String cleanedCategoryId = blankToNull(categoryId);
+        settings.setInputCategoryId(cleanedCategoryId);
+        settings.setOutputCategoryId(cleanedCategoryId);
+        normalize(settings);
         settings.setUpdatedByUserId(updatedByUserId);
         return repository.saveAndFlush(settings);
     }
 
     public MileageSettingsValidation validateForAddonCreate(String workspaceId) {
-        return validate(repository.findById(workspaceId).orElseGet(() -> defaults(workspaceId)), false);
+        return validate(normalizedCopy(workspaceId), false);
     }
 
     public MileageSettingsValidation validateForNativeConversion(String workspaceId) {
-        return validate(repository.findById(workspaceId).orElseGet(() -> defaults(workspaceId)), true);
+        return validate(normalizedCopy(workspaceId), true);
     }
 
     private static MileageWorkspaceSettings defaults(String workspaceId) {
@@ -79,7 +99,7 @@ public class MileageSettingsService {
         settings.setRoundingMode(DEFAULT_ROUNDING_MODE.name());
         settings.setConvertOnCreate(true);
         settings.setConvertOnUpdate(true);
-        settings.setPreserveOriginalNotes(true);
+        settings.setPreserveOriginalNotes(false);
         settings.setDryRunMode(false);
         settings.setAllowUserRateOverride(false);
         return settings;
@@ -123,7 +143,7 @@ public class MileageSettingsService {
         try {
             return RoundingMode.valueOf(value);
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("roundingMode must be a Java RoundingMode name", e);
+            return DEFAULT_ROUNDING_MODE;
         }
     }
 
@@ -148,5 +168,62 @@ public class MileageSettingsService {
 
     private static String blankToNull(String raw) {
         return raw == null || raw.isBlank() ? null : raw.trim();
+    }
+
+    private MileageWorkspaceSettings getNormalizedSettings(String workspaceId) {
+        return repository.findById(workspaceId)
+                .map(settings -> {
+                    boolean changed = normalize(settings);
+                    return changed ? repository.saveAndFlush(settings) : settings;
+                })
+                .orElseGet(() -> defaults(workspaceId));
+    }
+
+    private MileageWorkspaceSettings normalizedCopy(String workspaceId) {
+        MileageWorkspaceSettings settings = repository.findById(workspaceId).orElseGet(() -> defaults(workspaceId));
+        normalize(settings);
+        return settings;
+    }
+
+    private static boolean normalize(MileageWorkspaceSettings settings) {
+        boolean changed = false;
+        String mileageCategoryId = mileageCategoryId(settings);
+        if (!DEFAULT_UNIT.equals(settings.getUnit())) {
+            settings.setUnit(DEFAULT_UNIT);
+            changed = true;
+        }
+        if (!DEFAULT_ROUNDING_MODE.name().equals(settings.getRoundingMode())) {
+            settings.setRoundingMode(DEFAULT_ROUNDING_MODE.name());
+            changed = true;
+        }
+        if (settings.isPreserveOriginalNotes()) {
+            settings.setPreserveOriginalNotes(false);
+            changed = true;
+        }
+        if (mileageCategoryId != null) {
+            if (!mileageCategoryId.equals(settings.getInputCategoryId())) {
+                settings.setInputCategoryId(mileageCategoryId);
+                changed = true;
+            }
+            if (!mileageCategoryId.equals(settings.getOutputCategoryId())) {
+                settings.setOutputCategoryId(mileageCategoryId);
+                changed = true;
+            }
+        }
+        return changed;
+    }
+
+    private static String mileageCategoryId(MileageWorkspaceSettings settings) {
+        return firstNonBlank(settings.getInputCategoryId(), settings.getOutputCategoryId());
+    }
+
+    private static String firstNonBlank(String... values) {
+        for (String value : values) {
+            String cleaned = blankToNull(value);
+            if (cleaned != null) {
+                return cleaned;
+            }
+        }
+        return null;
     }
 }

@@ -5,6 +5,8 @@ import com.cake.clockify.client.ClockifyClient;
 import com.cake.clockify.client.ClockifyPageRequest;
 import com.cake.clockify.client.domains.ExpensesClient;
 import com.cake.clockify.client.domains.ProjectsClient;
+import com.cake.clockify.client.domains.UsersClient;
+import com.cake.clockify.client.models.User;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -15,6 +17,7 @@ import org.mockito.ArgumentCaptor;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -29,6 +32,7 @@ class ClockifyExpenseGatewayTest {
     private ClockifyClient client;
     private ExpensesClient expensesClient;
     private ProjectsClient projectsClient;
+    private UsersClient usersClient;
     private ClockifyExpenseGateway gateway;
 
     @BeforeEach
@@ -37,9 +41,11 @@ class ClockifyExpenseGatewayTest {
         client = mock(ClockifyClient.class);
         expensesClient = mock(ExpensesClient.class);
         projectsClient = mock(ProjectsClient.class);
+        usersClient = mock(UsersClient.class);
         when(clientFactory.getClient("ws-gateway")).thenReturn(client);
         when(client.expenses()).thenReturn(expensesClient);
         when(client.projects()).thenReturn(projectsClient);
+        when(client.users()).thenReturn(usersClient);
         gateway = new ClockifyExpenseGateway(clientFactory, objectMapper);
     }
 
@@ -81,6 +87,28 @@ class ClockifyExpenseGatewayTest {
         assertThat(body.getValue().path("categoryId").asText()).isEqualTo("cat-flat");
         assertThat(body.getValue().path("amount").asText()).isEqualTo("24.50");
         assertThat(response.path("id").asText()).isEqualTo("exp-created");
+    }
+
+    @Test
+    void createFlatExpenseCanSendAmountAsUnitQuantityWithoutMoneyRounding() throws Exception {
+        when(expensesClient.createExpense(eq("ws-gateway"), any(JsonNode.class))).thenReturn(objectMapper.createObjectNode().put("id", "exp-created"));
+        CreateFlatExpenseCommand command = new CreateFlatExpenseCommand(
+                "cat-mileage",
+                "user-1",
+                LocalDate.of(2026, 5, 24),
+                null,
+                null,
+                new BigDecimal("1.234500"),
+                true,
+                "converted note",
+                RoundingMode.HALF_UP,
+                true);
+
+        gateway.createFlatExpense("ws-gateway", command);
+
+        ArgumentCaptor<JsonNode> body = ArgumentCaptor.forClass(JsonNode.class);
+        verify(expensesClient).createExpense(eq("ws-gateway"), body.capture());
+        assertThat(body.getValue().path("amount").asText()).isEqualTo("1.2345");
     }
 
     @Test
@@ -147,6 +175,72 @@ class ClockifyExpenseGatewayTest {
 
         assertThat(gateway.listProjects("ws-gateway"))
                 .containsExactly(new ClockifyProjectOption("project-1", "Client Visit"));
+    }
+
+    @Test
+    void listUsersReturnsDisplayNamesAndEmailFallbacks() throws Exception {
+        when(usersClient.getUsersOfWorkspace(eq("ws-gateway"), any(ClockifyPageRequest.class)))
+                .thenReturn(List.of(
+                        new User("user-1", "ada@example.test", "Ada Lovelace"),
+                        new User("user-2", "grace@example.test", "")));
+
+        assertThat(gateway.listUsers("ws-gateway"))
+                .containsExactly(
+                        new ClockifyUserOption("user-1", "Ada Lovelace", "ada@example.test"),
+                        new ClockifyUserOption("user-2", "grace@example.test", "grace@example.test"));
+    }
+
+    @Test
+    void createOrRepairMileageCategoryCreatesUnitCategoryWithRoundedCentRate() throws Exception {
+        ObjectNode root = objectMapper.createObjectNode();
+        root.putArray("categories");
+        when(expensesClient.getCategories(eq("ws-gateway"), any(ClockifyPageRequest.class))).thenReturn(root);
+        when(expensesClient.createCategory(eq("ws-gateway"), any(JsonNode.class)))
+                .thenReturn(objectMapper.createObjectNode()
+                        .put("id", "cat-mileage")
+                        .put("name", "Mileage")
+                        .put("hasUnitPrice", true)
+                        .put("unit", "mile")
+                        .put("priceInCents", 73));
+
+        ClockifyCategoryOption option = gateway.createOrRepairMileageCategory("ws-gateway", new BigDecimal("0.725"));
+
+        ArgumentCaptor<JsonNode> body = ArgumentCaptor.forClass(JsonNode.class);
+        verify(expensesClient).createCategory(eq("ws-gateway"), body.capture());
+        assertThat(body.getValue().path("name").asText()).isEqualTo("Mileage");
+        assertThat(body.getValue().path("hasUnitPrice").asBoolean()).isTrue();
+        assertThat(body.getValue().path("unit").asText()).isEqualTo("mile");
+        assertThat(body.getValue().path("priceInCents").asInt()).isEqualTo(73);
+        assertThat(option).isEqualTo(new ClockifyCategoryOption("cat-mileage", "Mileage", "UNIT", "mile", new BigDecimal("73")));
+    }
+
+    @Test
+    void createOrRepairMileageCategoryRepairsExistingMileageCategory() throws Exception {
+        ObjectNode root = objectMapper.createObjectNode();
+        root.putArray("categories")
+                .addObject()
+                .put("id", "cat-mileage")
+                .put("name", "Mileage")
+                .put("hasUnitPrice", false)
+                .put("unit", "")
+                .put("priceInCents", 1);
+        when(expensesClient.getCategories(eq("ws-gateway"), any(ClockifyPageRequest.class))).thenReturn(root);
+        when(expensesClient.updateCategory(eq("ws-gateway"), eq("cat-mileage"), any(JsonNode.class)))
+                .thenReturn(objectMapper.createObjectNode()
+                        .put("id", "cat-mileage")
+                        .put("name", "Mileage")
+                        .put("hasUnitPrice", true)
+                        .put("unit", "mile")
+                        .put("priceInCents", 66));
+
+        ClockifyCategoryOption option = gateway.createOrRepairMileageCategory("ws-gateway", new BigDecimal("0.655"));
+
+        ArgumentCaptor<JsonNode> body = ArgumentCaptor.forClass(JsonNode.class);
+        verify(expensesClient).updateCategory(eq("ws-gateway"), eq("cat-mileage"), body.capture());
+        assertThat(body.getValue().path("hasUnitPrice").asBoolean()).isTrue();
+        assertThat(body.getValue().path("unit").asText()).isEqualTo("mile");
+        assertThat(body.getValue().path("priceInCents").asInt()).isEqualTo(66);
+        assertThat(option).isEqualTo(new ClockifyCategoryOption("cat-mileage", "Mileage", "UNIT", "mile", new BigDecimal("66")));
     }
 
     @Test

@@ -6,6 +6,7 @@ public record MileageSettingsRequest(
         String unit,
         String inputCategoryId,
         String outputCategoryId,
+        String mileageCategoryId,
         String roundingMode,
         Boolean convertOnCreate,
         Boolean convertOnUpdate,

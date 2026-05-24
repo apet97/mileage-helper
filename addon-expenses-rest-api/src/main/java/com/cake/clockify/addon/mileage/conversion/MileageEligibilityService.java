@@ -24,7 +24,8 @@ public class MileageEligibilityService {
         if (hasText(expense.workspaceId()) && !Objects.equals(expense.workspaceId(), settings.workspaceId())) {
             return EligibilityDecision.skipped(MileageSkipReason.WORKSPACE_MISMATCH, "Fetched expense belongs to another workspace");
         }
-        if (Objects.equals(expense.categoryId(), settings.outputCategoryId())) {
+        if (!Objects.equals(settings.inputCategoryId(), settings.outputCategoryId())
+                && Objects.equals(expense.categoryId(), settings.outputCategoryId())) {
             return EligibilityDecision.skipped(MileageSkipReason.ALREADY_OUTPUT_CATEGORY, "Expense is already in the output category");
         }
         if (expense.notes() != null && expense.notes().contains(MileageNoteService.MARKER_PREFIX)) {

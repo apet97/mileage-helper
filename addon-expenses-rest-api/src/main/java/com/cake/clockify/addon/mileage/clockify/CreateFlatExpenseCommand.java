@@ -13,6 +13,19 @@ public record CreateFlatExpenseCommand(
         BigDecimal amount,
         Boolean billable,
         String notes,
-        RoundingMode roundingMode
+        RoundingMode roundingMode,
+        boolean amountIsQuantity
 ) {
+    public CreateFlatExpenseCommand(
+            String categoryId,
+            String userId,
+            LocalDate date,
+            String projectId,
+            String taskId,
+            BigDecimal amount,
+            Boolean billable,
+            String notes,
+            RoundingMode roundingMode) {
+        this(categoryId, userId, date, projectId, taskId, amount, billable, notes, roundingMode, false);
+    }
 }

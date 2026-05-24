@@ -3,11 +3,12 @@
   const authToken = url.searchParams.get("auth_token") || "";
   let createContext = {
     rate: null,
-    unit: "mi",
+    unit: "mile",
     allowUserRateOverride: false,
     complete: false
   };
   let userIsAdmin = false;
+  let tokenClaims = {};
 
   if (authToken) {
     url.searchParams.delete("auth_token");
@@ -88,9 +89,13 @@
     return claims.workspaceRole || claims.role || claims.wsRole || "";
   }
 
+  function timezoneFromClaims() {
+    return tokenClaims.timeZone || tokenClaims.timezone || tokenClaims.tz || "";
+  }
+
   function applyRoleGate() {
-    const claims = claimsFromToken();
-    const role = roleFromClaims(claims);
+    tokenClaims = claimsFromToken();
+    const role = roleFromClaims(tokenClaims);
     const isAdmin = role === "OWNER" || role === "ADMIN";
     document.querySelectorAll("[data-admin-only]").forEach(element => {
       element.hidden = !isAdmin;
@@ -168,12 +173,12 @@
     const preview = element("btn-preview");
     const submit = document.querySelector("#mileage-form button[type='submit']");
     const context = element("create-context");
-    const unit = createContext.unit || "mi";
+    const unit = createContext.unit || "mile";
     const rateText = createContext.rate ? createContext.rate + " per " + unit : "not configured";
     if (context) {
       context.textContent = createContext.complete
         ? "Workspace rate: " + rateText
-        : "Mileage settings need a rate and output category before users can create expenses.";
+        : "Mileage settings need a rate and Mileage category before users can create expenses.";
     }
     if (rate) {
       rate.disabled = !createContext.allowUserRateOverride;
@@ -212,11 +217,11 @@
       body: JSON.stringify({ miles: payload.miles, rate: payload.rate })
     }).then(result => {
       const target = element("preview-result");
-      const unit = createContext.unit || "mi";
+      const unit = createContext.unit || "mile";
       target.replaceChildren();
       const primary = document.createElement("div");
       primary.className = "amount-primary";
-      primary.textContent = result.miles + " " + unit + " x " + result.rate + " = " + result.calculatedAmount;
+      primary.textContent = trimDecimal(result.miles) + " " + unitLabel(result.miles, unit) + " x " + trimDecimal(result.rate) + " = " + trimDecimal(result.calculatedAmount);
       const secondary = document.createElement("div");
       secondary.className = "amount-secondary";
       secondary.textContent = "Expense amount: " + result.roundedAmount;
@@ -295,37 +300,35 @@
   function renderMileageRows(rows, items, includeUser, emptyText) {
     rows.replaceChildren();
     if (!items.length) {
-      renderEmptyRow(rows, includeUser ? 7 : 6, emptyText);
+      renderEmptyRow(rows, includeUser ? 8 : 7, emptyText);
       return;
     }
     items.forEach(item => {
       const row = rows.insertRow();
       appendTextCell(row, item.expenseId);
       if (includeUser) {
-        appendTextCell(row, item.userId);
+        appendTextCell(row, item.userName || item.userId);
       }
+      appendTextCell(row, item.sourceLabel || sourceLabel(item.source));
       appendTextCell(row, item.status);
-      appendTextCell(row, item.miles);
-      appendTextCell(row, item.rate);
+      appendTextCell(row, trimDecimal(item.miles));
+      appendTextCell(row, trimDecimal(item.rate));
       appendAmountCell(row, item.calculatedAmount, item.roundedAmount);
-      appendTextCell(row, item.updatedAt);
+      appendTextCell(row, formatDate(item.updatedAt));
     });
   }
 
   function loadCategories() {
     return apiFetch("/api/mileage/options/categories").then(data => {
-      const input = element("settings-input-category");
-      const output = element("settings-output-category");
-      if (!input || !output) {
+      const categorySelect = element("settings-mileage-category");
+      if (!categorySelect) {
         return;
       }
-      input.replaceChildren();
-      output.replaceChildren();
+      categorySelect.replaceChildren();
+      appendOption(categorySelect, "", "Choose Mileage category");
       data.categories.forEach(category => {
-        const inputOption = new Option(category.name + " (" + category.type + ")", category.id);
-        const outputOption = new Option(category.name + " (" + category.type + ")", category.id);
-        input.appendChild(inputOption);
-        output.appendChild(outputOption);
+        const suffix = category.unit ? " (" + category.type + ": " + category.unit + ")" : " (" + category.type + ")";
+        appendOption(categorySelect, category.id, category.name + suffix);
       });
     });
   }
@@ -354,16 +357,10 @@
       .then(([settings]) => {
         element("settings-enabled").checked = settings.enabled;
         element("settings-rate").value = settings.rate || "";
-        element("settings-unit").value = settings.unit || "mi";
-        element("settings-input-category").value = settings.inputCategoryId || "";
-        element("settings-output-category").value = settings.outputCategoryId || "";
-        element("settings-rounding").value = settings.roundingMode || "HALF_UP";
+        element("settings-mileage-category").value = settings.mileageCategoryId || settings.inputCategoryId || settings.outputCategoryId || "";
         element("settings-convert-create").checked = settings.convertOnCreate;
         element("settings-convert-update").checked = settings.convertOnUpdate;
-        element("settings-preserve-notes").checked = settings.preserveOriginalNotes;
-        element("settings-dry-run").checked = settings.dryRunMode;
         element("settings-rate-override").checked = settings.allowUserRateOverride;
-        element("settings-template").value = settings.noteTemplate || "";
         element("settings-status").textContent = settings.completeForNativeConversion ? "Ready" : "Needs configuration";
       })
       .catch(error => toast(error.message, "error"));
@@ -374,16 +371,10 @@
     const payload = {
       enabled: element("settings-enabled").checked,
       rate: formValue("settings-rate"),
-      unit: formValue("settings-unit") || "mi",
-      inputCategoryId: formValue("settings-input-category") || null,
-      outputCategoryId: formValue("settings-output-category") || null,
-      roundingMode: formValue("settings-rounding") || "HALF_UP",
+      mileageCategoryId: formValue("settings-mileage-category") || null,
       convertOnCreate: element("settings-convert-create").checked,
       convertOnUpdate: element("settings-convert-update").checked,
-      preserveOriginalNotes: element("settings-preserve-notes").checked,
-      dryRunMode: element("settings-dry-run").checked,
       allowUserRateOverride: element("settings-rate-override").checked,
-      noteTemplate: formValue("settings-template") || null
     };
     apiFetch("/api/mileage/settings", {
       method: "PUT",
@@ -396,6 +387,22 @@
     }).catch(error => toast(error.message, "error"));
   }
 
+  function setupMileageCategory() {
+    apiFetch("/api/mileage/settings/mileage-category", { method: "POST" })
+      .then(settings => {
+        toast("Mileage category is ready.");
+        return loadCategories().then(() => {
+          if (element("settings-mileage-category")) {
+            element("settings-mileage-category").value = settings.mileageCategoryId || "";
+          }
+          loadSettings();
+          loadCreateContext();
+          loadDiagnostics();
+        });
+      })
+      .catch(error => toast(error.message, "error"));
+  }
+
   function loadConversions() {
     const rows = element("conversion-rows");
     if (!rows) {
@@ -405,18 +412,19 @@
       rows.replaceChildren();
       const items = data.conversions || [];
       if (!items.length) {
-        renderEmptyRow(rows, 7, "No conversion rows yet.");
+        renderEmptyRow(rows, 8, "No conversion rows yet.");
         return;
       }
       items.forEach(item => {
         const row = rows.insertRow();
         appendTextCell(row, item.expenseId);
-        appendTextCell(row, item.source);
+        appendTextCell(row, item.sourceLabel || sourceLabel(item.source));
+        appendTextCell(row, item.userName || item.userId);
         appendTextCell(row, item.status);
-        appendTextCell(row, item.miles);
-        appendTextCell(row, item.rate);
+        appendTextCell(row, trimDecimal(item.miles));
+        appendTextCell(row, trimDecimal(item.rate));
         appendAmountCell(row, item.calculatedAmount, item.roundedAmount);
-        appendTextCell(row, item.updatedAt);
+        appendTextCell(row, formatDate(item.updatedAt));
       });
     }).catch(error => toast(error.message, "error"));
   }
@@ -432,12 +440,50 @@
     stack.className = "metric-stack";
     const primary = document.createElement("span");
     primary.className = "amount-primary";
-    primary.textContent = calculatedAmount == null ? "" : String(calculatedAmount);
+    primary.textContent = calculatedAmount == null ? "" : trimDecimal(calculatedAmount);
     const secondary = document.createElement("span");
     secondary.className = "amount-secondary";
     secondary.textContent = roundedAmount == null ? "Expense amount: " : "Expense amount: " + roundedAmount;
     stack.append(primary, secondary);
     cell.appendChild(stack);
+  }
+
+  function trimDecimal(value) {
+    if (value == null || value === "") {
+      return "";
+    }
+    const text = String(value);
+    return text.indexOf(".") >= 0 ? text.replace(/0+$/, "").replace(/\.$/, "") : text;
+  }
+
+  function unitLabel(miles, unit) {
+    return unit === "mile" && trimDecimal(miles) !== "1" ? "miles" : unit;
+  }
+
+  function sourceLabel(source) {
+    if (source === "ADDON_FORM") {
+      return "Created through add-on";
+    }
+    if (source) {
+      return "Created through Expenses";
+    }
+    return "";
+  }
+
+  function formatDate(value) {
+    if (!value) {
+      return "";
+    }
+    const options = { dateStyle: "short", timeStyle: "short" };
+    const timezone = timezoneFromClaims();
+    if (timezone) {
+      options.timeZone = timezone;
+    }
+    try {
+      return new Intl.DateTimeFormat("en-US", options).format(new Date(value));
+    } catch (e) {
+      return new Intl.DateTimeFormat("en-US", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
+    }
   }
 
   function renderEmptyRow(rows, colspan, text) {
@@ -485,6 +531,7 @@
   on("btn-preview", "click", previewMileage);
   on("mileage-form", "submit", createMileage);
   on("settings-form", "submit", saveSettings);
+  on("btn-setup-mileage-category", "click", setupMileageCategory);
   on("btn-refresh-mine", "click", loadMine);
   on("btn-refresh-team", "click", loadTeam);
   on("btn-refresh-conversions", "click", loadConversions);

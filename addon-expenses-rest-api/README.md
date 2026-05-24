@@ -1,6 +1,6 @@
 # Mileage for Clockify
 
-Mileage for Clockify creates precise mileage reimbursements as real Clockify flat expenses and converts native/mobile unit mileage expenses through signed expense webhooks.
+Mileage for Clockify creates precise mileage reimbursements as real Clockify expenses and converts native/mobile Mileage-category expenses through signed expense webhooks.
 
 ## Current Status
 
@@ -9,12 +9,14 @@ This module is the implemented product module inside the standalone repository. 
 ## Scope
 
 - Settings store only mileage configuration per workspace.
+- Settings use one `Mileage` unit category, fixed unit `mile`, fixed `HALF_UP` rounding, and rate override disabled by default.
 - Audit rows provide idempotency, delete/restore state, dry-run records, and conversion failures.
 - Clockify remains the source of truth for expenses, receipts, approvals, reports, budgets, and invoices.
 - Mileage, rate, and money values are handled with `BigDecimal`.
 - Manual mileage creation defaults `billable` to true when omitted and derives the user from verified token claims.
 - Rate override on the main page is available only when workspace settings allow it; otherwise the configured workspace rate is used and shown as read-only context.
 - Regular users see only `Mine`; admins also see `Team`, `Settings`, `Conversions`, and `Diagnostics`.
+- Generated Clockify notes are deterministic and exact, for example `Mileage reimbursement: 1 mile x 0.725 = 0.725. Created/converted by Mileage for Clockify.`
 - Add-on previews and mileage tables show full `calculatedAmount` decimals first, with the rounded Clockify expense amount shown as secondary context.
 - Native/mobile created and restored expense webhooks tolerate both full expense payloads and reference payloads containing `expenseId`.
 

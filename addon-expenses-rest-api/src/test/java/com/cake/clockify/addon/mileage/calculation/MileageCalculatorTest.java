@@ -16,8 +16,18 @@ class MileageCalculatorTest {
         MileageCalculation result = calculator.calculate("37.4", "0.655", RoundingMode.HALF_UP);
         assertThat(result.calculatedAmount()).isEqualByComparingTo(new BigDecimal("24.4970"));
         assertThat(result.roundedAmount()).isEqualByComparingTo(new BigDecimal("24.50"));
-        assertThat(result.calculatedAmountText()).isEqualTo("24.4970");
+        assertThat(result.calculatedAmountText()).isEqualTo("24.497");
         assertThat(result.roundedAmountText()).isEqualTo("24.50");
+    }
+
+    @Test
+    void calculatesExactOneMileAt0725AndRoundsClockifyAmountHalfUp() {
+        MileageCalculation result = calculator.calculate("1", "0.725", RoundingMode.HALF_UP);
+
+        assertThat(result.calculatedAmount()).isEqualByComparingTo(new BigDecimal("0.725"));
+        assertThat(result.calculatedAmountText()).isEqualTo("0.725");
+        assertThat(result.roundedAmount()).isEqualByComparingTo(new BigDecimal("0.73"));
+        assertThat(result.roundedAmountText()).isEqualTo("0.73");
     }
 
     @Test
@@ -62,7 +72,7 @@ class MileageCalculatorTest {
         MileageCalculation result = calculator.calculate("1000000.000", "0.000001", RoundingMode.HALF_UP);
         assertThat(result.milesText()).isEqualTo("1000000");
         assertThat(result.rateText()).isEqualTo("0.000001");
-        assertThat(result.calculatedAmountText()).isEqualTo("1.000000000");
+        assertThat(result.calculatedAmountText()).isEqualTo("1");
         assertThat(result.roundedAmountText()).isEqualTo("1.00");
     }
 }

@@ -26,7 +26,7 @@ public class MileageWorkspaceSettings implements Persistable<String> {
     private BigDecimal rate;
 
     @Column(name = "unit", nullable = false, length = 16)
-    private String unit = "mi";
+    private String unit = "mile";
 
     @Column(name = "input_category_id", length = 64)
     private String inputCategoryId;
@@ -44,7 +44,7 @@ public class MileageWorkspaceSettings implements Persistable<String> {
     private boolean convertOnUpdate = true;
 
     @Column(name = "preserve_original_notes", nullable = false)
-    private boolean preserveOriginalNotes = true;
+    private boolean preserveOriginalNotes = false;
 
     @Column(name = "dry_run_mode", nullable = false)
     private boolean dryRunMode;

@@ -10,8 +10,8 @@ import java.util.UUID;
 public class MileageNoteService {
     public static final String MARKER_PREFIX = "[MileageAddon:converted:v1";
     public static final String DEFAULT_NOTE_TEMPLATE =
-            "Mileage reimbursement: {{miles}} {{unit}} x {{rate}} = {{calculatedAmount}}. Expense amount: {{roundedAmount}}. Created/converted by Mileage for Clockify. {{marker}}";
-    public static final String DEFAULT_UNIT = "mi";
+            "Mileage reimbursement: {{miles}} {{unit}} x {{rate}} = {{calculatedAmount}}. Created/converted by Mileage for Clockify.";
+    public static final String DEFAULT_UNIT = "mile";
     public static final RoundingMode DEFAULT_ROUNDING_MODE = RoundingMode.HALF_UP;
 
     public String marker(UUID conversionId) {
@@ -34,12 +34,8 @@ public class MileageNoteService {
         }
         String generated = render(template == null || template.isBlank() ? DEFAULT_NOTE_TEMPLATE : template,
                 calculation,
-                unit == null || unit.isBlank() ? DEFAULT_UNIT : unit,
+                unitLabel(calculation, unit),
                 marker(conversionId));
-        String original = originalNote == null ? "" : originalNote.strip();
-        if (preserveOriginalNotes && !original.isBlank()) {
-            return original + "\n\n" + generated;
-        }
         return generated;
     }
 
@@ -52,5 +48,16 @@ public class MileageNoteService {
                 .replace("{{roundedAmount}}", calculation.roundedAmountText())
                 .replace("{{amount}}", calculation.roundedAmountText())
                 .replace("{{marker}}", marker);
+    }
+
+    private static String unitLabel(MileageCalculation calculation, String unit) {
+        String base = unit == null || unit.isBlank() ? DEFAULT_UNIT : unit.strip();
+        if ("mi".equalsIgnoreCase(base)) {
+            base = DEFAULT_UNIT;
+        }
+        if (!DEFAULT_UNIT.equals(base)) {
+            return base;
+        }
+        return calculation.miles().compareTo(java.math.BigDecimal.ONE) == 0 ? DEFAULT_UNIT : DEFAULT_UNIT + "s";
     }
 }

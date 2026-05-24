@@ -82,7 +82,7 @@ class MileageApiControllerTest {
                                 {"miles":"37.4"}
                                 """))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.calculatedAmount").value("24.4970"))
+                .andExpect(jsonPath("$.calculatedAmount").value("24.497"))
                 .andExpect(jsonPath("$.roundedAmount").value("24.50"));
     }
 
@@ -106,7 +106,7 @@ class MileageApiControllerTest {
                                 {"miles":"37.4"}
                                 """))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.calculatedAmount").value("24.4970"))
+                .andExpect(jsonPath("$.calculatedAmount").value("24.497"))
                 .andExpect(jsonPath("$.roundedAmount").value("24.50"));
     }
 
@@ -197,6 +197,26 @@ class MileageApiControllerTest {
         assertThat(command.getValue().userId()).isEqualTo("user-claims");
         assertThat(command.getValue().taskId()).isNull();
         assertThat(command.getValue().amount()).isEqualByComparingTo(new BigDecimal("24.50"));
+    }
+
+    @Test
+    void createMileageExpenseWithSingleMileageCategorySendsMilesQuantityToClockify() throws Exception {
+        when(settingsService.validateForAddonCreate("ws-api")).thenReturn(singleCategorySettings());
+        when(gateway.createFlatExpense(eq("ws-api"), any(CreateFlatExpenseCommand.class))).thenReturn(createdExpense("exp-1"));
+
+        mockMvc.perform(post("/api/mileage/expenses")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createBody("1", null)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.calculatedAmount").value("0.725"))
+                .andExpect(jsonPath("$.roundedAmount").value("0.73"));
+
+        ArgumentCaptor<CreateFlatExpenseCommand> command = ArgumentCaptor.forClass(CreateFlatExpenseCommand.class);
+        verify(gateway).createFlatExpense(eq("ws-api"), command.capture());
+        assertThat(command.getValue().categoryId()).isEqualTo("cat-mileage");
+        assertThat(command.getValue().amount()).isEqualByComparingTo(new BigDecimal("1"));
+        assertThat(command.getValue().amountIsQuantity()).isTrue();
     }
 
     @Test
@@ -423,6 +443,11 @@ class MileageApiControllerTest {
     private static MileageSettingsValidation settings(boolean allowOverride) {
         return new MileageSettingsValidation("ws-api", true, true, new BigDecimal("0.655"), "mi",
                 "cat-input", "cat-output", RoundingMode.HALF_UP, true, true, true, false, allowOverride, null, List.of());
+    }
+
+    private static MileageSettingsValidation singleCategorySettings() {
+        return new MileageSettingsValidation("ws-api", true, true, new BigDecimal("0.725"), "mile",
+                "cat-mileage", "cat-mileage", RoundingMode.HALF_UP, true, true, false, false, false, null, List.of());
     }
 
     private static NormalizedClaims claims() {

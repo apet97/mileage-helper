@@ -52,8 +52,10 @@ Main product packages:
 - Mileage create requests intentionally omit `taskId`; the UI follows Clockify's regular expense form, does not fetch task options, and does not require `TASK_READ`. Native/mobile conversion may still preserve task IDs from existing Clockify expense snapshots.
 - Manual mileage expenses default to billable when `billable` is omitted; explicit `false` remains non-billable.
 - Main-page rate override is hidden and omitted unless workspace settings allow overrides. The backend calculation also ignores submitted override rates when the setting is off.
+- Mileage settings use one `Mileage` unit category with fixed unit `mile` and fixed `HALF_UP` rounding; existing input/output category settings normalize to that single category.
+- Generated Clockify notes are clean and exact, e.g. `Mileage reimbursement: 1 mile x 0.725 = 0.725. Created/converted by Mileage for Clockify.`
 - `EXPENSE_CREATED` and `EXPENSE_RESTORED` handlers accept either full payloads with `id` or reference payloads with `expenseId`.
-- Admin APIs: settings, diagnostics, category options, team mileage list/export, conversion list/detail/retry/export under `/api/mileage`.
+- Admin APIs: settings, Mileage category repair, diagnostics, category options, team mileage list/export, conversion list/detail/retry/export under `/api/mileage`.
 - Add-on previews and mileage tables show full `calculatedAmount` decimals first; Clockify Expenses still receives the rounded `roundedAmount`.
 - Tables: `mileage_workspace_settings`, `mileage_conversion`.
 - Historical pre-Mileage migrations V5/V10 are retained for Flyway validation only; V12 drops their leftover generic tables. New code/docs should not add `temp_addon_expenses*`, `clockify-expenses-api`, `Clockify Expenses API`, or `com.cake.clockify.addon.expenses` references.

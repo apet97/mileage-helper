@@ -26,6 +26,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -60,7 +61,10 @@ class MileageSettingsControllerTest {
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("ADMIN")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.rate").value("0.655"))
-                .andExpect(jsonPath("$.outputCategoryId").value("cat-output"));
+                .andExpect(jsonPath("$.mileageCategoryId").value("cat-mileage"))
+                .andExpect(jsonPath("$.mileageCategoryName").value("Mileage"))
+                .andExpect(jsonPath("$.fixedUnit").value("mile"))
+                .andExpect(jsonPath("$.fixedRoundingMode").value("HALF_UP"));
     }
 
     @Test
@@ -71,7 +75,7 @@ class MileageSettingsControllerTest {
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("OWNER"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"rate":"0.70","inputCategoryId":"cat-input","outputCategoryId":"cat-output"}
+                                {"rate":"0.70","mileageCategoryId":"cat-mileage"}
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.rate").value("0.655"));
@@ -85,6 +89,27 @@ class MileageSettingsControllerTest {
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("MEMBER"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void adminCanCreateOrRepairMileageCategory() throws Exception {
+        when(settingsService.getEffectiveSettings("ws-admin")).thenReturn(settingsResponse(List.of()));
+        when(gateway.createOrRepairMileageCategory("ws-admin", new BigDecimal("0.655")))
+                .thenReturn(new ClockifyCategoryOption("cat-mileage", "Mileage", "UNIT", "mile", new BigDecimal("73")));
+
+        mockMvc.perform(post("/api/mileage/settings/mileage-category")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("OWNER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.mileageCategoryId").value("cat-mileage"));
+
+        verify(settingsService).saveMileageCategory("ws-admin", "cat-mileage", "user-claims");
+    }
+
+    @Test
+    void memberCannotCreateOrRepairMileageCategory() throws Exception {
+        mockMvc.perform(post("/api/mileage/settings/mileage-category")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("MEMBER")))
                 .andExpect(status().isForbidden());
     }
 
@@ -130,8 +155,9 @@ class MileageSettingsControllerTest {
 
     private static com.cake.clockify.addon.mileage.api.model.MileageSettingsResponse settingsResponse(List<String> diagnostics) {
         return new com.cake.clockify.addon.mileage.api.model.MileageSettingsResponse(
-                true, "0.655", "mi", "cat-input", "cat-output", RoundingMode.HALF_UP.name(),
-                true, true, true, false, false, null, true, diagnostics.isEmpty(), diagnostics);
+                true, "0.655", "mile", "cat-mileage", "cat-mileage", RoundingMode.HALF_UP.name(),
+                true, true, false, false, false, null, true, diagnostics.isEmpty(), diagnostics,
+                "cat-mileage", "Mileage", "mile", RoundingMode.HALF_UP.name());
     }
 
     private static NormalizedClaims claims(String role) {

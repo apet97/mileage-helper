@@ -17,6 +17,32 @@ public record MileageSettingsResponse(
         String noteTemplate,
         boolean completeForAddonCreate,
         boolean completeForNativeConversion,
-        List<String> diagnostics
+        List<String> diagnostics,
+        String mileageCategoryId,
+        String mileageCategoryName,
+        String fixedUnit,
+        String fixedRoundingMode
 ) {
+    public MileageSettingsResponse withMileageCategoryName(String name) {
+        return new MileageSettingsResponse(
+                enabled,
+                rate,
+                unit,
+                inputCategoryId,
+                outputCategoryId,
+                roundingMode,
+                convertOnCreate,
+                convertOnUpdate,
+                preserveOriginalNotes,
+                dryRunMode,
+                allowUserRateOverride,
+                noteTemplate,
+                completeForAddonCreate,
+                completeForNativeConversion,
+                diagnostics,
+                mileageCategoryId,
+                name,
+                fixedUnit,
+                fixedRoundingMode);
+    }
 }

@@ -116,9 +116,12 @@ class MileageSettingsServiceTest {
         MileageSettingsResponse response = settingsService.getEffectiveSettings("ws-default");
 
         assertThat(response.enabled()).isTrue();
-        assertThat(response.unit()).isEqualTo("mi");
+        assertThat(response.unit()).isEqualTo("mile");
+        assertThat(response.fixedUnit()).isEqualTo("mile");
         assertThat(response.roundingMode()).isEqualTo("HALF_UP");
+        assertThat(response.fixedRoundingMode()).isEqualTo("HALF_UP");
         assertThat(response.allowUserRateOverride()).isFalse();
+        assertThat(response.preserveOriginalNotes()).isFalse();
         assertThat(response.convertOnCreate()).isTrue();
         assertThat(response.convertOnUpdate()).isTrue();
         assertThat(response.completeForAddonCreate()).isFalse();
@@ -129,28 +132,51 @@ class MileageSettingsServiceTest {
     @Test
     void savesSettingsWithBigDecimalRate() {
         MileageSettingsRequest request = new MileageSettingsRequest(
-                true, "0.655", "km", "cat-input", "cat-output", "HALF_EVEN",
+                true, "0.655", "km", "cat-input", "cat-output", "cat-mileage", "HALF_EVEN",
                 true, false, true, false, true, "custom {{marker}}");
 
         MileageWorkspaceSettings saved = settingsService.saveSettings("ws-save", request, "admin-1");
 
         assertThat(saved.getRate()).isEqualByComparingTo(new BigDecimal("0.655"));
-        assertThat(saved.getUnit()).isEqualTo("km");
-        assertThat(saved.getInputCategoryId()).isEqualTo("cat-input");
-        assertThat(saved.getOutputCategoryId()).isEqualTo("cat-output");
-        assertThat(saved.getRoundingMode()).isEqualTo("HALF_EVEN");
+        assertThat(saved.getUnit()).isEqualTo("mile");
+        assertThat(saved.getInputCategoryId()).isEqualTo("cat-mileage");
+        assertThat(saved.getOutputCategoryId()).isEqualTo("cat-mileage");
+        assertThat(saved.getRoundingMode()).isEqualTo("HALF_UP");
+        assertThat(saved.isPreserveOriginalNotes()).isFalse();
         assertThat(saved.getUpdatedByUserId()).isEqualTo("admin-1");
+    }
+
+    @Test
+    void normalizesExistingTwoCategorySettingsToSingleMileageCategory() {
+        MileageWorkspaceSettings settings = new MileageWorkspaceSettings();
+        settings.setWorkspaceId("ws-existing");
+        settings.setRate(new BigDecimal("0.725"));
+        settings.setUnit("mi");
+        settings.setInputCategoryId("cat-input");
+        settings.setOutputCategoryId("cat-output");
+        settings.setRoundingMode("DOWN");
+        settings.setPreserveOriginalNotes(true);
+        settingsRepository.saveAndFlush(settings);
+
+        MileageSettingsResponse response = settingsService.getEffectiveSettings("ws-existing");
+
+        assertThat(response.unit()).isEqualTo("mile");
+        assertThat(response.roundingMode()).isEqualTo("HALF_UP");
+        assertThat(response.inputCategoryId()).isEqualTo("cat-input");
+        assertThat(response.outputCategoryId()).isEqualTo("cat-input");
+        assertThat(response.mileageCategoryId()).isEqualTo("cat-input");
+        assertThat(response.preserveOriginalNotes()).isFalse();
     }
 
     @Test
     void rejectsInvalidRoundingMode() {
         MileageSettingsRequest request = new MileageSettingsRequest(
-                true, "0.655", "mi", null, "cat-output", "ROUNDISH",
+                true, "0.655", "mi", null, "cat-output", null, "ROUNDISH",
                 true, true, true, false, false, null);
 
-        assertThatThrownBy(() -> settingsService.saveSettings("ws-rounding", request, "admin-1"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage("roundingMode must be a Java RoundingMode name");
+        MileageWorkspaceSettings saved = settingsService.saveSettings("ws-rounding", request, "admin-1");
+
+        assertThat(saved.getRoundingMode()).isEqualTo("HALF_UP");
     }
 
     @Test

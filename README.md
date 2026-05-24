@@ -1,6 +1,6 @@
 # Mileage for Clockify
 
-Standalone repository for the Mileage for Clockify add-on. It creates precise mileage reimbursements as real Clockify flat expenses and converts eligible native/mobile unit mileage expenses through expense webhooks.
+Standalone repository for the Mileage for Clockify add-on. It creates precise mileage reimbursements as real Clockify expenses and converts eligible native/mobile Mileage-category expenses through expense webhooks.
 
 ## Repository Layout
 
@@ -18,10 +18,12 @@ The ignored local clone `addon-expenses-rest-api/addon-java-sdk/` is read-only r
 - Manifest: `GET /manifest`, schema `1.5`, key `mileage-for-clockify`, minimum plan `PRO`.
 - UI: `GET /iframe/mileage`, `GET /iframe/settings`.
 - User APIs: `GET /api/mileage/create-context`, `GET /api/mileage/mine`, `GET /api/mileage/mine.csv`, `POST /api/mileage/preview`, `POST /api/mileage/expenses`.
-- Admin APIs: settings, diagnostics, category options, team mileage list/export, conversion list/detail/retry/export under `/api/mileage`.
+- Admin APIs: settings, Mileage category repair, diagnostics, category options, team mileage list/export, conversion list/detail/retry/export under `/api/mileage`.
 - Webhooks: `EXPENSE_CREATED`, `EXPENSE_UPDATED`, `EXPENSE_DELETED`, `EXPENSE_RESTORED`.
 - Manual mileage expenses are billable by default unless the request explicitly sends `billable=false`.
 - The main form hides rate override unless workspace settings allow it; users always see the configured workspace rate context first.
+- Settings use one `Mileage` unit category, fixed unit `mile`, and fixed `HALF_UP` Clockify-style rounding.
+- Generated Clockify notes use the exact calculated amount, for example `Mileage reimbursement: 1 mile x 0.725 = 0.725. Created/converted by Mileage for Clockify.`
 - The add-on displays full calculated mileage decimals in previews, Mine, Team, and Conversions while Clockify receives the rounded expense amount.
 - Native-created/restored expense webhooks accept both full payloads with `id` and reference payloads with `expenseId`.
 

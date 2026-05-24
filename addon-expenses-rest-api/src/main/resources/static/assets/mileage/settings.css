@@ -224,6 +224,10 @@ button:disabled {
   gap: 8px;
 }
 
+.align-end {
+  align-items: end;
+}
+
 .result-strip,
 .context-strip,
 .empty-state,
@@ -303,6 +307,11 @@ tbody tr:last-child td { border-bottom: 0; }
 }
 
 .warnings { color: var(--danger); }
+
+.result-strip:empty,
+.warnings:empty {
+  display: none;
+}
 
 .toast-container {
   position: fixed;
