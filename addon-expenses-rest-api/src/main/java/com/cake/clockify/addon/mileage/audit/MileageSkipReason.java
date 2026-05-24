@@ -1,0 +1,16 @@
+package com.cake.clockify.addon.mileage.audit;
+
+public enum MileageSkipReason {
+    ADDON_DISABLED,
+    SETTINGS_INCOMPLETE,
+    NOT_INPUT_CATEGORY,
+    ALREADY_OUTPUT_CATEGORY,
+    ALREADY_MARKED,
+    ALREADY_CONVERTED,
+    MISSING_QUANTITY,
+    INVALID_QUANTITY,
+    FINALIZED_OR_LOCKED,
+    DRY_RUN,
+    WORKSPACE_MISMATCH,
+    API_RESOURCE_NOT_FOUND
+}

@@ -1,0 +1,7 @@
+.git
+**/.git
+.DS_Store
+**/.DS_Store
+target/
+**/target/
+addon-expenses-rest-api/addon-java-sdk/

@@ -1,0 +1,158 @@
+package com.cake.clockify.addon.mileage.clockify;
+
+import com.cake.clockify.addon.db.service.ClockifyClientFactory;
+import com.cake.clockify.client.ClockifyClient;
+import com.cake.clockify.client.ClockifyPageRequest;
+import com.cake.clockify.client.domains.ExpensesClient;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDate;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+class ClockifyExpenseGatewayTest {
+    private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
+    private ClockifyClientFactory clientFactory;
+    private ClockifyClient client;
+    private ExpensesClient expensesClient;
+    private ClockifyExpenseGateway gateway;
+
+    @BeforeEach
+    void setUp() {
+        clientFactory = mock(ClockifyClientFactory.class);
+        client = mock(ClockifyClient.class);
+        expensesClient = mock(ExpensesClient.class);
+        when(clientFactory.getClient("ws-gateway")).thenReturn(client);
+        when(client.expenses()).thenReturn(expensesClient);
+        gateway = new ClockifyExpenseGateway(clientFactory, objectMapper);
+    }
+
+    @Test
+    void fetchExpenseMapsQuantityAndTotalWithBigDecimal() throws Exception {
+        ObjectNode response = objectMapper.createObjectNode();
+        response.put("id", "exp-1");
+        response.put("workspaceId", "ws-gateway");
+        response.put("userId", "user-1");
+        response.put("date", "2026-05-24T12:00:00Z");
+        response.put("projectId", "project-1");
+        response.put("taskId", "task-1");
+        response.put("categoryId", "cat-unit");
+        response.put("notes", "note");
+        response.put("quantity", "37.400000");
+        response.put("billable", true);
+        response.put("fileId", "file-1");
+        response.put("total", 2449.70);
+        response.put("locked", false);
+        when(expensesClient.getExpense("ws-gateway", "exp-1")).thenReturn(response);
+
+        ClockifyExpenseSnapshot snapshot = gateway.getExpense("ws-gateway", "exp-1");
+
+        assertThat(snapshot.quantity()).isEqualByComparingTo(new BigDecimal("37.400000"));
+        assertThat(snapshot.total()).isEqualByComparingTo(new BigDecimal("2449.70"));
+        assertThat(snapshot.fileId()).isEqualTo("file-1");
+        assertThat(snapshot.locked()).isFalse();
+    }
+
+    @Test
+    void createFlatExpenseSendsOutputCategoryAndAmountAsPlainString() throws Exception {
+        when(expensesClient.createExpense(eq("ws-gateway"), any(JsonNode.class))).thenReturn(objectMapper.createObjectNode().put("id", "exp-created"));
+        CreateFlatExpenseCommand command = command();
+
+        JsonNode response = gateway.createFlatExpense("ws-gateway", command);
+
+        ArgumentCaptor<JsonNode> body = ArgumentCaptor.forClass(JsonNode.class);
+        verify(expensesClient).createExpense(eq("ws-gateway"), body.capture());
+        assertThat(body.getValue().path("categoryId").asText()).isEqualTo("cat-flat");
+        assertThat(body.getValue().path("amount").asText()).isEqualTo("24.50");
+        assertThat(response.path("id").asText()).isEqualTo("exp-created");
+    }
+
+    @Test
+    void createFlatExpenseWithReceiptForwardsFileOnlyToClockify() throws Exception {
+        byte[] file = new byte[] {1, 2, 3};
+        when(expensesClient.createExpense(eq("ws-gateway"), any(JsonNode.class), eq("receipt.png"), eq("image/png"), eq(file)))
+                .thenReturn(objectMapper.createObjectNode().put("id", "exp-file").put("fileId", "file-1"));
+
+        JsonNode response = gateway.createFlatExpenseWithReceipt("ws-gateway", command(), "receipt.png", "image/png", file);
+
+        assertThat(response.path("fileId").asText()).isEqualTo("file-1");
+        verify(expensesClient).createExpense(eq("ws-gateway"), any(JsonNode.class), eq("receipt.png"), eq("image/png"), eq(file));
+    }
+
+    @Test
+    void updateFlatExpenseSendsSourceIdentityDateBillableCategoryAmountNotesAndChangeFields() throws Exception {
+        when(expensesClient.updateExpense(eq("ws-gateway"), eq("exp-1"), any(JsonNode.class)))
+                .thenReturn(objectMapper.createObjectNode().put("id", "exp-1"));
+        UpdateFlatExpenseCommand command = new UpdateFlatExpenseCommand(
+                "cat-flat",
+                "user-1",
+                "2026-05-24T12:00:00Z",
+                "project-1",
+                "task-1",
+                false,
+                new BigDecimal("24.50"),
+                "converted",
+                RoundingMode.HALF_UP);
+
+        gateway.updateFlatExpense("ws-gateway", "exp-1", command);
+
+        ArgumentCaptor<JsonNode> body = ArgumentCaptor.forClass(JsonNode.class);
+        verify(expensesClient).updateExpense(eq("ws-gateway"), eq("exp-1"), body.capture());
+        assertThat(body.getValue().path("categoryId").asText()).isEqualTo("cat-flat");
+        assertThat(body.getValue().path("userId").asText()).isEqualTo("user-1");
+        assertThat(body.getValue().path("date").asText()).isEqualTo("2026-05-24T12:00:00Z");
+        assertThat(body.getValue().path("projectId").asText()).isEqualTo("project-1");
+        assertThat(body.getValue().path("taskId").asText()).isEqualTo("task-1");
+        assertThat(body.getValue().path("billable").asBoolean()).isFalse();
+        assertThat(body.getValue().path("amount").asText()).isEqualTo("24.50");
+        assertThat(body.getValue().path("notes").asText()).isEqualTo("converted");
+        assertThat(body.getValue().path("changeFields").asText()).isEqualTo("CATEGORY,AMOUNT,NOTES");
+    }
+
+    @Test
+    void listCategoriesNormalizesUnitAndFlatTypes() throws Exception {
+        ObjectNode root = objectMapper.createObjectNode();
+        var categories = root.putArray("categories");
+        categories.addObject().put("id", "cat-unit").put("name", "Mileage unit").put("hasUnitPrice", true).put("unit", "mi").put("priceInCents", 1);
+        categories.addObject().put("id", "cat-flat").put("name", "Mileage flat").put("hasUnitPrice", false).put("unit", "");
+        when(expensesClient.getCategories(eq("ws-gateway"), any(ClockifyPageRequest.class))).thenReturn(root);
+
+        assertThat(gateway.listCategories("ws-gateway"))
+                .extracting(ClockifyCategoryOption::type)
+                .containsExactly("UNIT", "FLAT");
+    }
+
+    @Test
+    void gatewayUsesClockifyClientFactoryForWorkspace() throws Exception {
+        when(expensesClient.createExpense(eq("ws-gateway"), any(JsonNode.class))).thenReturn(objectMapper.createObjectNode());
+
+        gateway.createFlatExpense("ws-gateway", command());
+
+        verify(clientFactory).getClient("ws-gateway");
+    }
+
+    private static CreateFlatExpenseCommand command() {
+        return new CreateFlatExpenseCommand(
+                "cat-flat",
+                "user-1",
+                LocalDate.of(2026, 5, 24),
+                "project-1",
+                "task-1",
+                new BigDecimal("24.50"),
+                true,
+                "converted note",
+                RoundingMode.HALF_UP);
+    }
+}

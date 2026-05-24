@@ -1,0 +1,20 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/addon_test
+    username: 15x
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        default_schema: addon_db_test
+  flyway:
+    enabled: true
+    schemas: addon_db_test
+    create-schemas: true
+
+clockify:
+  api-key: test-api-key
+  workspace-id: test-workspace

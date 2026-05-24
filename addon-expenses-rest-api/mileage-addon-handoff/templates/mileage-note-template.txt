@@ -1,0 +1,4 @@
+Mileage reimbursement: {{miles}} {{unit}} × {{rate}} = {{amount}}. Created/converted by Mileage for Clockify. {{marker}}
+
+Marker format:
+[MileageAddon:converted:v1 id={{conversionId}}]

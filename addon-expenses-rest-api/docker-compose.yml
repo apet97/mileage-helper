@@ -1,0 +1,42 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: mileage-for-clockify-db
+    environment:
+      POSTGRES_DB: mileage_for_clockify
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d mileage_for_clockify"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  addon:
+    build:
+      context: ..
+      dockerfile: addon-expenses-rest-api/Dockerfile
+    container_name: mileage-for-clockify-app
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/mileage_for_clockify
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: password
+      ADDON_KEY: mileage-for-clockify
+      ADDON_NAME: Mileage for Clockify
+      ADDON_DESCRIPTION: Create and convert precise mileage reimbursements into real Clockify flat expenses.
+      ADDON_BASE_URL: http://localhost:8080
+      # Secret key for encrypting data at rest (AES-GCM-256 requires 32 bytes hex = 64 characters)
+      ADDON_CRYPTO_KEY_K1: 00000000000000000000000000000000000000000000000000000000000000aa
+      ADDON_CRYPTO_ACTIVE_KEY_ID: k1
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

@@ -1,0 +1,68 @@
+# Mileage for Clockify
+
+Mileage for Clockify creates precise mileage reimbursements as real Clockify flat expenses and converts native/mobile unit mileage expenses through signed expense webhooks.
+
+## Current Status
+
+This module is the implemented product module inside the standalone repository. The old generic expense API boilerplate has been replaced by Mileage-specific manifest, settings, calculation, conversion, webhook, iframe, and audit code.
+
+## Scope
+
+- Settings store only mileage configuration per workspace.
+- Audit rows provide idempotency, delete/restore state, dry-run records, and conversion failures.
+- Clockify remains the source of truth for expenses, receipts, approvals, reports, budgets, and invoices.
+- Mileage, rate, and money values are handled with `BigDecimal`.
+
+## Non-goals
+
+- This add-on does not replace Clockify reports.
+- This add-on does not expose a generic expense API explorer.
+- This add-on does not store installation tokens in frontend code.
+
+## Environment
+
+- `SPRING_DATASOURCE_URL`
+- `SPRING_DATASOURCE_USERNAME`
+- `SPRING_DATASOURCE_PASSWORD`
+- `ADDON_BASE_URL`
+- `ADDON_CRYPTO_ACTIVE_KEY_ID`
+- `ADDON_CRYPTO_KEY_K1`
+- `ADDON_ENABLE_HSTS` defaults to `true`
+- `PORT` defaults to `8080`
+- `ADDON_KEY` defaults to `mileage-for-clockify`
+- `ADDON_NAME` defaults to `Mileage for Clockify`
+- `ADDON_DESCRIPTION` defaults to the Mileage product description
+
+## Local Run
+
+From the repository root:
+
+```bash
+docker compose -f addon-expenses-rest-api/docker-compose.yml up --build
+```
+
+The app serves `/manifest`, `/iframe/mileage`, `/iframe/settings`, `/healthz`, and `/actuator/health`.
+
+If local Postgres already uses `5432`, keep the compose database internal:
+
+```bash
+docker compose -f addon-expenses-rest-api/docker-compose.yml -f <(printf 'services:\n  db:\n    ports: !reset []\n') up -d
+```
+
+## Tests
+
+```bash
+mvn -pl addon-expenses-rest-api -am test
+mvn -pl addon-expenses-rest-api -am clean test
+```
+
+## Active Docs
+
+- `endpoints.md` - route list.
+- `models.md` - DTO/entity map.
+- `webhooks.md` - expense webhook behavior and loop prevention.
+- `edge-cases.md` - skip/failure behavior.
+- `reports.md` - relationship to native Clockify reports.
+- `mileage-addon-handoff/docs/ACCEPTANCE_CRITERIA.md` - release checklist and manual workspace validation.
+
+`mileage-addon-handoff/` is retained as historical design and implementation context. Prefer current source, tests, and the active docs above for maintenance work.

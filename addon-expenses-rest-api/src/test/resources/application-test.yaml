@@ -1,0 +1,30 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/addon_test
+    username: 15x
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        default_schema: temp_addon_expenses
+  flyway:
+    enabled: true
+    schemas: temp_addon_expenses
+    create-schemas: true
+
+addon:
+  key: mileage-for-clockify
+  name: Mileage for Clockify
+  description: Create and convert precise mileage reimbursements into real Clockify flat expenses.
+  base-url: https://mileage.example.com
+  crypto:
+    active-key-id: k1
+    keys:
+      k1: 00000000000000000000000000000000000000000000000000000000000000aa
+
+clockify:
+  api-key: test-api-key
+  workspace-id: test-workspace
