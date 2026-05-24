@@ -80,6 +80,23 @@ class MileageSecurityTest {
         assertThat(javascript).contains("element.hidden = !isAdmin");
     }
 
+    @Test
+    void mileageIframeDoesNotAskForRawUserId() {
+        String html = new MileageIframeController().mileage().getBody();
+
+        assertThat(html).doesNotContain("User ID");
+        assertThat(html).contains("id=\"field-user\"");
+        assertThat(html).contains("type=\"hidden\"");
+    }
+
+    @Test
+    void mileageJavascriptDefaultsUserIdFromVerifiedClaims() throws Exception {
+        String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
+
+        assertThat(javascript).contains("claims.user || claims.userId");
+        assertThat(javascript).contains("document.getElementById(\"field-user\").value = currentUserId");
+    }
+
     private static final class RejectingSignatureParser extends ClockifySignatureParser {
         private RejectingSignatureParser() {
             super("mileage-for-clockify", publicKey());
