@@ -8,6 +8,8 @@ import com.cake.clockify.addon.db.entity.AddonWebhookToken;
 import com.cake.clockify.addon.db.repository.AddonWebhookTokenRepository;
 import com.cake.clockify.addon.db.service.AddonInstallationService;
 import com.cake.clockify.addon.db.service.AddonSettingsService;
+import com.cake.clockify.addonsdk.clockify.model.ClockifyManifest;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,7 +19,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.net.URI;
 import java.util.Base64;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -36,6 +40,7 @@ public class JpaPersistenceLifecycleHandler implements AddonLifecycleHandler {
     private final ClockifyAddonProperties props;
     private final AddonSettingsService settingsService;
     private final ObjectMapper objectMapper;
+    private final Map<String, String> manifestWebhookEventsByPath;
 
     public JpaPersistenceLifecycleHandler(
             AddonInstallationService installationService,
@@ -44,12 +49,24 @@ public class JpaPersistenceLifecycleHandler implements AddonLifecycleHandler {
             ClockifyAddonProperties props,
             AddonSettingsService settingsService,
             ObjectMapper objectMapper) {
+        this(installationService, webhookTokenRepo, codec, props, settingsService, objectMapper, null);
+    }
+
+    public JpaPersistenceLifecycleHandler(
+            AddonInstallationService installationService,
+            AddonWebhookTokenRepository webhookTokenRepo,
+            TokenCodec codec,
+            ClockifyAddonProperties props,
+            AddonSettingsService settingsService,
+            ObjectMapper objectMapper,
+            ClockifyManifest manifest) {
         this.installationService = installationService;
         this.webhookTokenRepo = webhookTokenRepo;
         this.codec = codec;
         this.props = props;
         this.settingsService = settingsService;
         this.objectMapper = objectMapper;
+        this.manifestWebhookEventsByPath = webhookEventsByPath(manifest);
     }
 
     @Override
@@ -80,12 +97,16 @@ public class JpaPersistenceLifecycleHandler implements AddonLifecycleHandler {
                 continue;
             }
             String path = stringValue(wh.get("path"));
-            String eventType = firstString(wh, "webhookType", "webhookEvent", "eventType", "event");
+            String explicitEventType = firstString(wh, "webhookEvent", "eventType", "event");
             String webhookToken = stringValue(wh.get("authToken"));
             if (path == null || webhookToken == null) continue;
 
             String normalizedPath = normalizeWebhookPath(path);
             if (normalizedPath == null) continue;
+            String eventType = manifestWebhookEventsByPath.get(normalizedPath);
+            if (eventType == null && explicitEventType != null) {
+                eventType = explicitEventType.toUpperCase(Locale.ROOT);
+            }
 
             activePaths.add(normalizedPath);
 
@@ -166,6 +187,26 @@ public class JpaPersistenceLifecycleHandler implements AddonLifecycleHandler {
             }
         }
         return null;
+    }
+
+    private Map<String, String> webhookEventsByPath(ClockifyManifest manifest) {
+        if (manifest == null || manifest.getWebhooks() == null) {
+            return Map.of();
+        }
+        Map<String, String> out = new HashMap<>();
+        for (Object item : manifest.getWebhooks()) {
+            if (item == null) {
+                continue;
+            }
+            Map<String, Object> webhook = objectMapper.convertValue(item, new TypeReference<>() {});
+            String path = stringValue(webhook.get("path"));
+            String event = firstString(webhook, "event", "webhookEvent", "eventType");
+            String normalizedPath = normalizeWebhookPath(path);
+            if (normalizedPath != null && event != null) {
+                out.put(normalizedPath, event.toUpperCase(Locale.ROOT));
+            }
+        }
+        return Map.copyOf(out);
     }
 
     private static String normalizeWebhookPath(String rawPath) {

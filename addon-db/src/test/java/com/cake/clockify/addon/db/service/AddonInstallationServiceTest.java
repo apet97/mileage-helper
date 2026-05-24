@@ -52,13 +52,11 @@ class AddonInstallationServiceTest extends AbstractDbTest {
     }
 
     @Test
-    void testMarkUninstalledUpdatesStatus() {
+    void testMarkUninstalledDeletesInstallationRecordAndToken() {
         service.markInstalled("ws-1", "test-addon", "addon-id-123", "raw-token-abc", "http://b", "http://r", "u");
         service.markUninstalled("ws-1");
 
-        Optional<AddonInstallation> inst = repository.findById("ws-1");
-        assertThat(inst).isPresent();
-        assertThat(inst.get().getStatus()).isEqualTo("DELETED");
+        assertThat(repository.findById("ws-1")).isEmpty();
     }
 
     @Test
@@ -66,12 +64,12 @@ class AddonInstallationServiceTest extends AbstractDbTest {
         // Uninstalled non-existing workspace should do nothing and not throw
         service.markUninstalled("ws-non-exist");
 
-        // Uninstalled existing workspace twice should keep status DELETED
+        // Uninstalling an existing workspace twice should leave no stored token record.
         service.markInstalled("ws-1", "test-addon", "addon-id-123", "raw-token-abc", "http://b", "http://r", "u");
         service.markUninstalled("ws-1");
         service.markUninstalled("ws-1");
 
-        assertThat(repository.findById("ws-1").get().getStatus()).isEqualTo("DELETED");
+        assertThat(repository.findById("ws-1")).isEmpty();
     }
 
     @Test

@@ -7,6 +7,7 @@ import com.cake.clockify.addon.db.entity.AddonWebhookToken;
 import com.cake.clockify.addon.db.repository.AddonWebhookTokenRepository;
 import com.cake.clockify.addon.db.service.AddonInstallationService;
 import com.cake.clockify.addon.db.service.AddonSettingsService;
+import com.cake.clockify.addonsdk.clockify.model.ClockifyManifest;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -44,7 +45,8 @@ class JpaPersistenceLifecycleHandlerTest {
                 codec,
                 props,
                 mock(AddonSettingsService.class),
-                new ObjectMapper());
+                new ObjectMapper(),
+                manifestWithNewTimeEntryWebhook());
     }
 
     @Test
@@ -102,13 +104,13 @@ class JpaPersistenceLifecycleHandlerTest {
     }
 
     @Test
-    void installedPayloadAcceptsOfficialWebhookTypeAlias() {
+    void installedPayloadUsesManifestEventWhenOfficialWebhookTypeIsAddon() {
         NormalizedClaims claims = claims();
         Map<String, Object> payload = Map.of(
                 "authToken", "installation-token",
                 "webhooks", List.of(Map.of(
                         "path", "/webhook/new-time-entry",
-                        "webhookType", "NEW_TIME_ENTRY",
+                        "webhookType", "ADDON",
                         "authToken", "webhook-token")));
 
         when(webhookTokenRepository.findByWorkspaceIdAndAddonKeyAndPath("ws-1", "test-addon", "/new-time-entry"))
@@ -148,5 +150,38 @@ class JpaPersistenceLifecycleHandlerTest {
                 null,
                 null,
                 null);
+    }
+
+    private static ClockifyManifest manifestWithNewTimeEntryWebhook() {
+        return new ClockifyManifest() {
+            @Override
+            public String getSchemaVersion() {
+                return "1.5";
+            }
+
+            @Override
+            public String getKey() {
+                return "test-addon";
+            }
+
+            @Override
+            public List<?> getLifecycle() {
+                return List.of();
+            }
+
+            @Override
+            public List<?> getWebhooks() {
+                return List.of(Map.of("event", "NEW_TIME_ENTRY", "path", "/webhook/new-time-entry"));
+            }
+
+            @Override
+            public List<?> getComponents() {
+                return List.of();
+            }
+
+            @Override
+            public void setSettings(Object settings) {
+            }
+        };
     }
 }

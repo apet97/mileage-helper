@@ -1,6 +1,7 @@
 package com.cake.clockify.addon.db.config;
 
 import com.cake.clockify.addon.core.crypto.TokenCodec;
+import com.cake.clockify.addonsdk.clockify.model.ClockifyManifest;
 import com.cake.clockify.addon.db.repository.AddonInstallationRepository;
 import com.cake.clockify.addon.db.repository.AddonWebhookEventRepository;
 import com.cake.clockify.addon.db.repository.AddonWorkspaceSettingRepository;
@@ -13,6 +14,7 @@ import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 
@@ -46,14 +48,16 @@ public class AddonDbAutoConfiguration {
             TokenCodec codec,
             ClockifyAddonProperties props,
             AddonSettingsService settingsService,
-            org.springframework.beans.factory.ObjectProvider<ObjectMapper> objectMapperProvider) {
+            ObjectProvider<ObjectMapper> objectMapperProvider,
+            ObjectProvider<ClockifyManifest> manifestProvider) {
         return new JpaPersistenceLifecycleHandler(
                 installationService,
                 webhookTokenRepo,
                 codec,
                 props,
                 settingsService,
-                objectMapperProvider.getIfAvailable(ObjectMapper::new)
+                objectMapperProvider.getIfAvailable(ObjectMapper::new),
+                manifestProvider.getIfAvailable()
         );
     }
 

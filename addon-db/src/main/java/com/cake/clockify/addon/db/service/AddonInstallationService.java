@@ -57,14 +57,11 @@ public class AddonInstallationService {
     }
 
     /**
-     * Idempotently marks an installation as DELETED.
+     * Idempotently removes an installation and its encrypted installation token.
      */
     @Transactional
     public void markUninstalled(String workspaceId) {
-        repository.findById(workspaceId).ifPresent(installation -> {
-            installation.setStatus("DELETED");
-            repository.save(installation);
-        });
+        repository.findById(workspaceId).ifPresent(repository::delete);
     }
 
     /**
