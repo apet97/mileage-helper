@@ -35,7 +35,6 @@ public class MileageIframeController {
                     <header class="panel-heading"><h1>Create Mileage Expense</h1><span id="create-status" class="status-text"></span></header>
                     <form id="mileage-form" class="form-grid">
                       <label><span>Date</span><input id="field-date" name="date" type="date" required></label>
-                      <input id="field-user" name="userId" type="hidden" required>
                       <label><span>Project</span><select id="field-project" name="projectId"><option value="">No project</option></select></label>
                       <label><span>Task</span><select id="field-task" name="taskId" disabled><option value="">No task</option></select></label>
                       <label><span>Miles</span><input id="field-miles" name="miles" inputmode="decimal" required></label>

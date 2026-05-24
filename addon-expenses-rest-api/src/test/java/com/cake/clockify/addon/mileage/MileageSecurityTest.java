@@ -85,16 +85,17 @@ class MileageSecurityTest {
         String html = new MileageIframeController().mileage().getBody();
 
         assertThat(html).doesNotContain("User ID");
-        assertThat(html).contains("id=\"field-user\"");
-        assertThat(html).contains("type=\"hidden\"");
+        assertThat(html).doesNotContain("id=\"field-user\"");
+        assertThat(html).doesNotContain("name=\"userId\"");
     }
 
     @Test
-    void mileageJavascriptDefaultsUserIdFromVerifiedClaims() throws Exception {
+    void mileageJavascriptDoesNotSendUserId() throws Exception {
         String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
 
-        assertThat(javascript).contains("claims.user || claims.userId");
-        assertThat(javascript).contains("document.getElementById(\"field-user\").value = currentUserId");
+        assertThat(javascript).doesNotContain("field-user");
+        assertThat(javascript).doesNotContain("currentUserIdFromClaims");
+        assertThat(javascript).doesNotContain("userId");
     }
 
     private static final class RejectingSignatureParser extends ClockifySignatureParser {

@@ -19,7 +19,7 @@ This is the standalone repository for Mileage for Clockify. It contains the add-
 6. Never hardcode Clockify API hosts in add-on code. Use token or installation context through the platform/client services.
 7. Never expose installation tokens to frontend code, logs, docs, screenshots, or test output.
 8. Preserve workspace isolation in every repository query, service method, webhook path, and Clockify API call.
-9. User-facing mileage creation must use the verified user ID from Clockify token claims, not a frontend or request-supplied `userId`.
+9. User-facing mileage creation must use the verified user ID from Clockify token claims, not a frontend or request-supplied `userId`. Do not add `userId` back to the create request DTO, multipart allowlist, iframe form, or frontend payload.
 
 ## Module Map
 
@@ -40,6 +40,7 @@ This is the standalone repository for Mileage for Clockify. It contains the add-
 - Main admin APIs: settings, diagnostics, categories, conversion list/detail/retry under `/api/mileage`.
 - Webhooks: `EXPENSE_CREATED`, `EXPENSE_UPDATED`, `EXPENSE_DELETED`, `EXPENSE_RESTORED`.
 - DB tables: `mileage_workspace_settings`, `mileage_conversion`.
+- Mileage create requests intentionally omit `userId`; the backend injects the verified claims user into Clockify create commands and audit rows.
 - Historical pre-Mileage migrations V5/V10 are retained for Flyway validation only; V12 drops their leftover generic tables. Do not add new `temp_addon_expenses*`, `clockify-expenses-api`, `Clockify Expenses API`, or `com.cake.clockify.addon.expenses` references.
 
 ## Commands

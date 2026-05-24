@@ -134,7 +134,6 @@ class MileageApiControllerTest {
                         .file(file)
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims())
                         .param("date", "2026-05-24")
-                        .param("userId", "user-1")
                         .param("projectId", "project-1")
                         .param("taskId", "task-1")
                         .param("miles", "37.4")
@@ -266,7 +265,6 @@ class MileageApiControllerTest {
                         .file(file)
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims())
                         .param("date", "2026-05-24")
-                        .param("userId", "user-1")
                         .param("miles", "37.4")
                         .param("auth_token", "secret-token-value")
                         .param("addonToken", "secret-addon-value")
@@ -292,7 +290,6 @@ class MileageApiControllerTest {
                         .file(file)
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims())
                         .param("date", "2026-05-24")
-                        .param("userId", "user-1")
                         .param("miles", "37.4")
                         .param("auth_token", "secret-token-value")
                         .param("addonToken", "secret-addon-value")
@@ -336,7 +333,6 @@ class MileageApiControllerTest {
                         .file(file)
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims())
                         .param("date", "2026-05-24")
-                        .param("userId", "user-1")
                         .param("miles", "37.4"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Receipt file exceeds 10 MB"));
@@ -353,7 +349,6 @@ class MileageApiControllerTest {
                         .file(file)
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims())
                         .param("date", "2026-05-24")
-                        .param("userId", "user-1")
                         .param("miles", "37.4"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Unsupported receipt file type"));
@@ -364,7 +359,7 @@ class MileageApiControllerTest {
     private static String createBody(String miles, String rate) {
         String rateField = rate == null ? "" : ",\"rate\":\"" + rate + "\"";
         return """
-                {"date":"2026-05-24","userId":"user-1","projectId":"project-1","taskId":"task-1","miles":"%s"%s,"billable":true,"notes":"Client site visit"}
+                {"date":"2026-05-24","projectId":"project-1","taskId":"task-1","miles":"%s"%s,"billable":true,"notes":"Client site visit"}
                 """.formatted(miles, rateField);
     }
 

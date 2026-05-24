@@ -46,7 +46,7 @@ public class MileageApiController {
     private static final Set<String> ALLOWED_RECEIPT_TYPES = Set.of(
             "image/png", "image/jpeg", "image/gif", "image/webp", "image/heic", "application/pdf");
     private static final Set<String> MULTIPART_FIELDS = Set.of(
-            "date", "userId", "projectId", "taskId", "miles", "rate", "billable", "notes");
+            "date", "projectId", "taskId", "miles", "rate", "billable", "notes");
 
     private final MileageSettingsService settingsService;
     private final MileageCalculator calculator;
@@ -189,7 +189,6 @@ public class MileageApiController {
                         (left, right) -> left));
         return new CreateMileageExpenseRequest(
                 safe.get("date"),
-                safe.get("userId"),
                 safe.get("projectId"),
                 safe.get("taskId"),
                 safe.get("miles"),

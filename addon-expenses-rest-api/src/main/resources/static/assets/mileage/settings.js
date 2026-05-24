@@ -55,18 +55,9 @@
     return claims.workspaceRole || claims.role || claims.wsRole || "";
   }
 
-  function currentUserIdFromClaims(claims) {
-    return claims.user || claims.userId || "";
-  }
-
   function applyRoleGate() {
     const claims = claimsFromToken();
     const role = roleFromClaims(claims);
-    const currentUserId = currentUserIdFromClaims(claims);
-    const userField = document.getElementById("field-user");
-    if (userField && currentUserId) {
-      document.getElementById("field-user").value = currentUserId;
-    }
     const isAdmin = role === "OWNER" || role === "ADMIN";
     document.querySelectorAll("[data-admin-only]").forEach(element => {
       element.hidden = !isAdmin;
@@ -109,7 +100,6 @@
   function mileagePayload() {
     return {
       date: formValue("field-date"),
-      userId: formValue("field-user") || currentUserIdFromClaims(claimsFromToken()),
       projectId: formValue("field-project") || null,
       taskId: formValue("field-task") || null,
       miles: formValue("field-miles"),

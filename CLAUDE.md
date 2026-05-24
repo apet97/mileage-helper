@@ -48,6 +48,7 @@ Main product packages:
 - Webhooks: `EXPENSE_CREATED`, `EXPENSE_UPDATED`, `EXPENSE_DELETED`, `EXPENSE_RESTORED`.
 - UI routes: `/iframe/mileage`, `/iframe/settings`.
 - User APIs: `POST /api/mileage/preview`, `POST /api/mileage/expenses`.
+- Mileage create requests intentionally omit `userId`; the backend injects the verified claims user into Clockify create commands and audit rows.
 - Admin APIs: settings, diagnostics, category options, conversion list/detail/retry under `/api/mileage`.
 - Tables: `mileage_workspace_settings`, `mileage_conversion`.
 - Historical pre-Mileage migrations V5/V10 are retained for Flyway validation only; V12 drops their leftover generic tables. New code/docs should not add `temp_addon_expenses*`, `clockify-expenses-api`, `Clockify Expenses API`, or `com.cake.clockify.addon.expenses` references.
@@ -96,7 +97,7 @@ Live sacrificial Clockify checks may use shell environment variables such as `CL
 - Do not expose installation tokens to frontend JavaScript or HTML.
 - Do not log tokens, auth headers, receipt bytes, or raw upstream error bodies.
 - Preserve workspace isolation in repository methods and service calls.
-- Do not trust request-supplied `userId` for user-facing mileage creation; derive the target user from verified Clockify token claims.
+- Do not trust request-supplied `userId` for user-facing mileage creation; derive the target user from verified Clockify token claims. Do not add `userId` back to the create request DTO, multipart allowlist, iframe form, or frontend payload.
 - Keep `addon-core` and `addon-db` changes narrow; ask before structural platform changes.
 - Keep copied Marketplace docs under `addon-expenses-rest-api/MARKETPLACE_OCS/` as source reference material.
 - Do not restore deleted live shell probes. Do not add new legacy temp-addon migrations; keep V5/V10 only as immutable Flyway history and use forward migrations for cleanup.

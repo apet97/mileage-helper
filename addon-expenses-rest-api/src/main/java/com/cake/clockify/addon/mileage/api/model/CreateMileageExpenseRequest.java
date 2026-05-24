@@ -4,7 +4,6 @@ import jakarta.validation.constraints.NotBlank;
 
 public record CreateMileageExpenseRequest(
         @NotBlank String date,
-        String userId,
         String projectId,
         String taskId,
         @NotBlank String miles,
