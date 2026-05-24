@@ -157,7 +157,30 @@ class MileageApiControllerTest {
         ArgumentCaptor<CreateFlatExpenseCommand> command = ArgumentCaptor.forClass(CreateFlatExpenseCommand.class);
         verify(gateway).createFlatExpense(eq("ws-api"), command.capture());
         assertThat(command.getValue().categoryId()).isEqualTo("cat-output");
+        assertThat(command.getValue().userId()).isEqualTo("user-claims");
         assertThat(command.getValue().amount()).isEqualByComparingTo(new BigDecimal("24.50"));
+    }
+
+    @Test
+    void createMileageExpenseIgnoresTamperedUserIdAndUsesVerifiedClaimsUser() throws Exception {
+        when(settingsService.validateForAddonCreate("ws-api")).thenReturn(settings(false));
+        when(gateway.createFlatExpense(eq("ws-api"), any(CreateFlatExpenseCommand.class))).thenReturn(createdExpense("exp-1"));
+
+        mockMvc.perform(post("/api/mileage/expenses")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"date":"2026-05-24","userId":"other-user","projectId":"project-1","taskId":"task-1","miles":"37.4","billable":true}
+                                """))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<CreateFlatExpenseCommand> command = ArgumentCaptor.forClass(CreateFlatExpenseCommand.class);
+        verify(gateway).createFlatExpense(eq("ws-api"), command.capture());
+        assertThat(command.getValue().userId()).isEqualTo("user-claims");
+
+        ArgumentCaptor<MileageConversion> saved = ArgumentCaptor.forClass(MileageConversion.class);
+        verify(conversionRepository).saveAndFlush(saved.capture());
+        assertThat(saved.getValue().getUserId()).isEqualTo("user-claims");
     }
 
     @Test
@@ -177,6 +200,7 @@ class MileageApiControllerTest {
         assertThat(saved.getValue().getSource()).isEqualTo(MileageConversionSource.ADDON_FORM);
         assertThat(saved.getValue().getStatus()).isEqualTo(MileageConversionStatus.CONVERTED);
         assertThat(saved.getValue().getExpenseId()).isEqualTo("exp-1");
+        assertThat(saved.getValue().getUserId()).isEqualTo("user-claims");
     }
 
     @Test
@@ -277,7 +301,7 @@ class MileageApiControllerTest {
 
         ArgumentCaptor<CreateFlatExpenseCommand> command = ArgumentCaptor.forClass(CreateFlatExpenseCommand.class);
         verify(gateway).createFlatExpenseWithReceipt(eq("ws-api"), command.capture(), eq("receipt.png"), eq("image/png"), any());
-        assertThat(command.getValue().userId()).isEqualTo("user-1");
+        assertThat(command.getValue().userId()).isEqualTo("user-claims");
         assertThat(command.getValue().amount()).isEqualByComparingTo(new BigDecimal("24.50"));
     }
 

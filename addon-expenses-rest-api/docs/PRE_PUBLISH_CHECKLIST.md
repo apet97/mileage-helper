@@ -1,5 +1,19 @@
 # Mileage for Clockify Pre-Publish Checklist
 
+## Current Local Evidence
+
+Last local hardening pass: 2026-05-24.
+
+- `mvn -pl addon-expenses-rest-api -am clean test`: passed with 114 product-module tests and full reactor `BUILD SUCCESS`.
+- `docker compose -f addon-expenses-rest-api/docker-compose.yml build`: passed.
+- Runtime `/manifest` probe: returned key `mileage-for-clockify`, schema `1.5`, and packaged icon paths.
+- Runtime `/assets/mileage/icon.png` probe: returned a 512 x 512 PNG.
+- Runtime security header probe: CSP, `nosniff`, `no-referrer`, permissions policy, and HSTS under forwarded HTTPS.
+- Static stale/dead-code scan: no active-source hits for removed expense-boilerplate names, obsolete live shell probes, or legacy temp-addon schema names outside immutable Flyway history.
+- Flyway history keeps V5/V10 for existing database validation; V12 drops the leftover generic tables.
+- Git history was rewritten before publish-prep handoff to remove the obsolete live shell probe and its hardcoded API-key fallback.
+- Marketplace docs compliance pass reviewed lifecycle, UI component, webhook, authentication, environment/region, development checklist, and publishing/security guidance. User mileage creation now derives target `userId` from verified Clockify token claims instead of request parameters.
+
 ## Required Local Gates
 
 - [ ] `git status --short --branch` reviewed.
@@ -12,10 +26,12 @@
 - [ ] Installed lifecycle payload with official webhook entries stores manifest event types.
 - [ ] Webhook requests require valid `Clockify-Signature` and `Clockify-Webhook-Event-Type`.
 - [ ] `/api/mileage/**` requires a verified user token.
+- [ ] User mileage creation uses verified token claims for target user identity.
 - [ ] Installation token is not exposed to frontend HTML, JavaScript, logs, docs, screenshots, or test output.
 - [ ] Uninstall removes stored installation and webhook secrets.
 - [ ] Diagnostics show installation, settings, and native conversion readiness.
 - [ ] UI creates mileage without raw user ID entry.
+- [ ] Active source has no legacy temp-addon schema names, deleted shell probe, or generic expense-boilerplate references outside immutable Flyway history.
 
 ## Required Manual Marketplace Gates
 

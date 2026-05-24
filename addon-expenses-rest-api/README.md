@@ -4,7 +4,7 @@ Mileage for Clockify creates precise mileage reimbursements as real Clockify fla
 
 ## Current Status
 
-This module is the implemented product module inside the standalone repository. The old generic expense API boilerplate has been replaced by Mileage-specific manifest, settings, calculation, conversion, webhook, iframe, and audit code.
+This module is the implemented product module inside the standalone repository. The old generic expense API boilerplate has been replaced by Mileage-specific manifest, settings, calculation, conversion, webhook, iframe, and audit code. Historical pre-Mileage migrations remain only for Flyway validation; `V12__drop_legacy_temp_addon_expenses_tables.sql` removes leftover generic tables so the product-owned tables are `mileage_workspace_settings` and `mileage_conversion`.
 
 ## Scope
 
@@ -63,6 +63,6 @@ mvn -pl addon-expenses-rest-api -am clean test
 - `webhooks.md` - expense webhook behavior and loop prevention.
 - `edge-cases.md` - skip/failure behavior.
 - `reports.md` - relationship to native Clockify reports.
-- `mileage-addon-handoff/docs/ACCEPTANCE_CRITERIA.md` - release checklist and manual workspace validation.
+- `docs/PRE_PUBLISH_CHECKLIST.md` - current local and manual pre-publish gates.
 
 `mileage-addon-handoff/` is retained as historical design and implementation context. Prefer current source, tests, and the active docs above for maintenance work.

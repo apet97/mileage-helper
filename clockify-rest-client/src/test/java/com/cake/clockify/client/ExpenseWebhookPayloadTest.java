@@ -6,6 +6,8 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 class ExpenseWebhookPayloadTest {
@@ -44,10 +46,10 @@ class ExpenseWebhookPayloadTest {
         assertNull(payload.taskId());
         assertEquals("68ae0c8189b9b14a1304e26e", payload.categoryId());
         assertEquals("", payload.notes());
-        assertEquals(22, payload.quantity());
+        assertEquals(new BigDecimal("22"), payload.quantity());
         assertTrue(payload.billable());
         assertEquals("", payload.fileId());
-        assertEquals(220000, payload.total());
+        assertEquals(new BigDecimal("220000"), payload.total());
         assertNull(payload.locked());
     }
 
@@ -80,10 +82,10 @@ class ExpenseWebhookPayloadTest {
         assertEquals("6606d1c0ad0bc15d89f41ae0", payload.projectId());
         assertEquals("660298b663b23a11842833e8", payload.categoryId());
         assertEquals("", payload.notes());
-        assertEquals(1, payload.quantity());
+        assertEquals(new BigDecimal("1"), payload.quantity());
         assertTrue(payload.billable());
         assertEquals("", payload.fileId());
-        assertEquals(500, payload.total());
+        assertEquals(new BigDecimal("500"), payload.total());
         assertEquals(false, payload.locked());
     }
 

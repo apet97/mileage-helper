@@ -1,5 +1,6 @@
 package com.cake.clockify.client.models;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 
 public record Expense(
@@ -11,9 +12,9 @@ public record Expense(
         String taskId,
         String categoryId,
         String notes,
-        double quantity,
+        BigDecimal quantity,
         boolean billable,
         String fileId,
-        double total,
+        BigDecimal total,
         boolean locked
 ) {}

@@ -9,10 +9,10 @@ spring:
     show-sql: false
     properties:
       hibernate:
-        default_schema: temp_addon_expenses
+        default_schema: mileage_test
   flyway:
     enabled: true
-    schemas: temp_addon_expenses
+    schemas: mileage_test
     create-schemas: true
 
 addon:

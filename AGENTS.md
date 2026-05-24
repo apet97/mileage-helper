@@ -19,6 +19,7 @@ This is the standalone repository for Mileage for Clockify. It contains the add-
 6. Never hardcode Clockify API hosts in add-on code. Use token or installation context through the platform/client services.
 7. Never expose installation tokens to frontend code, logs, docs, screenshots, or test output.
 8. Preserve workspace isolation in every repository query, service method, webhook path, and Clockify API call.
+9. User-facing mileage creation must use the verified user ID from Clockify token claims, not a frontend or request-supplied `userId`.
 
 ## Module Map
 
@@ -39,6 +40,7 @@ This is the standalone repository for Mileage for Clockify. It contains the add-
 - Main admin APIs: settings, diagnostics, categories, conversion list/detail/retry under `/api/mileage`.
 - Webhooks: `EXPENSE_CREATED`, `EXPENSE_UPDATED`, `EXPENSE_DELETED`, `EXPENSE_RESTORED`.
 - DB tables: `mileage_workspace_settings`, `mileage_conversion`.
+- Historical pre-Mileage migrations V5/V10 are retained for Flyway validation only; V12 drops their leftover generic tables. Do not add new `temp_addon_expenses*`, `clockify-expenses-api`, `Clockify Expenses API`, or `com.cake.clockify.addon.expenses` references.
 
 ## Commands
 
@@ -51,6 +53,17 @@ docker compose -f addon-expenses-rest-api/docker-compose.yml build
 ```
 
 Before Marketplace submission, also complete [addon-expenses-rest-api/docs/PRE_PUBLISH_CHECKLIST.md](addon-expenses-rest-api/docs/PRE_PUBLISH_CHECKLIST.md).
+
+Use this stale/dead-code scan after documentation or migration cleanup:
+
+```bash
+rg -n "clockify-expenses-api|Clockify Expenses API|com\\.cake\\.clockify\\.addon\\.expenses|temp_addon_expenses|temp-addon-expenses|API_TEST_|CLOCKIFY_API_KEY:-|test-suite\\.sh" \
+  addon-expenses-rest-api/src/main addon-expenses-rest-api/src/test/resources addon-expenses-rest-api/pom.xml \
+  -g '!**/target/**' -g '!addon-expenses-rest-api/src/main/resources/db/migration/V5__*' \
+  -g '!addon-expenses-rest-api/src/main/resources/db/migration/V10__*' \
+  -g '!addon-expenses-rest-api/src/main/resources/db/migration/V12__*' \
+  -g '!addon-expenses-rest-api/MARKETPLACE_OCS/**'
+```
 
 If local port `5432` is already in use, keep Postgres internal while running the Docker stack:
 

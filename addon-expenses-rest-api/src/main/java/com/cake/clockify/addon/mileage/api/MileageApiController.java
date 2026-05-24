@@ -87,7 +87,7 @@ public class MileageApiController {
             @Valid @RequestBody CreateMileageExpenseRequest body) throws IOException, InterruptedException {
         NormalizedClaims claims = RequestAttributes.requireClaims(request);
         MileageSettingsValidation settings = requireAddonSettings(claims.workspaceId());
-        return ResponseEntity.ok(createExpense(claims.workspaceId(), settings, body, null));
+        return ResponseEntity.ok(createExpense(claims.workspaceId(), required("userId", claims.userId()), settings, body, null));
     }
 
     @PostMapping(value = "/expenses", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -98,11 +98,12 @@ public class MileageApiController {
         NormalizedClaims claims = RequestAttributes.requireClaims(request);
         MileageSettingsValidation settings = requireAddonSettings(claims.workspaceId());
         CreateMileageExpenseRequest body = requestFromMultipart(params);
-        return ResponseEntity.ok(createExpense(claims.workspaceId(), settings, body, file));
+        return ResponseEntity.ok(createExpense(claims.workspaceId(), required("userId", claims.userId()), settings, body, file));
     }
 
     private MileageCreateExpenseResponse createExpense(
             String workspaceId,
+            String userId,
             MileageSettingsValidation settings,
             CreateMileageExpenseRequest request,
             MultipartFile file) throws IOException, InterruptedException {
@@ -117,7 +118,7 @@ public class MileageApiController {
                 settings.noteTemplate());
         CreateFlatExpenseCommand command = new CreateFlatExpenseCommand(
                 settings.outputCategoryId(),
-                required("userId", request.userId()),
+                userId,
                 LocalDate.parse(required("date", request.date())),
                 blankToNull(request.projectId()),
                 blankToNull(request.taskId()),
@@ -134,6 +135,7 @@ public class MileageApiController {
                 conversionId,
                 workspaceId,
                 expenseId,
+                userId,
                 request,
                 settings,
                 calculation,
@@ -200,6 +202,7 @@ public class MileageApiController {
             UUID id,
             String workspaceId,
             String expenseId,
+            String userId,
             CreateMileageExpenseRequest request,
             MileageSettingsValidation settings,
             MileageCalculation calculation,
@@ -211,7 +214,7 @@ public class MileageApiController {
         conversion.setSource(MileageConversionSource.ADDON_FORM);
         conversion.setSourceCategoryId(settings.inputCategoryId());
         conversion.setTargetCategoryId(settings.outputCategoryId());
-        conversion.setUserId(request.userId());
+        conversion.setUserId(userId);
         conversion.setProjectId(blankToNull(request.projectId()));
         conversion.setTaskId(blankToNull(request.taskId()));
         conversion.setMiles(calculation.miles());

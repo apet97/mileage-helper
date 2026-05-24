@@ -110,6 +110,7 @@ class MileageApplicationSmokeTest {
         assertThat(application).contains("jdbc:postgresql://localhost:5432/mileage_for_clockify");
         assertThat(testApplication).contains("key: mileage-for-clockify");
         assertThat(testApplication).contains("name: Mileage for Clockify");
+        assertThat(testApplication).doesNotContain("temp_addon_expenses");
     }
 
     @Test

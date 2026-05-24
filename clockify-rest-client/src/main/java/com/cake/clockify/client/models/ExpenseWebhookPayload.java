@@ -2,6 +2,8 @@ package com.cake.clockify.client.models;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
+import java.math.BigDecimal;
+
 /**
  * Webhook payload for {@code EXPENSE_CREATED} and {@code EXPENSE_RESTORED} events.
  *
@@ -18,9 +20,9 @@ public record ExpenseWebhookPayload(
         String taskId,
         String categoryId,
         String notes,
-        double quantity,
+        BigDecimal quantity,
         boolean billable,
         String fileId,
-        double total,
+        BigDecimal total,
         Boolean locked
 ) {}
