@@ -29,8 +29,17 @@ class MileageNoteServiceTest {
     void appendsHumanFormulaAndMarkerToBlankNote() {
         String note = service.buildConvertedNote("", calculation, "mi", conversionId, true, null);
 
-        assertThat(note).contains("Mileage reimbursement: 37.4 mi x 0.655 = 24.50.");
+        assertThat(note).contains("Mileage reimbursement: 37.4 mi x 0.655 = 24.4970.");
+        assertThat(note).contains("Expense amount: 24.50.");
         assertThat(note).contains(service.marker(conversionId));
+    }
+
+    @Test
+    void supportsCalculatedAndRoundedTemplateTokensWhileKeepingLegacyAmountRounded() {
+        String note = service.buildConvertedNote("", calculation, "mi", conversionId, true,
+                "{{calculatedAmount}} / {{roundedAmount}} / {{amount}} / {{marker}}");
+
+        assertThat(note).contains("24.4970 / 24.50 / 24.50 / " + service.marker(conversionId));
     }
 
     @Test

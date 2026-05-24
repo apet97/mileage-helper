@@ -104,6 +104,27 @@ class JpaPersistenceLifecycleHandlerTest {
     }
 
     @Test
+    void installedPayloadCanonicalizesDoubleSlashWebhookPathAndUsesManifestEvent() {
+        NormalizedClaims claims = claims();
+        Map<String, Object> payload = Map.of(
+                "authToken", "installation-token",
+                "webhooks", List.of(Map.of(
+                        "path", "//webhook/new-time-entry",
+                        "webhookType", "ADDON",
+                        "authToken", "webhook-token")));
+
+        when(webhookTokenRepository.findByWorkspaceIdAndAddonKeyAndPath("ws-1", "test-addon", "/new-time-entry"))
+                .thenReturn(Optional.empty());
+
+        handler.onInstalled(claims, payload);
+
+        ArgumentCaptor<AddonWebhookToken> saved = ArgumentCaptor.forClass(AddonWebhookToken.class);
+        verify(webhookTokenRepository).save(saved.capture());
+        assertThat(saved.getValue().getPath()).isEqualTo("/new-time-entry");
+        assertThat(saved.getValue().getEventType()).isEqualTo("NEW_TIME_ENTRY");
+    }
+
+    @Test
     void installedPayloadUsesManifestEventWhenOfficialWebhookTypeIsAddon() {
         NormalizedClaims claims = claims();
         Map<String, Object> payload = Map.of(

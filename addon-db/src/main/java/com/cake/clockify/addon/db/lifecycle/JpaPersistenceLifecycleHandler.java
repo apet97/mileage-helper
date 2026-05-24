@@ -225,6 +225,7 @@ public class JpaPersistenceLifecycleHandler implements AddonLifecycleHandler {
         if (path == null || path.isBlank()) {
             path = "/";
         }
+        path = path.replaceFirst("^/+", "/");
         path = path.replaceAll("/+$", "");
         if (path.isEmpty()) {
             path = "/";

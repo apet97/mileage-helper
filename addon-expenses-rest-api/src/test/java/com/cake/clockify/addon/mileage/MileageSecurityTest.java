@@ -4,6 +4,7 @@ import com.cake.clockify.addon.core.auth.filter.ClockifyIframeAuthFilter;
 import com.cake.clockify.addon.mileage.iframe.MileageIframeController;
 import com.cake.clockify.addonsdk.clockify.ClockifySignatureParser;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -30,7 +31,7 @@ class MileageSecurityTest {
 
     @Test
     void mileageIframeUsesExternalCssAndJs() {
-        String html = new MileageIframeController().mileage().getBody();
+        String html = new MileageIframeController().mileage(requestWithRole("ADMIN")).getBody();
 
         assertThat(html).contains("href=\"/assets/mileage/settings.css\"");
         assertThat(html).contains("src=\"/assets/mileage/settings.js\" defer");
@@ -38,7 +39,7 @@ class MileageSecurityTest {
 
     @Test
     void installationTokenNeverAppearsInIframeHtml() {
-        String html = new MileageIframeController().mileage().getBody();
+        String html = new MileageIframeController().mileage(requestWithRole("ADMIN")).getBody();
 
         assertThat(html).doesNotContain("secret-token-value");
         assertThat(html).doesNotContain("auth_token=");
@@ -47,7 +48,7 @@ class MileageSecurityTest {
 
     @Test
     void mileageIframeDoesNotContainInlineScriptOrInlineStyle() {
-        String html = new MileageIframeController().mileage().getBody();
+        String html = new MileageIframeController().mileage(requestWithRole("ADMIN")).getBody();
 
         assertThat(html).doesNotContain("<style");
         assertThat(html).doesNotContain("<script>");
@@ -81,8 +82,44 @@ class MileageSecurityTest {
     }
 
     @Test
+    void memberMileageIframeRendersOnlyMineNavigationAndNoAdminPanels() {
+        String html = new MileageIframeController().mileage(requestWithRole("MEMBER")).getBody();
+
+        assertThat(html).contains("data-tab-target=\"mine\"");
+        assertThat(html).doesNotContain("data-tab-target=\"team\"");
+        assertThat(html).doesNotContain("data-tab-target=\"admin-settings\"");
+        assertThat(html).doesNotContain("data-tab-target=\"conversion-log\"");
+        assertThat(html).doesNotContain("data-tab-target=\"diagnostics\"");
+        assertThat(html).doesNotContain("id=\"tab-team\"");
+        assertThat(html).doesNotContain("id=\"tab-admin-settings\"");
+        assertThat(html).doesNotContain("id=\"tab-conversion-log\"");
+        assertThat(html).doesNotContain("id=\"tab-diagnostics\"");
+    }
+
+    @Test
+    void adminMileageIframeRendersMineTeamSettingsConversionsAndDiagnostics() {
+        String html = new MileageIframeController().mileage(requestWithRole("OWNER")).getBody();
+
+        assertThat(html).contains("data-tab-target=\"mine\"");
+        assertThat(html).contains("data-tab-target=\"team\"");
+        assertThat(html).contains("data-tab-target=\"admin-settings\"");
+        assertThat(html).contains("data-tab-target=\"conversion-log\"");
+        assertThat(html).contains("data-tab-target=\"diagnostics\"");
+    }
+
+    @Test
+    void memberCannotOpenSettingsIframe() throws Exception {
+        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(new MileageIframeController()).build();
+
+        mockMvc.perform(get("/iframe/settings")
+                        .requestAttr(com.cake.clockify.addon.core.auth.RequestAttributes.NORMALIZED_CLAIMS,
+                                claims("MEMBER")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void mileageIframeDoesNotAskForRawUserId() {
-        String html = new MileageIframeController().mileage().getBody();
+        String html = new MileageIframeController().mileage(requestWithRole("ADMIN")).getBody();
 
         assertThat(html).doesNotContain("User ID");
         assertThat(html).doesNotContain("id=\"field-user\"");
@@ -91,7 +128,7 @@ class MileageSecurityTest {
 
     @Test
     void mileageCreateFormDoesNotExposeTaskSelector() {
-        String html = new MileageIframeController().mileage().getBody();
+        String html = new MileageIframeController().mileage(requestWithRole("ADMIN")).getBody();
 
         assertThat(html).doesNotContain("id=\"field-task\"");
         assertThat(html).doesNotContain("name=\"taskId\"");
@@ -100,7 +137,7 @@ class MileageSecurityTest {
 
     @Test
     void mileageCreateFormDefaultsBillableAndGroupsRateOverride() {
-        String html = new MileageIframeController().mileage().getBody();
+        String html = new MileageIframeController().mileage(requestWithRole("ADMIN")).getBody();
 
         assertThat(html).contains("id=\"field-billable\" name=\"billable\" type=\"checkbox\" checked");
         assertThat(html).contains("id=\"rate-field-row\"");
@@ -112,7 +149,8 @@ class MileageSecurityTest {
 
         assertThat(javascript).doesNotContain("field-user");
         assertThat(javascript).doesNotContain("currentUserIdFromClaims");
-        assertThat(javascript).doesNotContain("userId");
+        assertThat(javascript).doesNotContain("userId:");
+        assertThat(javascript).doesNotContain("append(\"userId\"");
     }
 
     @Test
@@ -131,6 +169,49 @@ class MileageSecurityTest {
         assertThat(javascript).contains("/api/mileage/create-context");
         assertThat(javascript).contains("allowUserRateOverride");
         assertThat(javascript).contains("field-rate");
+    }
+
+    @Test
+    void mileageJavascriptDownloadsCsvWithBearerHeaderAndNoAuthTokenQuery() throws Exception {
+        String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
+
+        assertThat(javascript).contains("downloadCsv");
+        assertThat(javascript).contains("blob()");
+        assertThat(javascript).contains("Authorization");
+        assertThat(javascript).doesNotContain("mine.csv?auth_token");
+        assertThat(javascript).doesNotContain("team.csv?auth_token");
+        assertThat(javascript).doesNotContain("conversions.csv?auth_token");
+    }
+
+    @Test
+    void mileageJavascriptDisplaysCalculatedAmountAsPrimaryAmount() throws Exception {
+        String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
+
+        assertThat(javascript).contains("result.calculatedAmount");
+        assertThat(javascript).contains("item.calculatedAmount");
+        assertThat(javascript).contains("Expense amount: \" + roundedAmount");
+    }
+
+    private static MockHttpServletRequest requestWithRole(String role) {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setAttribute(com.cake.clockify.addon.core.auth.RequestAttributes.NORMALIZED_CLAIMS, claims(role));
+        return request;
+    }
+
+    private static com.cake.clockify.addon.core.auth.NormalizedClaims claims(String role) {
+        return new com.cake.clockify.addon.core.auth.NormalizedClaims(
+                "ws-iframe",
+                "mileage-for-clockify",
+                "https://backend.example.test",
+                "https://reports.example.test",
+                null,
+                null,
+                "user-claims",
+                role,
+                "en",
+                "DEFAULT",
+                "UTC",
+                java.time.Instant.now());
     }
 
     private static final class RejectingSignatureParser extends ClockifySignatureParser {

@@ -10,7 +10,7 @@ import java.util.UUID;
 public class MileageNoteService {
     public static final String MARKER_PREFIX = "[MileageAddon:converted:v1";
     public static final String DEFAULT_NOTE_TEMPLATE =
-            "Mileage reimbursement: {{miles}} {{unit}} x {{rate}} = {{amount}}. Created/converted by Mileage for Clockify. {{marker}}";
+            "Mileage reimbursement: {{miles}} {{unit}} x {{rate}} = {{calculatedAmount}}. Expense amount: {{roundedAmount}}. Created/converted by Mileage for Clockify. {{marker}}";
     public static final String DEFAULT_UNIT = "mi";
     public static final RoundingMode DEFAULT_ROUNDING_MODE = RoundingMode.HALF_UP;
 
@@ -48,6 +48,8 @@ public class MileageNoteService {
                 .replace("{{miles}}", calculation.milesText())
                 .replace("{{unit}}", unit)
                 .replace("{{rate}}", calculation.rateText())
+                .replace("{{calculatedAmount}}", calculation.calculatedAmountText())
+                .replace("{{roundedAmount}}", calculation.roundedAmountText())
                 .replace("{{amount}}", calculation.roundedAmountText())
                 .replace("{{marker}}", marker);
     }

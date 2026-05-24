@@ -47,13 +47,14 @@ Main product packages:
 - Scopes: `EXPENSE_READ`, `EXPENSE_WRITE`, `USER_READ`, `PROJECT_READ`, `WORKSPACE_READ`.
 - Webhooks: `EXPENSE_CREATED`, `EXPENSE_UPDATED`, `EXPENSE_DELETED`, `EXPENSE_RESTORED`.
 - UI routes: `/iframe/mileage`, `/iframe/settings`.
-- User APIs: `GET /api/mileage/create-context`, `POST /api/mileage/preview`, `POST /api/mileage/expenses`.
+- User APIs: `GET /api/mileage/create-context`, `GET /api/mileage/mine`, `GET /api/mileage/mine.csv`, `POST /api/mileage/preview`, `POST /api/mileage/expenses`.
 - Mileage create requests intentionally omit `userId`; the backend injects the verified claims user into Clockify create commands and audit rows.
 - Mileage create requests intentionally omit `taskId`; the UI follows Clockify's regular expense form, does not fetch task options, and does not require `TASK_READ`. Native/mobile conversion may still preserve task IDs from existing Clockify expense snapshots.
 - Manual mileage expenses default to billable when `billable` is omitted; explicit `false` remains non-billable.
 - Main-page rate override is hidden and omitted unless workspace settings allow overrides. The backend calculation also ignores submitted override rates when the setting is off.
 - `EXPENSE_CREATED` and `EXPENSE_RESTORED` handlers accept either full payloads with `id` or reference payloads with `expenseId`.
-- Admin APIs: settings, diagnostics, category options, conversion list/detail/retry under `/api/mileage`.
+- Admin APIs: settings, diagnostics, category options, team mileage list/export, conversion list/detail/retry/export under `/api/mileage`.
+- Add-on previews and mileage tables show full `calculatedAmount` decimals first; Clockify Expenses still receives the rounded `roundedAmount`.
 - Tables: `mileage_workspace_settings`, `mileage_conversion`.
 - Historical pre-Mileage migrations V5/V10 are retained for Flyway validation only; V12 drops their leftover generic tables. New code/docs should not add `temp_addon_expenses*`, `clockify-expenses-api`, `Clockify Expenses API`, or `com.cake.clockify.addon.expenses` references.
 

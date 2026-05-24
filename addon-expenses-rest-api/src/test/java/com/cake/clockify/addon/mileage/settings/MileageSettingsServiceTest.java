@@ -81,9 +81,15 @@ class MileageSettingsServiceTest {
     @Test
     void conversionQueriesAreWorkspaceIsolated() {
         conversionRepository.saveAndFlush(conversion("ws-one", "exp-a", MileageConversionStatus.CONVERTED));
+        MileageConversion otherUser = conversion("ws-one", "exp-c", MileageConversionStatus.CONVERTED);
+        otherUser.setUserId("user-two");
+        conversionRepository.saveAndFlush(otherUser);
         conversionRepository.saveAndFlush(conversion("ws-two", "exp-b", MileageConversionStatus.CONVERTED));
 
         assertThat(conversionRepository.findAllByWorkspaceId("ws-one", PageRequest.of(0, 10)))
+                .extracting(MileageConversion::getExpenseId)
+                .containsExactlyInAnyOrder("exp-a", "exp-c");
+        assertThat(conversionRepository.findAllByWorkspaceIdAndUserId("ws-one", "user-one", PageRequest.of(0, 10)))
                 .extracting(MileageConversion::getExpenseId)
                 .containsExactly("exp-a");
         assertThat(conversionRepository.findByWorkspaceIdAndExpenseId("ws-one", "exp-b")).isEmpty();
@@ -112,6 +118,7 @@ class MileageSettingsServiceTest {
         assertThat(response.enabled()).isTrue();
         assertThat(response.unit()).isEqualTo("mi");
         assertThat(response.roundingMode()).isEqualTo("HALF_UP");
+        assertThat(response.allowUserRateOverride()).isFalse();
         assertThat(response.convertOnCreate()).isTrue();
         assertThat(response.convertOnUpdate()).isTrue();
         assertThat(response.completeForAddonCreate()).isFalse();
@@ -174,6 +181,7 @@ class MileageSettingsServiceTest {
         conversion.setExpenseId(expenseId);
         conversion.setSource(MileageConversionSource.WEBHOOK_CREATED);
         conversion.setStatus(status);
+        conversion.setUserId("user-one");
         conversion.setMiles(new BigDecimal("37.400000"));
         conversion.setRate(new BigDecimal("0.655000"));
         conversion.setCalculatedAmount(new BigDecimal("24.497000"));

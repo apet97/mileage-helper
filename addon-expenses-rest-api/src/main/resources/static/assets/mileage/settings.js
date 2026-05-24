@@ -1,17 +1,21 @@
 (function () {
   const url = new URL(window.location.href);
   const authToken = url.searchParams.get("auth_token") || "";
-  const sessionRows = [];
   let createContext = {
     rate: null,
     unit: "mi",
     allowUserRateOverride: false,
     complete: false
   };
+  let userIsAdmin = false;
 
   if (authToken) {
     url.searchParams.delete("auth_token");
     history.replaceState({}, document.title, url.pathname + url.search + url.hash);
+  }
+
+  function element(id) {
+    return document.getElementById(id);
   }
 
   function authHeaders(extra) {
@@ -42,6 +46,29 @@
     });
   }
 
+  function downloadCsv(path, fallbackName) {
+    return fetch(path, { headers: authHeaders() }).then(async response => {
+      if (!response.ok) {
+        throw new Error("CSV export failed.");
+      }
+      const blob = await response.blob();
+      const href = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = href;
+      link.download = filenameFromDisposition(response.headers.get("Content-Disposition")) || fallbackName;
+      link.hidden = true;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(href), 0);
+    }).catch(error => toast(error.message, "error"));
+  }
+
+  function filenameFromDisposition(disposition) {
+    const match = disposition && disposition.match(/filename="?([^"]+)"?/);
+    return match ? match[1] : "";
+  }
+
   function claimsFromToken() {
     if (!authToken || authToken.split(".").length < 2) {
       return {};
@@ -68,30 +95,41 @@
     document.querySelectorAll("[data-admin-only]").forEach(element => {
       element.hidden = !isAdmin;
     });
-    if (!isAdmin && document.querySelector(".nav-button.active")?.dataset.tabTarget?.startsWith("admin")) {
-      switchTab("create");
+    if (!isAdmin && document.querySelector(".nav-button.active")?.dataset.tabTarget !== "mine") {
+      switchTab("mine");
     }
     return isAdmin;
   }
 
   function switchTab(tab) {
+    const targetPanel = element("tab-" + tab);
+    if (!targetPanel) {
+      return;
+    }
     document.querySelectorAll(".tab-panel").forEach(panel => {
-      panel.classList.toggle("active", panel.id === "tab-" + tab);
+      panel.classList.toggle("active", panel === targetPanel);
     });
     document.querySelectorAll(".nav-button").forEach(button => {
       button.classList.toggle("active", button.dataset.tabTarget === tab);
     });
-    if (tab === "admin-settings") {
+    if (tab === "mine") {
+      loadMine();
+    } else if (tab === "team" && userIsAdmin) {
+      loadTeam();
+    } else if (tab === "admin-settings" && userIsAdmin) {
       loadSettings();
-    } else if (tab === "conversion-log") {
+    } else if (tab === "conversion-log" && userIsAdmin) {
       loadConversions();
-    } else if (tab === "diagnostics") {
+    } else if (tab === "diagnostics" && userIsAdmin) {
       loadDiagnostics();
     }
   }
 
   function toast(message, type) {
-    const container = document.getElementById("toast-container");
+    const container = element("toast-container");
+    if (!container) {
+      return;
+    }
     const node = document.createElement("div");
     node.className = "toast " + (type || "");
     node.textContent = message;
@@ -100,12 +138,12 @@
   }
 
   function formValue(id) {
-    const node = document.getElementById(id);
+    const node = element(id);
     return node && node.value ? node.value.trim() : "";
   }
 
   function defaultDate() {
-    const date = document.getElementById("field-date");
+    const date = element("field-date");
     if (date && !date.value) {
       date.value = new Date().toISOString().slice(0, 10);
     }
@@ -118,37 +156,50 @@
       projectId: formValue("field-project") || null,
       miles: formValue("field-miles"),
       rate: rateAllowed ? (formValue("field-rate") || null) : null,
-      billable: document.getElementById("field-billable").checked,
+      billable: element("field-billable").checked,
       notes: formValue("field-notes") || null
     };
   }
 
   function applyCreateContext(data) {
     createContext = Object.assign({}, createContext, data || {});
-    const rateRow = document.getElementById("rate-field-row");
-    const rate = document.getElementById("field-rate");
-    const preview = document.getElementById("btn-preview");
+    const rateRow = element("rate-field-row");
+    const rate = element("field-rate");
+    const preview = element("btn-preview");
     const submit = document.querySelector("#mileage-form button[type='submit']");
-    const context = document.getElementById("create-context");
+    const context = element("create-context");
     const unit = createContext.unit || "mi";
     const rateText = createContext.rate ? createContext.rate + " per " + unit : "not configured";
-    context.textContent = createContext.complete
-      ? "Workspace rate: " + rateText
-      : "Mileage settings need a rate and output category before users can create expenses.";
-    rate.disabled = !createContext.allowUserRateOverride;
-    rateRow.hidden = !createContext.allowUserRateOverride;
-    if (!createContext.allowUserRateOverride) {
-      rate.value = "";
+    if (context) {
+      context.textContent = createContext.complete
+        ? "Workspace rate: " + rateText
+        : "Mileage settings need a rate and output category before users can create expenses.";
     }
-    preview.disabled = !createContext.complete;
-    submit.disabled = !createContext.complete;
+    if (rate) {
+      rate.disabled = !createContext.allowUserRateOverride;
+      if (!createContext.allowUserRateOverride) {
+        rate.value = "";
+      }
+    }
+    if (rateRow) {
+      rateRow.hidden = !createContext.allowUserRateOverride;
+    }
+    if (preview) {
+      preview.disabled = !createContext.complete;
+    }
+    if (submit) {
+      submit.disabled = !createContext.complete;
+    }
   }
 
   function loadCreateContext() {
+    if (!element("create-context")) {
+      return Promise.resolve();
+    }
     return apiFetch("/api/mileage/create-context")
       .then(applyCreateContext)
       .catch(error => {
-        document.getElementById("create-context").textContent = "Mileage settings could not be loaded.";
+        element("create-context").textContent = "Mileage settings could not be loaded.";
         toast(error.message, "error");
       });
   }
@@ -160,20 +211,31 @@
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ miles: payload.miles, rate: payload.rate })
     }).then(result => {
-      document.getElementById("preview-result").textContent =
-        result.miles + " " + (createContext.unit || "mi") + " x " + result.rate + " = " + result.roundedAmount;
+      const target = element("preview-result");
+      const unit = createContext.unit || "mi";
+      target.replaceChildren();
+      const primary = document.createElement("div");
+      primary.className = "amount-primary";
+      primary.textContent = result.miles + " " + unit + " x " + result.rate + " = " + result.calculatedAmount;
+      const secondary = document.createElement("div");
+      secondary.className = "amount-secondary";
+      secondary.textContent = "Expense amount: " + result.roundedAmount;
+      target.append(primary, secondary);
     }).catch(error => toast(error.message, "error"));
   }
 
   function setCreateBusy(busy) {
     const submit = document.querySelector("#mileage-form button[type='submit']");
+    if (!submit) {
+      return;
+    }
     submit.disabled = busy || !createContext.complete;
     submit.textContent = busy ? "Creating..." : "Create Expense";
   }
 
   function createMileage(event) {
     event.preventDefault();
-    const file = document.getElementById("field-receipt").files[0];
+    const file = element("field-receipt").files[0];
     setCreateBusy(true);
     if (file) {
       const body = new FormData();
@@ -197,34 +259,66 @@
   }
 
   function recordSubmission(result) {
-    sessionRows.unshift(result);
-    document.getElementById("create-status").textContent = "Created " + result.expenseId;
-    document.getElementById("field-miles").value = "";
-    document.getElementById("field-rate").value = "";
-    document.getElementById("field-notes").value = "";
-    document.getElementById("field-receipt").value = "";
-    renderSessionRows();
+    element("create-status").textContent = "Created " + result.expenseId;
+    element("field-miles").value = "";
+    element("field-rate").value = "";
+    element("field-notes").value = "";
+    element("field-receipt").value = "";
+    const target = element("preview-result");
+    if (target) {
+      target.replaceChildren();
+    }
+    loadMine();
     toast("Mileage expense created.");
   }
 
-  function renderSessionRows() {
-    const target = document.getElementById("user-activity");
-    if (!sessionRows.length) {
-      target.textContent = "Mileage submissions from this session appear here.";
+  function loadMine() {
+    const rows = element("mine-rows");
+    if (!rows) {
+      return Promise.resolve();
+    }
+    return apiFetch("/api/mileage/mine?pageSize=50")
+      .then(data => renderMileageRows(rows, data.conversions || [], false, "No mileage rows yet."))
+      .catch(error => toast(error.message, "error"));
+  }
+
+  function loadTeam() {
+    const rows = element("team-rows");
+    if (!rows) {
+      return Promise.resolve();
+    }
+    return apiFetch("/api/mileage/team?pageSize=50")
+      .then(data => renderMileageRows(rows, data.conversions || [], true, "No team mileage rows yet."))
+      .catch(error => toast(error.message, "error"));
+  }
+
+  function renderMileageRows(rows, items, includeUser, emptyText) {
+    rows.replaceChildren();
+    if (!items.length) {
+      renderEmptyRow(rows, includeUser ? 7 : 6, emptyText);
       return;
     }
-    target.replaceChildren();
-    sessionRows.slice(0, 10).forEach(row => {
-      const line = document.createElement("div");
-      line.textContent = row.expenseId + " - " + row.miles + " miles - " + row.roundedAmount;
-      target.appendChild(line);
+    items.forEach(item => {
+      const row = rows.insertRow();
+      appendTextCell(row, item.expenseId);
+      if (includeUser) {
+        appendTextCell(row, item.userId);
+      }
+      appendTextCell(row, item.status);
+      appendTextCell(row, item.miles);
+      appendTextCell(row, item.rate);
+      appendAmountCell(row, item.calculatedAmount, item.roundedAmount);
+      appendTextCell(row, item.updatedAt);
     });
   }
 
   function loadCategories() {
     return apiFetch("/api/mileage/options/categories").then(data => {
-      const input = document.getElementById("settings-input-category");
-      const output = document.getElementById("settings-output-category");
+      const input = element("settings-input-category");
+      const output = element("settings-output-category");
+      if (!input || !output) {
+        return;
+      }
       input.replaceChildren();
       output.replaceChildren();
       data.categories.forEach(category => {
@@ -241,8 +335,11 @@
   }
 
   function loadProjects() {
+    const project = element("field-project");
+    if (!project) {
+      return Promise.resolve();
+    }
     return apiFetch("/api/mileage/options/projects").then(data => {
-      const project = document.getElementById("field-project");
       project.replaceChildren();
       appendOption(project, "", "No project");
       (data.projects || []).forEach(item => appendOption(project, item.id, item.name));
@@ -250,21 +347,24 @@
   }
 
   function loadSettings() {
-    Promise.all([apiFetch("/api/mileage/settings"), loadCategories()])
+    if (!element("settings-form")) {
+      return Promise.resolve();
+    }
+    return Promise.all([apiFetch("/api/mileage/settings"), loadCategories()])
       .then(([settings]) => {
-        document.getElementById("settings-enabled").checked = settings.enabled;
-        document.getElementById("settings-rate").value = settings.rate || "";
-        document.getElementById("settings-unit").value = settings.unit || "mi";
-        document.getElementById("settings-input-category").value = settings.inputCategoryId || "";
-        document.getElementById("settings-output-category").value = settings.outputCategoryId || "";
-        document.getElementById("settings-rounding").value = settings.roundingMode || "HALF_UP";
-        document.getElementById("settings-convert-create").checked = settings.convertOnCreate;
-        document.getElementById("settings-convert-update").checked = settings.convertOnUpdate;
-        document.getElementById("settings-preserve-notes").checked = settings.preserveOriginalNotes;
-        document.getElementById("settings-dry-run").checked = settings.dryRunMode;
-        document.getElementById("settings-rate-override").checked = settings.allowUserRateOverride;
-        document.getElementById("settings-template").value = settings.noteTemplate || "";
-        document.getElementById("settings-status").textContent = settings.completeForNativeConversion ? "Ready" : "Needs configuration";
+        element("settings-enabled").checked = settings.enabled;
+        element("settings-rate").value = settings.rate || "";
+        element("settings-unit").value = settings.unit || "mi";
+        element("settings-input-category").value = settings.inputCategoryId || "";
+        element("settings-output-category").value = settings.outputCategoryId || "";
+        element("settings-rounding").value = settings.roundingMode || "HALF_UP";
+        element("settings-convert-create").checked = settings.convertOnCreate;
+        element("settings-convert-update").checked = settings.convertOnUpdate;
+        element("settings-preserve-notes").checked = settings.preserveOriginalNotes;
+        element("settings-dry-run").checked = settings.dryRunMode;
+        element("settings-rate-override").checked = settings.allowUserRateOverride;
+        element("settings-template").value = settings.noteTemplate || "";
+        element("settings-status").textContent = settings.completeForNativeConversion ? "Ready" : "Needs configuration";
       })
       .catch(error => toast(error.message, "error"));
   }
@@ -272,17 +372,17 @@
   function saveSettings(event) {
     event.preventDefault();
     const payload = {
-      enabled: document.getElementById("settings-enabled").checked,
+      enabled: element("settings-enabled").checked,
       rate: formValue("settings-rate"),
       unit: formValue("settings-unit") || "mi",
       inputCategoryId: formValue("settings-input-category") || null,
       outputCategoryId: formValue("settings-output-category") || null,
       roundingMode: formValue("settings-rounding") || "HALF_UP",
-      convertOnCreate: document.getElementById("settings-convert-create").checked,
-      convertOnUpdate: document.getElementById("settings-convert-update").checked,
-      preserveOriginalNotes: document.getElementById("settings-preserve-notes").checked,
-      dryRunMode: document.getElementById("settings-dry-run").checked,
-      allowUserRateOverride: document.getElementById("settings-rate-override").checked,
+      convertOnCreate: element("settings-convert-create").checked,
+      convertOnUpdate: element("settings-convert-update").checked,
+      preserveOriginalNotes: element("settings-preserve-notes").checked,
+      dryRunMode: element("settings-dry-run").checked,
+      allowUserRateOverride: element("settings-rate-override").checked,
       noteTemplate: formValue("settings-template") || null
     };
     apiFetch("/api/mileage/settings", {
@@ -297,22 +397,63 @@
   }
 
   function loadConversions() {
-    apiFetch("/api/mileage/conversions?pageSize=50").then(data => {
-      const rows = document.getElementById("conversion-rows");
+    const rows = element("conversion-rows");
+    if (!rows) {
+      return Promise.resolve();
+    }
+    return apiFetch("/api/mileage/conversions?pageSize=50").then(data => {
       rows.replaceChildren();
-      data.conversions.forEach(item => {
+      const items = data.conversions || [];
+      if (!items.length) {
+        renderEmptyRow(rows, 7, "No conversion rows yet.");
+        return;
+      }
+      items.forEach(item => {
         const row = rows.insertRow();
-        [item.expenseId, item.status, item.miles, item.roundedAmount, item.updatedAt].forEach(value => {
-          const cell = row.insertCell();
-          cell.textContent = value == null ? "" : String(value);
-        });
+        appendTextCell(row, item.expenseId);
+        appendTextCell(row, item.source);
+        appendTextCell(row, item.status);
+        appendTextCell(row, item.miles);
+        appendTextCell(row, item.rate);
+        appendAmountCell(row, item.calculatedAmount, item.roundedAmount);
+        appendTextCell(row, item.updatedAt);
       });
     }).catch(error => toast(error.message, "error"));
   }
 
+  function appendTextCell(row, value) {
+    const cell = row.insertCell();
+    cell.textContent = value == null ? "" : String(value);
+  }
+
+  function appendAmountCell(row, calculatedAmount, roundedAmount) {
+    const cell = row.insertCell();
+    const stack = document.createElement("div");
+    stack.className = "metric-stack";
+    const primary = document.createElement("span");
+    primary.className = "amount-primary";
+    primary.textContent = calculatedAmount == null ? "" : String(calculatedAmount);
+    const secondary = document.createElement("span");
+    secondary.className = "amount-secondary";
+    secondary.textContent = roundedAmount == null ? "Expense amount: " : "Expense amount: " + roundedAmount;
+    stack.append(primary, secondary);
+    cell.appendChild(stack);
+  }
+
+  function renderEmptyRow(rows, colspan, text) {
+    const row = rows.insertRow();
+    const cell = row.insertCell();
+    cell.colSpan = colspan;
+    cell.className = "empty-table";
+    cell.textContent = text;
+  }
+
   function loadDiagnostics() {
-    apiFetch("/api/mileage/diagnostics").then(data => {
-      const list = document.getElementById("diagnostics-list");
+    if (!element("diagnostics-list")) {
+      return Promise.resolve();
+    }
+    return apiFetch("/api/mileage/diagnostics").then(data => {
+      const list = element("diagnostics-list");
       list.replaceChildren();
       [["Installation", data.installationAvailable], ["Settings", data.settingsComplete], ["Native conversion", data.nativeConversionReady]].forEach(([label, value]) => {
         const dt = document.createElement("dt");
@@ -321,7 +462,7 @@
         dd.textContent = value ? "OK" : "Needs attention";
         list.append(dt, dd);
       });
-      const warnings = document.getElementById("diagnostics-warnings");
+      const warnings = element("diagnostics-warnings");
       warnings.replaceChildren();
       (data.warnings || []).forEach(text => {
         const item = document.createElement("li");
@@ -331,21 +472,30 @@
     }).catch(error => toast(error.message, "error"));
   }
 
+  function on(id, event, handler) {
+    const node = element(id);
+    if (node) {
+      node.addEventListener(event, handler);
+    }
+  }
+
   document.querySelectorAll("[data-tab-target]").forEach(button => {
     button.addEventListener("click", () => switchTab(button.dataset.tabTarget));
   });
-  document.getElementById("btn-preview").addEventListener("click", previewMileage);
-  document.getElementById("mileage-form").addEventListener("submit", createMileage);
-  document.getElementById("settings-form").addEventListener("submit", saveSettings);
-  document.getElementById("btn-refresh-conversions").addEventListener("click", loadConversions);
-  document.getElementById("btn-refresh-diagnostics").addEventListener("click", loadDiagnostics);
+  on("btn-preview", "click", previewMileage);
+  on("mileage-form", "submit", createMileage);
+  on("settings-form", "submit", saveSettings);
+  on("btn-refresh-mine", "click", loadMine);
+  on("btn-refresh-team", "click", loadTeam);
+  on("btn-refresh-conversions", "click", loadConversions);
+  on("btn-refresh-diagnostics", "click", loadDiagnostics);
+  on("btn-export-mine", "click", () => downloadCsv("/api/mileage/mine.csv", "mileage-mine.csv"));
+  on("btn-export-team", "click", () => downloadCsv("/api/mileage/team.csv", "mileage-team.csv"));
+  on("btn-export-conversions", "click", () => downloadCsv("/api/mileage/conversions.csv", "mileage-conversions.csv"));
 
-  const isAdmin = applyRoleGate();
-  if (isAdmin && window.location.pathname.endsWith("/iframe/settings")) {
-    switchTab("admin-settings");
-  }
+  userIsAdmin = applyRoleGate();
   defaultDate();
   loadCreateContext();
   loadProjects();
-  renderSessionRows();
+  switchTab(userIsAdmin && window.location.pathname.endsWith("/iframe/settings") ? "admin-settings" : "mine");
 })();

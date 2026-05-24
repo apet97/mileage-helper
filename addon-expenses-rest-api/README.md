@@ -14,6 +14,8 @@ This module is the implemented product module inside the standalone repository. 
 - Mileage, rate, and money values are handled with `BigDecimal`.
 - Manual mileage creation defaults `billable` to true when omitted and derives the user from verified token claims.
 - Rate override on the main page is available only when workspace settings allow it; otherwise the configured workspace rate is used and shown as read-only context.
+- Regular users see only `Mine`; admins also see `Team`, `Settings`, `Conversions`, and `Diagnostics`.
+- Add-on previews and mileage tables show full `calculatedAmount` decimals first, with the rounded Clockify expense amount shown as secondary context.
 - Native/mobile created and restored expense webhooks tolerate both full expense payloads and reference payloads containing `expenseId`.
 
 ## Non-goals
