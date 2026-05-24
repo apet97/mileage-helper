@@ -13,6 +13,7 @@ import java.math.BigDecimal;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record ExpenseWebhookPayload(
         String id,
+        String expenseId,
         String workspaceId,
         String userId,
         String date,

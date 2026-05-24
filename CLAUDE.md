@@ -47,8 +47,12 @@ Main product packages:
 - Scopes: `EXPENSE_READ`, `EXPENSE_WRITE`, `USER_READ`, `PROJECT_READ`, `WORKSPACE_READ`.
 - Webhooks: `EXPENSE_CREATED`, `EXPENSE_UPDATED`, `EXPENSE_DELETED`, `EXPENSE_RESTORED`.
 - UI routes: `/iframe/mileage`, `/iframe/settings`.
-- User APIs: `POST /api/mileage/preview`, `POST /api/mileage/expenses`.
+- User APIs: `GET /api/mileage/create-context`, `POST /api/mileage/preview`, `POST /api/mileage/expenses`.
 - Mileage create requests intentionally omit `userId`; the backend injects the verified claims user into Clockify create commands and audit rows.
+- Mileage create requests intentionally omit `taskId`; the UI follows Clockify's regular expense form, does not fetch task options, and does not require `TASK_READ`. Native/mobile conversion may still preserve task IDs from existing Clockify expense snapshots.
+- Manual mileage expenses default to billable when `billable` is omitted; explicit `false` remains non-billable.
+- Main-page rate override is hidden and omitted unless workspace settings allow overrides. The backend calculation also ignores submitted override rates when the setting is off.
+- `EXPENSE_CREATED` and `EXPENSE_RESTORED` handlers accept either full payloads with `id` or reference payloads with `expenseId`.
 - Admin APIs: settings, diagnostics, category options, conversion list/detail/retry under `/api/mileage`.
 - Tables: `mileage_workspace_settings`, `mileage_conversion`.
 - Historical pre-Mileage migrations V5/V10 are retained for Flyway validation only; V12 drops their leftover generic tables. New code/docs should not add `temp_addon_expenses*`, `clockify-expenses-api`, `Clockify Expenses API`, or `com.cake.clockify.addon.expenses` references.
@@ -87,7 +91,9 @@ Runtime configuration uses these names:
 - `ADDON_ENABLE_HSTS`
 - `PORT`
 
-Live sacrificial Clockify checks may use shell environment variables such as `CLOCKIFY_API_BASE_URL`, `CLOCKIFY_API_KEY`, `CLOCKIFY_WORKSPACE_ID`, `CLOCKIFY_TEST_USER_ID`, `CLOCKIFY_TEST_PROJECT_ID`, and `CLOCKIFY_TEST_TASK_ID`. Never print secret values.
+Live sacrificial Clockify checks may use shell environment variables such as `CLOCKIFY_API_BASE_URL`, `CLOCKIFY_API_KEY`, `CLOCKIFY_WORKSPACE_ID`, `CLOCKIFY_TEST_USER_ID`, and `CLOCKIFY_TEST_PROJECT_ID`. Never print secret values.
+
+Default CORS allows Clockify origins and the origin from `ADDON_BASE_URL`, which keeps local ngrok iframe/API testing working without adding a broad wildcard.
 
 ## Hard Rules
 
@@ -98,6 +104,8 @@ Live sacrificial Clockify checks may use shell environment variables such as `CL
 - Do not log tokens, auth headers, receipt bytes, or raw upstream error bodies.
 - Preserve workspace isolation in repository methods and service calls.
 - Do not trust request-supplied `userId` for user-facing mileage creation; derive the target user from verified Clockify token claims. Do not add `userId` back to the create request DTO, multipart allowlist, iframe form, or frontend payload.
+- Do not add a task selector, task options endpoint, `taskId` create field, or `TASK_READ` scope for user-facing mileage creation unless product requirements change and live scope evidence is captured first.
+- Do not expose the rate override input on the main page unless `/api/mileage/create-context` reports `allowUserRateOverride=true`.
 - Keep `addon-core` and `addon-db` changes narrow; ask before structural platform changes.
 - Keep copied Marketplace docs under `addon-expenses-rest-api/MARKETPLACE_OCS/` as source reference material.
 - Do not restore deleted live shell probes. Do not add new legacy temp-addon migrations; keep V5/V10 only as immutable Flyway history and use forward migrations for cleanup.

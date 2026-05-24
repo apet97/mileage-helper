@@ -41,6 +41,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -135,11 +136,48 @@ class MileageApiControllerTest {
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims())
                         .param("date", "2026-05-24")
                         .param("projectId", "project-1")
-                        .param("taskId", "task-1")
                         .param("miles", "37.4")
                         .param("notes", "Client site visit"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.expenseId").value("exp-file"));
+    }
+
+    @Test
+    void createMileageExpenseJsonDefaultsBillableToTrueWhenOmitted() throws Exception {
+        when(settingsService.validateForAddonCreate("ws-api")).thenReturn(settings(false));
+        when(gateway.createFlatExpense(eq("ws-api"), any(CreateFlatExpenseCommand.class))).thenReturn(createdExpense("exp-1"));
+
+        mockMvc.perform(post("/api/mileage/expenses")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"date":"2026-05-24","projectId":"project-1","miles":"37.4"}
+                                """))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<CreateFlatExpenseCommand> command = ArgumentCaptor.forClass(CreateFlatExpenseCommand.class);
+        verify(gateway).createFlatExpense(eq("ws-api"), command.capture());
+        assertThat(command.getValue().billable()).isTrue();
+    }
+
+    @Test
+    void createMileageExpenseMultipartDefaultsBillableToTrueWhenOmitted() throws Exception {
+        when(settingsService.validateForAddonCreate("ws-api")).thenReturn(settings(false));
+        when(gateway.createFlatExpenseWithReceipt(eq("ws-api"), any(CreateFlatExpenseCommand.class), eq("receipt.png"), eq("image/png"), any()))
+                .thenReturn(createdExpense("exp-file"));
+        MockMultipartFile file = new MockMultipartFile("file", "receipt.png", "image/png", new byte[] {1, 2, 3});
+
+        mockMvc.perform(multipart("/api/mileage/expenses")
+                        .file(file)
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims())
+                        .param("date", "2026-05-24")
+                        .param("projectId", "project-1")
+                        .param("miles", "37.4"))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<CreateFlatExpenseCommand> command = ArgumentCaptor.forClass(CreateFlatExpenseCommand.class);
+        verify(gateway).createFlatExpenseWithReceipt(eq("ws-api"), command.capture(), eq("receipt.png"), eq("image/png"), any());
+        assertThat(command.getValue().billable()).isTrue();
     }
 
     @Test
@@ -157,6 +195,7 @@ class MileageApiControllerTest {
         verify(gateway).createFlatExpense(eq("ws-api"), command.capture());
         assertThat(command.getValue().categoryId()).isEqualTo("cat-output");
         assertThat(command.getValue().userId()).isEqualTo("user-claims");
+        assertThat(command.getValue().taskId()).isNull();
         assertThat(command.getValue().amount()).isEqualByComparingTo(new BigDecimal("24.50"));
     }
 
@@ -169,7 +208,7 @@ class MileageApiControllerTest {
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"date":"2026-05-24","userId":"other-user","projectId":"project-1","taskId":"task-1","miles":"37.4","billable":true}
+                                {"date":"2026-05-24","userId":"other-user","projectId":"project-1","miles":"37.4","billable":true}
                                 """))
                 .andExpect(status().isOk());
 
@@ -232,6 +271,19 @@ class MileageApiControllerTest {
         ArgumentCaptor<MileageConversion> saved = ArgumentCaptor.forClass(MileageConversion.class);
         verify(conversionRepository).saveAndFlush(saved.capture());
         assertThat(saved.getValue().getRate()).isEqualByComparingTo(new BigDecimal("0.655"));
+    }
+
+    @Test
+    void createContextExposesRateOverridePolicyToMembers() throws Exception {
+        when(settingsService.validateForAddonCreate("ws-api")).thenReturn(settings(false));
+
+        mockMvc.perform(get("/api/mileage/create-context")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("MEMBER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rate").value("0.655"))
+                .andExpect(jsonPath("$.unit").value("mi"))
+                .andExpect(jsonPath("$.allowUserRateOverride").value(false))
+                .andExpect(jsonPath("$.complete").value(true));
     }
 
     @Test
@@ -359,7 +411,7 @@ class MileageApiControllerTest {
     private static String createBody(String miles, String rate) {
         String rateField = rate == null ? "" : ",\"rate\":\"" + rate + "\"";
         return """
-                {"date":"2026-05-24","projectId":"project-1","taskId":"task-1","miles":"%s"%s,"billable":true,"notes":"Client site visit"}
+                {"date":"2026-05-24","projectId":"project-1","miles":"%s"%s,"billable":true,"notes":"Client site visit"}
                 """.formatted(miles, rateField);
     }
 
@@ -374,8 +426,12 @@ class MileageApiControllerTest {
     }
 
     private static NormalizedClaims claims() {
+        return claims("OWNER");
+    }
+
+    private static NormalizedClaims claims(String role) {
         return new NormalizedClaims("ws-api", "mileage-for-clockify", "https://backend.example.test",
-                "https://reports.example.test", null, null, "user-claims", "OWNER", "en", "DEFAULT", "UTC", Instant.now());
+                "https://reports.example.test", null, null, "user-claims", role, "en", "DEFAULT", "UTC", Instant.now());
     }
 
     private static final class ValidUserSignatureParser extends ClockifySignatureParser {

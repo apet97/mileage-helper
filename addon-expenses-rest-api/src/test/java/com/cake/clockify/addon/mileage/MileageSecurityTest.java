@@ -90,12 +90,47 @@ class MileageSecurityTest {
     }
 
     @Test
+    void mileageCreateFormDoesNotExposeTaskSelector() {
+        String html = new MileageIframeController().mileage().getBody();
+
+        assertThat(html).doesNotContain("id=\"field-task\"");
+        assertThat(html).doesNotContain("name=\"taskId\"");
+        assertThat(html).doesNotContain("<span>Task</span>");
+    }
+
+    @Test
+    void mileageCreateFormDefaultsBillableAndGroupsRateOverride() {
+        String html = new MileageIframeController().mileage().getBody();
+
+        assertThat(html).contains("id=\"field-billable\" name=\"billable\" type=\"checkbox\" checked");
+        assertThat(html).contains("id=\"rate-field-row\"");
+    }
+
+    @Test
     void mileageJavascriptDoesNotSendUserId() throws Exception {
         String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
 
         assertThat(javascript).doesNotContain("field-user");
         assertThat(javascript).doesNotContain("currentUserIdFromClaims");
         assertThat(javascript).doesNotContain("userId");
+    }
+
+    @Test
+    void mileageJavascriptDoesNotFetchTaskOptionsOrSendTaskId() throws Exception {
+        String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
+
+        assertThat(javascript).doesNotContain("options/tasks");
+        assertThat(javascript).doesNotContain("field-task");
+        assertThat(javascript).doesNotContain("taskId");
+    }
+
+    @Test
+    void mileageJavascriptLoadsCreateContextBeforeAllowingRateOverride() throws Exception {
+        String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
+
+        assertThat(javascript).contains("/api/mileage/create-context");
+        assertThat(javascript).contains("allowUserRateOverride");
+        assertThat(javascript).contains("field-rate");
     }
 
     private static final class RejectingSignatureParser extends ClockifySignatureParser {

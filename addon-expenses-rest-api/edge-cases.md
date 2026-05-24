@@ -1,7 +1,11 @@
 # Mileage Edge Cases
 
 - If mileage settings are incomplete, add-on-created expenses return `configuration_missing` and native conversions record `SKIPPED`.
+- The create page loads `/api/mileage/create-context` before enabling Preview/Create. If the context cannot load, the buttons stay disabled.
+- Manual add-on-created expenses default to billable when `billable` is omitted. An explicit `billable=false` remains non-billable.
+- Rate override input is hidden and omitted unless workspace settings allow user overrides. Backend calculation still ignores submitted override rates when override is disabled.
 - Duplicate webhook delivery is idempotent through the `(workspace_id, expense_id)` audit row and marker checks.
+- `EXPENSE_CREATED` and `EXPENSE_RESTORED` webhooks can arrive as full payloads with `id` or reference payloads with `expenseId`; missing both IDs is a no-op.
 - If a marker is manually removed from Clockify notes, the audit row still prevents a second conversion after `CONVERTED`.
 - Locked or finalized expenses are skipped with `FINALIZED_OR_LOCKED`.
 - Delete webhooks mark the audit row `DELETED`; they never hard-delete the row.

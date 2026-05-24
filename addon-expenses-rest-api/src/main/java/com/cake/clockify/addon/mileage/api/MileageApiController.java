@@ -3,6 +3,7 @@ package com.cake.clockify.addon.mileage.api;
 import com.cake.clockify.addon.core.auth.NormalizedClaims;
 import com.cake.clockify.addon.core.auth.RequestAttributes;
 import com.cake.clockify.addon.mileage.api.model.CreateMileageExpenseRequest;
+import com.cake.clockify.addon.mileage.api.model.MileageCreateContextResponse;
 import com.cake.clockify.addon.mileage.api.model.MileageCreateExpenseResponse;
 import com.cake.clockify.addon.mileage.api.model.MileagePreviewRequest;
 import com.cake.clockify.addon.mileage.api.model.MileagePreviewResponse;
@@ -23,6 +24,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -46,7 +48,7 @@ public class MileageApiController {
     private static final Set<String> ALLOWED_RECEIPT_TYPES = Set.of(
             "image/png", "image/jpeg", "image/gif", "image/webp", "image/heic", "application/pdf");
     private static final Set<String> MULTIPART_FIELDS = Set.of(
-            "date", "projectId", "taskId", "miles", "rate", "billable", "notes");
+            "date", "projectId", "miles", "rate", "billable", "notes");
 
     private final MileageSettingsService settingsService;
     private final MileageCalculator calculator;
@@ -79,6 +81,13 @@ public class MileageApiController {
                 calculation.rateText(),
                 calculation.calculatedAmountText(),
                 calculation.roundedAmountText()));
+    }
+
+    @GetMapping("/create-context")
+    public ResponseEntity<MileageCreateContextResponse> createContext(HttpServletRequest request) {
+        NormalizedClaims claims = RequestAttributes.requireClaims(request);
+        MileageSettingsValidation settings = settingsService.validateForAddonCreate(claims.workspaceId());
+        return ResponseEntity.ok(MileageCreateContextResponse.from(settings));
     }
 
     @PostMapping(value = "/expenses", consumes = MediaType.APPLICATION_JSON_VALUE)
@@ -121,9 +130,9 @@ public class MileageApiController {
                 userId,
                 LocalDate.parse(required("date", request.date())),
                 blankToNull(request.projectId()),
-                blankToNull(request.taskId()),
+                null,
                 calculation.roundedAmount(),
-                request.billable(),
+                billableOrDefault(request.billable()),
                 note,
                 settings.roundingMode());
         JsonNode response = createClockifyExpense(workspaceId, command, file);
@@ -190,7 +199,6 @@ public class MileageApiController {
         return new CreateMileageExpenseRequest(
                 safe.get("date"),
                 safe.get("projectId"),
-                safe.get("taskId"),
                 safe.get("miles"),
                 safe.get("rate"),
                 parseBoolean(safe.get("billable")),
@@ -215,7 +223,7 @@ public class MileageApiController {
         conversion.setTargetCategoryId(settings.outputCategoryId());
         conversion.setUserId(userId);
         conversion.setProjectId(blankToNull(request.projectId()));
-        conversion.setTaskId(blankToNull(request.taskId()));
+        conversion.setTaskId(null);
         conversion.setMiles(calculation.miles());
         conversion.setRate(calculation.rate());
         conversion.setCalculatedAmount(calculation.calculatedAmount());
@@ -250,6 +258,10 @@ public class MileageApiController {
             return null;
         }
         return Boolean.parseBoolean(value);
+    }
+
+    private static Boolean billableOrDefault(Boolean billable) {
+        return billable == null ? Boolean.TRUE : billable;
     }
 
     private static String blankToNull(String value) {

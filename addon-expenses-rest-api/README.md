@@ -12,6 +12,9 @@ This module is the implemented product module inside the standalone repository. 
 - Audit rows provide idempotency, delete/restore state, dry-run records, and conversion failures.
 - Clockify remains the source of truth for expenses, receipts, approvals, reports, budgets, and invoices.
 - Mileage, rate, and money values are handled with `BigDecimal`.
+- Manual mileage creation defaults `billable` to true when omitted and derives the user from verified token claims.
+- Rate override on the main page is available only when workspace settings allow it; otherwise the configured workspace rate is used and shown as read-only context.
+- Native/mobile created and restored expense webhooks tolerate both full expense payloads and reference payloads containing `expenseId`.
 
 ## Non-goals
 
@@ -43,6 +46,8 @@ docker compose -f addon-expenses-rest-api/docker-compose.yml up --build
 
 The app serves `/manifest`, `/iframe/mileage`, `/iframe/settings`, `/healthz`, and `/actuator/health`.
 
+For local tunnel testing, set `ADDON_BASE_URL` to the current ngrok origin before starting the app. Default CORS includes Clockify origins and the `ADDON_BASE_URL` origin so iframe API calls can post back to the same tunnel.
+
 If local Postgres already uses `5432`, keep the compose database internal:
 
 ```bash
@@ -58,10 +63,10 @@ mvn -pl addon-expenses-rest-api -am clean test
 
 ## Active Docs
 
-- `endpoints.md` - route list.
+- `endpoints.md` - route list, including the create-page context endpoint.
 - `models.md` - DTO/entity map.
-- `webhooks.md` - expense webhook behavior and loop prevention.
-- `edge-cases.md` - skip/failure behavior.
+- `webhooks.md` - expense webhook payload shapes, conversion behavior, and loop prevention.
+- `edge-cases.md` - skip/failure behavior and default create behavior.
 - `reports.md` - relationship to native Clockify reports.
 - `docs/PRE_PUBLISH_CHECKLIST.md` - current local and manual pre-publish gates.
 

@@ -48,6 +48,16 @@ class MileageWebhookIntegrationTest {
     }
 
     @Test
+    void expenseCreatedReferencePayloadFetchesAndConverts() {
+        NormalizedClaims claims = claims();
+        new ExpenseCreatedWebhookHandler(objectMapper, conversionService)
+                .handle(claims, "EXPENSE_CREATED", refPayload("exp-ref"));
+
+        verify(conversionService).convertIfEligible(
+                claims, "exp-ref", MileageConversionSource.WEBHOOK_CREATED, "EXPENSE_CREATED");
+    }
+
+    @Test
     void expenseUpdatedWebhookAfterConversionIsIgnored() {
         NormalizedClaims claims = claims();
         new ExpenseUpdatedWebhookHandler(objectMapper, conversionService)

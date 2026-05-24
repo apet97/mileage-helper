@@ -19,7 +19,6 @@ import java.util.List;
 public class ClockifyExpenseGateway {
     private static final int CATEGORY_PAGE_SIZE = 200;
     private static final int PROJECT_PAGE_SIZE = 200;
-    private static final int TASK_PAGE_SIZE = 200;
 
     private final ClockifyClientFactory clientFactory;
     private final ObjectMapper objectMapper;
@@ -104,21 +103,6 @@ public class ClockifyExpenseGateway {
                 if (!item.path("archived").asBoolean(false)) {
                     out.add(new ClockifyProjectOption(text(item, "id"), text(item, "name")));
                 }
-            }
-        }
-        return out;
-    }
-
-    public List<ClockifyTaskOption> listTasks(String workspaceId, String projectId) throws IOException, InterruptedException {
-        if (projectId == null || projectId.isBlank()) {
-            return List.of();
-        }
-        JsonNode root = client(workspaceId).tasks().getTasks(workspaceId, projectId, new ClockifyPageRequest(1, TASK_PAGE_SIZE));
-        JsonNode tasks = root.isArray() ? root : root.path("tasks");
-        List<ClockifyTaskOption> out = new ArrayList<>();
-        if (tasks instanceof ArrayNode array) {
-            for (JsonNode item : array) {
-                out.add(new ClockifyTaskOption(text(item, "id"), text(item, "name")));
             }
         }
         return out;

@@ -6,7 +6,7 @@ This is the standalone repository for Mileage for Clockify. It contains the add-
 
 1. Run `git status --short --branch`.
 2. Read this file, then `CLAUDE.md`, then [README.md](README.md).
-3. For product behavior, use [addon-expenses-rest-api/README.md](addon-expenses-rest-api/README.md), [addon-expenses-rest-api/endpoints.md](addon-expenses-rest-api/endpoints.md), and the implemented tests before relying on old handoff docs.
+3. For product behavior, use [addon-expenses-rest-api/README.md](addon-expenses-rest-api/README.md), [addon-expenses-rest-api/endpoints.md](addon-expenses-rest-api/endpoints.md), [addon-expenses-rest-api/webhooks.md](addon-expenses-rest-api/webhooks.md), and the implemented tests before relying on old handoff docs.
 4. Treat `addon-expenses-rest-api/mileage-addon-handoff/` and `addon-expenses-rest-api/docs/IMPLEMENTATION_PLAN_MILEAGE_FOR_CLOCKIFY_DETAILED.md` as historical implementation records unless a task explicitly says to resume or audit them.
 
 ## Non-Negotiables
@@ -20,6 +20,8 @@ This is the standalone repository for Mileage for Clockify. It contains the add-
 7. Never expose installation tokens to frontend code, logs, docs, screenshots, or test output.
 8. Preserve workspace isolation in every repository query, service method, webhook path, and Clockify API call.
 9. User-facing mileage creation must use the verified user ID from Clockify token claims, not a frontend or request-supplied `userId`. Do not add `userId` back to the create request DTO, multipart allowlist, iframe form, or frontend payload.
+10. User-facing mileage creation follows Clockify's regular expense form shape and does not require or fetch tasks. Do not add a task selector, task options endpoint, `taskId` create-field, or `TASK_READ` manifest scope unless the product requirement changes and live scope evidence is captured first.
+11. Main-page rate override is settings-gated. Keep `/api/mileage/create-context`, server-side rate override enforcement, and frontend visibility in sync.
 
 ## Module Map
 
@@ -36,11 +38,15 @@ This is the standalone repository for Mileage for Clockify. It contains the add-
 - Manifest strategy: manual schema 1.5 model in `MileageManifestV15`; do not switch to `ClockifyManifest.v1_5Builder()` unless you verify it exists locally.
 - Manifest key: `mileage-for-clockify`.
 - Main UI: `/iframe/mileage`; settings UI: `/iframe/settings`.
-- Main user APIs: `POST /api/mileage/preview`, `POST /api/mileage/expenses`.
+- Main user APIs: `GET /api/mileage/create-context`, `POST /api/mileage/preview`, `POST /api/mileage/expenses`.
 - Main admin APIs: settings, diagnostics, categories, conversion list/detail/retry under `/api/mileage`.
 - Webhooks: `EXPENSE_CREATED`, `EXPENSE_UPDATED`, `EXPENSE_DELETED`, `EXPENSE_RESTORED`.
 - DB tables: `mileage_workspace_settings`, `mileage_conversion`.
 - Mileage create requests intentionally omit `userId`; the backend injects the verified claims user into Clockify create commands and audit rows.
+- Mileage create requests intentionally omit `taskId`; the UI lists projects and categories but does not call task APIs. Native expense conversion may still preserve an existing Clockify `taskId` from webhook snapshots.
+- Manual mileage expenses default to billable when `billable` is omitted. An explicit `false` still stays non-billable.
+- Main-page rate override is hidden and omitted unless workspace settings allow user overrides. Backend calculation still ignores submitted override rates when the setting is off.
+- Native expense `EXPENSE_CREATED` and `EXPENSE_RESTORED` handlers accept either `id` or `expenseId` payload shapes.
 - Historical pre-Mileage migrations V5/V10 are retained for Flyway validation only; V12 drops their leftover generic tables. Do not add new `temp_addon_expenses*`, `clockify-expenses-api`, `Clockify Expenses API`, or `com.cake.clockify.addon.expenses` references.
 
 ## Commands

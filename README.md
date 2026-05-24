@@ -17,9 +17,12 @@ The ignored local clone `addon-expenses-rest-api/addon-java-sdk/` is read-only r
 
 - Manifest: `GET /manifest`, schema `1.5`, key `mileage-for-clockify`, minimum plan `PRO`.
 - UI: `GET /iframe/mileage`, `GET /iframe/settings`.
-- User APIs: `POST /api/mileage/preview`, `POST /api/mileage/expenses`.
+- User APIs: `GET /api/mileage/create-context`, `POST /api/mileage/preview`, `POST /api/mileage/expenses`.
 - Admin APIs: settings, diagnostics, category options, conversion list/detail/retry under `/api/mileage`.
 - Webhooks: `EXPENSE_CREATED`, `EXPENSE_UPDATED`, `EXPENSE_DELETED`, `EXPENSE_RESTORED`.
+- Manual mileage expenses are billable by default unless the request explicitly sends `billable=false`.
+- The main form hides rate override unless workspace settings allow it; users always see the configured workspace rate context first.
+- Native-created/restored expense webhooks accept both full payloads with `id` and reference payloads with `expenseId`.
 
 ## Build And Test
 
@@ -57,4 +60,4 @@ docker compose -f addon-expenses-rest-api/docker-compose.yml -f <(printf 'servic
 
 ## Configuration
 
-Runtime configuration uses `SPRING_DATASOURCE_*`, `ADDON_BASE_URL`, `ADDON_KEY`, `ADDON_NAME`, `ADDON_DESCRIPTION`, and `ADDON_CRYPTO_*` variables. See [addon-expenses-rest-api/README.md](addon-expenses-rest-api/README.md) for the full list.
+Runtime configuration uses `SPRING_DATASOURCE_*`, `ADDON_BASE_URL`, `ADDON_KEY`, `ADDON_NAME`, `ADDON_DESCRIPTION`, and `ADDON_CRYPTO_*` variables. Default CORS includes Clockify origins plus the `ADDON_BASE_URL` origin, which is what local ngrok testing needs. See [addon-expenses-rest-api/README.md](addon-expenses-rest-api/README.md) for the full list.

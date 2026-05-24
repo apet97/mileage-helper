@@ -54,6 +54,24 @@ class ExpenseWebhookPayloadTest {
     }
 
     @Test
+    void deserializeExpenseCreatedReferencePayload() throws Exception {
+        String json = """
+                {
+                    "workspaceId": "68adfddad138cb5f24c63b22",
+                    "userId": "64621faec4d2cc53b91fce6c",
+                    "expenseId": "68ae0cafcef78725aa10db15",
+                    "categoryId": "68ae0c8189b9b14a1304e26e"
+                }
+                """;
+
+        ExpenseWebhookPayload payload = objectMapper.readValue(json, ExpenseWebhookPayload.class);
+
+        assertNotNull(payload);
+        assertNull(payload.id());
+        assertEquals("68ae0cafcef78725aa10db15", payload.expenseId());
+    }
+
+    @Test
     void deserializeExpenseRestoredPayload() throws Exception {
         String json = """
                 {

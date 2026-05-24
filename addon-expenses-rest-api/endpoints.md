@@ -4,14 +4,16 @@ All API routes are scoped by the verified Clockify add-on JWT claims. There are 
 
 ## User Routes
 
-- `POST /api/mileage/preview`
-- `POST /api/mileage/expenses`
+- `GET /api/mileage/create-context` - safe create-page settings for verified users: configured rate/unit, rounding, completeness, diagnostics, and whether rate override is allowed.
+- `POST /api/mileage/preview` - preview miles x active rate using workspace settings unless rate override is allowed and supplied.
+- `POST /api/mileage/expenses` - create a flat Clockify expense for the verified claims user; defaults billable to true when omitted and never accepts `userId` or `taskId`.
 
 ## Admin Routes
 
 - `GET /api/mileage/settings`
 - `PUT /api/mileage/settings`
 - `GET /api/mileage/options/categories`
+- `GET /api/mileage/options/projects`
 - `GET /api/mileage/diagnostics`
 - `GET /api/mileage/conversions`
 - `GET /api/mileage/conversions/{id}`

@@ -7,7 +7,7 @@ The manifest subscribes to:
 - `EXPENSE_DELETED`
 - `EXPENSE_RESTORED`
 
-Created and restored payloads carry `id`; updated and deleted payloads carry `expenseId`. Handlers return without throwing when a payload is empty or the expense ID is missing.
+Created and restored payloads usually carry `id`; handlers also accept `expenseId` reference payloads. Updated and deleted payloads carry `expenseId`. Handlers return without throwing when a payload is empty or the expense ID is missing, but any present ID must be used to fetch the current Clockify expense before eligibility checks.
 
 Native/mobile unit mileage conversion is performed by fetching the current expense through `ClockifyExpenseGateway`, checking workspace isolation, eligibility, marker state, and audit state, then updating the same Clockify expense to the configured flat output category.
 

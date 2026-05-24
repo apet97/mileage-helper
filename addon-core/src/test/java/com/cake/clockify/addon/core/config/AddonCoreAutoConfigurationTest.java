@@ -150,6 +150,36 @@ class AddonCoreAutoConfigurationTest {
     }
 
     @Test
+    void corsFilterAllowsConfiguredAddonBaseUrlForSameOriginApiPosts() {
+        this.contextRunner
+                .withUserConfiguration(BaseTestConfig.class)
+                .withPropertyValues(
+                        "addon.key=my-key",
+                        "addon.name=my-name",
+                        "addon.base-url=https://dev-tunnel.ngrok-free.app",
+                        "addon.crypto.active-key-id=k1",
+                        "addon.crypto.keys.k1=" + TEST_KEY_HEX
+                )
+                .run(context -> {
+                    CorsFilter filter = (CorsFilter) context
+                            .getBean("addonCorsFilter", FilterRegistrationBean.class)
+                            .getFilter();
+                    org.springframework.mock.web.MockHttpServletRequest request =
+                            new org.springframework.mock.web.MockHttpServletRequest("OPTIONS", "/api/mileage/preview");
+                    request.addHeader("Origin", "https://dev-tunnel.ngrok-free.app");
+                    request.addHeader("Access-Control-Request-Method", "POST");
+                    org.springframework.mock.web.MockHttpServletResponse response =
+                            new org.springframework.mock.web.MockHttpServletResponse();
+
+                    filter.doFilter(request, response, new org.springframework.mock.web.MockFilterChain());
+
+                    assertThat(response.getStatus()).isEqualTo(200);
+                    assertThat(response.getHeader("Access-Control-Allow-Origin"))
+                            .isEqualTo("https://dev-tunnel.ngrok-free.app");
+                });
+    }
+
+    @Test
     void corsAllowedOriginPatternsAreTrimmedAndBlankEntriesIgnored() {
         this.contextRunner
                 .withUserConfiguration(BaseTestConfig.class)

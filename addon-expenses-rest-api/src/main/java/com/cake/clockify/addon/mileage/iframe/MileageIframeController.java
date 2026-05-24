@@ -33,18 +33,18 @@ public class MileageIframeController {
                 <main class="workspace">
                   <section class="tab-panel active" id="tab-create">
                     <header class="panel-heading"><h1>Create Mileage Expense</h1><span id="create-status" class="status-text"></span></header>
+                    <div class="context-strip" id="create-context">Loading workspace mileage settings...</div>
                     <form id="mileage-form" class="form-grid">
                       <label><span>Date</span><input id="field-date" name="date" type="date" required></label>
                       <label><span>Project</span><select id="field-project" name="projectId"><option value="">No project</option></select></label>
-                      <label><span>Task</span><select id="field-task" name="taskId" disabled><option value="">No task</option></select></label>
                       <label><span>Miles</span><input id="field-miles" name="miles" inputmode="decimal" required></label>
-                      <label><span>Rate override</span><input id="field-rate" name="rate" inputmode="decimal"></label>
+                      <label id="rate-field-row"><span>Rate override</span><input id="field-rate" name="rate" inputmode="decimal" disabled></label>
                       <label class="wide"><span>Notes</span><textarea id="field-notes" name="notes" rows="4"></textarea></label>
-                      <label class="check-row"><input id="field-billable" name="billable" type="checkbox"><span>Billable</span></label>
+                      <label class="check-row"><input id="field-billable" name="billable" type="checkbox" checked><span>Billable</span></label>
                       <label class="wide"><span>Receipt</span><input id="field-receipt" name="file" type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/heic,application/pdf"></label>
                       <div class="actions wide">
-                        <button type="button" id="btn-preview">Preview</button>
-                        <button type="submit">Create Expense</button>
+                        <button type="button" id="btn-preview" disabled>Preview</button>
+                        <button type="submit" disabled>Create Expense</button>
                       </div>
                     </form>
                     <div class="result-strip" id="preview-result" aria-live="polite"></div>
@@ -56,18 +56,28 @@ public class MileageIframeController {
                   <section class="tab-panel" id="tab-admin-settings">
                     <header class="panel-heading"><h1>Workspace Settings</h1><span id="settings-status" class="status-text"></span></header>
                     <form id="settings-form" class="form-grid">
-                      <label><span>Rate</span><input id="settings-rate" name="rate" inputmode="decimal"></label>
-                      <label><span>Unit</span><input id="settings-unit" name="unit" autocomplete="off"></label>
-                      <label><span>Input category</span><select id="settings-input-category" name="inputCategoryId"></select></label>
-                      <label><span>Output category</span><select id="settings-output-category" name="outputCategoryId"></select></label>
-                      <label><span>Rounding</span><select id="settings-rounding" name="roundingMode"><option>HALF_UP</option><option>HALF_EVEN</option><option>DOWN</option><option>UP</option></select></label>
-                      <label class="check-row"><input id="settings-enabled" name="enabled" type="checkbox"><span>Enabled</span></label>
-                      <label class="check-row"><input id="settings-convert-create" name="convertOnCreate" type="checkbox"><span>Convert created native expenses</span></label>
-                      <label class="check-row"><input id="settings-convert-update" name="convertOnUpdate" type="checkbox"><span>Convert updated native expenses</span></label>
-                      <label class="check-row"><input id="settings-preserve-notes" name="preserveOriginalNotes" type="checkbox"><span>Preserve notes</span></label>
-                      <label class="check-row"><input id="settings-dry-run" name="dryRunMode" type="checkbox"><span>Dry run</span></label>
-                      <label class="check-row"><input id="settings-rate-override" name="allowUserRateOverride" type="checkbox"><span>Allow rate override</span></label>
-                      <label class="wide"><span>Note template</span><textarea id="settings-template" name="noteTemplate" rows="3"></textarea></label>
+                      <fieldset class="wide settings-group">
+                        <legend>Manual mileage</legend>
+                        <div class="form-grid compact">
+                          <label><span>Rate</span><input id="settings-rate" name="rate" inputmode="decimal"></label>
+                          <label><span>Unit</span><input id="settings-unit" name="unit" autocomplete="off"></label>
+                          <label><span>Output category</span><select id="settings-output-category" name="outputCategoryId"></select></label>
+                          <label><span>Rounding</span><select id="settings-rounding" name="roundingMode"><option>HALF_UP</option><option>HALF_EVEN</option><option>DOWN</option><option>UP</option></select></label>
+                          <label class="check-row"><input id="settings-enabled" name="enabled" type="checkbox"><span>Enabled</span></label>
+                          <label class="check-row"><input id="settings-rate-override" name="allowUserRateOverride" type="checkbox"><span>Allow rate override</span></label>
+                        </div>
+                      </fieldset>
+                      <fieldset class="wide settings-group">
+                        <legend>Native expense conversion</legend>
+                        <div class="form-grid compact">
+                          <label><span>Input category</span><select id="settings-input-category" name="inputCategoryId"></select></label>
+                          <label class="check-row"><input id="settings-convert-create" name="convertOnCreate" type="checkbox"><span>Convert created native expenses</span></label>
+                          <label class="check-row"><input id="settings-convert-update" name="convertOnUpdate" type="checkbox"><span>Convert updated native expenses</span></label>
+                          <label class="check-row"><input id="settings-preserve-notes" name="preserveOriginalNotes" type="checkbox"><span>Preserve notes</span></label>
+                          <label class="check-row"><input id="settings-dry-run" name="dryRunMode" type="checkbox"><span>Dry run</span></label>
+                          <label class="wide"><span>Note template</span><textarea id="settings-template" name="noteTemplate" rows="3"></textarea></label>
+                        </div>
+                      </fieldset>
                       <div class="actions wide"><button type="submit">Save Settings</button></div>
                     </form>
                   </section>

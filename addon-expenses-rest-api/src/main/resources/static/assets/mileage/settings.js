@@ -2,6 +2,12 @@
   const url = new URL(window.location.href);
   const authToken = url.searchParams.get("auth_token") || "";
   const sessionRows = [];
+  let createContext = {
+    rate: null,
+    unit: "mi",
+    allowUserRateOverride: false,
+    complete: false
+  };
 
   if (authToken) {
     url.searchParams.delete("auth_token");
@@ -65,6 +71,7 @@
     if (!isAdmin && document.querySelector(".nav-button.active")?.dataset.tabTarget?.startsWith("admin")) {
       switchTab("create");
     }
+    return isAdmin;
   }
 
   function switchTab(tab) {
@@ -97,16 +104,53 @@
     return node && node.value ? node.value.trim() : "";
   }
 
+  function defaultDate() {
+    const date = document.getElementById("field-date");
+    if (date && !date.value) {
+      date.value = new Date().toISOString().slice(0, 10);
+    }
+  }
+
   function mileagePayload() {
+    const rateAllowed = Boolean(createContext.allowUserRateOverride);
     return {
       date: formValue("field-date"),
       projectId: formValue("field-project") || null,
-      taskId: formValue("field-task") || null,
       miles: formValue("field-miles"),
-      rate: formValue("field-rate") || null,
+      rate: rateAllowed ? (formValue("field-rate") || null) : null,
       billable: document.getElementById("field-billable").checked,
       notes: formValue("field-notes") || null
     };
+  }
+
+  function applyCreateContext(data) {
+    createContext = Object.assign({}, createContext, data || {});
+    const rateRow = document.getElementById("rate-field-row");
+    const rate = document.getElementById("field-rate");
+    const preview = document.getElementById("btn-preview");
+    const submit = document.querySelector("#mileage-form button[type='submit']");
+    const context = document.getElementById("create-context");
+    const unit = createContext.unit || "mi";
+    const rateText = createContext.rate ? createContext.rate + " per " + unit : "not configured";
+    context.textContent = createContext.complete
+      ? "Workspace rate: " + rateText
+      : "Mileage settings need a rate and output category before users can create expenses.";
+    rate.disabled = !createContext.allowUserRateOverride;
+    rateRow.hidden = !createContext.allowUserRateOverride;
+    if (!createContext.allowUserRateOverride) {
+      rate.value = "";
+    }
+    preview.disabled = !createContext.complete;
+    submit.disabled = !createContext.complete;
+  }
+
+  function loadCreateContext() {
+    return apiFetch("/api/mileage/create-context")
+      .then(applyCreateContext)
+      .catch(error => {
+        document.getElementById("create-context").textContent = "Mileage settings could not be loaded.";
+        toast(error.message, "error");
+      });
   }
 
   function previewMileage() {
@@ -117,13 +161,20 @@
       body: JSON.stringify({ miles: payload.miles, rate: payload.rate })
     }).then(result => {
       document.getElementById("preview-result").textContent =
-        result.miles + " x " + result.rate + " = " + result.roundedAmount;
+        result.miles + " " + (createContext.unit || "mi") + " x " + result.rate + " = " + result.roundedAmount;
     }).catch(error => toast(error.message, "error"));
+  }
+
+  function setCreateBusy(busy) {
+    const submit = document.querySelector("#mileage-form button[type='submit']");
+    submit.disabled = busy || !createContext.complete;
+    submit.textContent = busy ? "Creating..." : "Create Expense";
   }
 
   function createMileage(event) {
     event.preventDefault();
     const file = document.getElementById("field-receipt").files[0];
+    setCreateBusy(true);
     if (file) {
       const body = new FormData();
       Object.entries(mileagePayload()).forEach(([key, value]) => {
@@ -132,19 +183,26 @@
         }
       });
       body.append("file", file);
-      apiFetch("/api/mileage/expenses", { method: "POST", body }).then(recordSubmission).catch(error => toast(error.message, "error"));
+      apiFetch("/api/mileage/expenses", { method: "POST", body })
+        .then(recordSubmission)
+        .catch(error => toast(error.message, "error"))
+        .finally(() => setCreateBusy(false));
       return;
     }
     apiFetch("/api/mileage/expenses", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(mileagePayload())
-    }).then(recordSubmission).catch(error => toast(error.message, "error"));
+    }).then(recordSubmission).catch(error => toast(error.message, "error")).finally(() => setCreateBusy(false));
   }
 
   function recordSubmission(result) {
     sessionRows.unshift(result);
     document.getElementById("create-status").textContent = "Created " + result.expenseId;
+    document.getElementById("field-miles").value = "";
+    document.getElementById("field-rate").value = "";
+    document.getElementById("field-notes").value = "";
+    document.getElementById("field-receipt").value = "";
     renderSessionRows();
     toast("Mileage expense created.");
   }
@@ -191,20 +249,6 @@
     }).catch(error => toast(error.message, "error"));
   }
 
-  function loadTasks(projectId) {
-    const task = document.getElementById("field-task");
-    task.replaceChildren();
-    appendOption(task, "", "No task");
-    task.disabled = !projectId;
-    if (!projectId) {
-      return Promise.resolve();
-    }
-    return apiFetch("/api/mileage/options/tasks?projectId=" + encodeURIComponent(projectId)).then(data => {
-      (data.tasks || []).forEach(item => appendOption(task, item.id, item.name));
-      task.disabled = false;
-    }).catch(error => toast(error.message, "error"));
-  }
-
   function loadSettings() {
     Promise.all([apiFetch("/api/mileage/settings"), loadCategories()])
       .then(([settings]) => {
@@ -247,6 +291,7 @@
       body: JSON.stringify(payload)
     }).then(() => {
       toast("Settings saved.");
+      loadCreateContext();
       loadDiagnostics();
     }).catch(error => toast(error.message, "error"));
   }
@@ -294,12 +339,13 @@
   document.getElementById("settings-form").addEventListener("submit", saveSettings);
   document.getElementById("btn-refresh-conversions").addEventListener("click", loadConversions);
   document.getElementById("btn-refresh-diagnostics").addEventListener("click", loadDiagnostics);
-  const projectSelect = document.getElementById("field-project");
-  if (projectSelect) {
-    projectSelect.addEventListener("change", () => loadTasks(projectSelect.value));
-  }
 
-  applyRoleGate();
+  const isAdmin = applyRoleGate();
+  if (isAdmin && window.location.pathname.endsWith("/iframe/settings")) {
+    switchTab("admin-settings");
+  }
+  defaultDate();
+  loadCreateContext();
   loadProjects();
   renderSessionRows();
 })();

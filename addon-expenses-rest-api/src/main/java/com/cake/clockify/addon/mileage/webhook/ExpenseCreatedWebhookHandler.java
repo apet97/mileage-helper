@@ -21,9 +21,20 @@ public class ExpenseCreatedWebhookHandler extends AbstractTypedWebhookHandler<Ex
 
     @Override
     protected void handleTyped(NormalizedClaims claims, String eventType, ExpenseWebhookPayload payload) {
-        if (payload == null || payload.id() == null || payload.id().isBlank()) {
+        String expenseId = expenseId(payload);
+        if (expenseId == null) {
             return;
         }
-        conversionService.convertIfEligible(claims, payload.id(), MileageConversionSource.WEBHOOK_CREATED, eventType);
+        conversionService.convertIfEligible(claims, expenseId, MileageConversionSource.WEBHOOK_CREATED, eventType);
+    }
+
+    private static String expenseId(ExpenseWebhookPayload payload) {
+        if (payload == null) {
+            return null;
+        }
+        if (payload.id() != null && !payload.id().isBlank()) {
+            return payload.id();
+        }
+        return payload.expenseId() == null || payload.expenseId().isBlank() ? null : payload.expenseId();
     }
 }
