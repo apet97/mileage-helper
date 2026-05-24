@@ -13,6 +13,7 @@ import org.springframework.data.domain.Persistable;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 
 @Entity
@@ -49,6 +50,9 @@ public class MileageConversion implements Persistable<UUID> {
 
     @Column(name = "task_id", length = 64)
     private String taskId;
+
+    @Column(name = "expense_date")
+    private LocalDate expenseDate;
 
     @Column(name = "miles", precision = 18, scale = 6)
     private BigDecimal miles;
@@ -143,6 +147,8 @@ public class MileageConversion implements Persistable<UUID> {
     public void setProjectId(String projectId) { this.projectId = projectId; }
     public String getTaskId() { return taskId; }
     public void setTaskId(String taskId) { this.taskId = taskId; }
+    public LocalDate getExpenseDate() { return expenseDate; }
+    public void setExpenseDate(LocalDate expenseDate) { this.expenseDate = expenseDate; }
     public BigDecimal getMiles() { return miles; }
     public void setMiles(BigDecimal miles) { this.miles = miles; }
     public BigDecimal getRate() { return rate; }

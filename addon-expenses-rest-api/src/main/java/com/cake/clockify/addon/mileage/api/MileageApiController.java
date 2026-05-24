@@ -119,6 +119,7 @@ public class MileageApiController {
             MultipartFile file) throws IOException, InterruptedException {
         MileageCalculation calculation = calculation(request.miles(), request.rate(), settings);
         UUID conversionId = UUID.randomUUID();
+        LocalDate expenseDate = LocalDate.parse(required("date", request.date()));
         String note = noteService.buildConvertedNote(
                 request.notes(),
                 calculation,
@@ -129,7 +130,7 @@ public class MileageApiController {
         CreateFlatExpenseCommand command = new CreateFlatExpenseCommand(
                 settings.outputCategoryId(),
                 userId,
-                LocalDate.parse(required("date", request.date())),
+                expenseDate,
                 blankToNull(request.projectId()),
                 null,
                 clockifyExpenseAmount(settings, calculation),
@@ -148,6 +149,7 @@ public class MileageApiController {
                 expenseId,
                 userId,
                 request,
+                expenseDate,
                 settings,
                 calculation,
                 noteService.marker(conversionId));
@@ -226,6 +228,7 @@ public class MileageApiController {
             String expenseId,
             String userId,
             CreateMileageExpenseRequest request,
+            LocalDate expenseDate,
             MileageSettingsValidation settings,
             MileageCalculation calculation,
             String marker) {
@@ -239,6 +242,7 @@ public class MileageApiController {
         conversion.setUserId(userId);
         conversion.setProjectId(blankToNull(request.projectId()));
         conversion.setTaskId(null);
+        conversion.setExpenseDate(expenseDate);
         conversion.setMiles(calculation.miles());
         conversion.setRate(calculation.rate());
         conversion.setCalculatedAmount(calculation.calculatedAmount());

@@ -25,6 +25,7 @@ The ignored local clone `addon-expenses-rest-api/addon-java-sdk/` is read-only r
 - Settings use one `Mileage` unit category, fixed unit `mile`, and fixed `HALF_UP` Clockify-style rounding.
 - Generated Clockify notes use the exact calculated amount, for example `Mileage reimbursement: 1 mile x 0.725 = 0.725. Created/converted by Mileage for Clockify.`
 - The add-on displays full calculated mileage decimals in previews, Mine, Team, and Conversions while Clockify receives the rounded expense amount.
+- Mileage lists and CSV exports filter by actual expense date, defaulting to this US week with preset and custom ranges.
 - Native-created/restored expense webhooks accept both full payloads with `id` and reference payloads with `expenseId`.
 
 ## Build And Test

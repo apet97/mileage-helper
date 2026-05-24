@@ -20,6 +20,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -93,6 +94,42 @@ class MileageSettingsServiceTest {
                 .extracting(MileageConversion::getExpenseId)
                 .containsExactly("exp-a");
         assertThat(conversionRepository.findByWorkspaceIdAndExpenseId("ws-one", "exp-b")).isEmpty();
+    }
+
+    @Test
+    void conversionQueriesFilterByWorkspaceUserStatusAndExpenseDate() {
+        MileageConversion thisWeek = conversion("ws-dates", "exp-this-week", MileageConversionStatus.CONVERTED);
+        thisWeek.setExpenseDate(LocalDate.parse("2026-05-24"));
+        conversionRepository.saveAndFlush(thisWeek);
+        MileageConversion lastWeek = conversion("ws-dates", "exp-last-week", MileageConversionStatus.CONVERTED);
+        lastWeek.setExpenseDate(LocalDate.parse("2026-05-17"));
+        conversionRepository.saveAndFlush(lastWeek);
+        MileageConversion failed = conversion("ws-dates", "exp-failed", MileageConversionStatus.FAILED);
+        failed.setExpenseDate(LocalDate.parse("2026-05-25"));
+        conversionRepository.saveAndFlush(failed);
+        MileageConversion otherUser = conversion("ws-dates", "exp-other-user", MileageConversionStatus.CONVERTED);
+        otherUser.setUserId("user-two");
+        otherUser.setExpenseDate(LocalDate.parse("2026-05-26"));
+        conversionRepository.saveAndFlush(otherUser);
+        MileageConversion otherWorkspace = conversion("ws-other-dates", "exp-other-ws", MileageConversionStatus.CONVERTED);
+        otherWorkspace.setExpenseDate(LocalDate.parse("2026-05-24"));
+        conversionRepository.saveAndFlush(otherWorkspace);
+
+        LocalDate from = LocalDate.parse("2026-05-24");
+        LocalDate to = LocalDate.parse("2026-05-30");
+
+        assertThat(conversionRepository.findAllByWorkspaceIdAndUserIdAndExpenseDateBetween(
+                        "ws-dates", "user-one", from, to, PageRequest.of(0, 10)))
+                .extracting(MileageConversion::getExpenseId)
+                .containsExactlyInAnyOrder("exp-this-week", "exp-failed");
+        assertThat(conversionRepository.findAllByWorkspaceIdAndStatusAndExpenseDateBetween(
+                        "ws-dates", MileageConversionStatus.CONVERTED, from, to, PageRequest.of(0, 10)))
+                .extracting(MileageConversion::getExpenseId)
+                .containsExactlyInAnyOrder("exp-this-week", "exp-other-user");
+        assertThat(conversionRepository.findAllByWorkspaceIdAndExpenseDateBetween(
+                        "ws-dates", from, to, PageRequest.of(0, 10)))
+                .extracting(MileageConversion::getExpenseId)
+                .containsExactlyInAnyOrder("exp-this-week", "exp-failed", "exp-other-user");
     }
 
     @Test
@@ -212,6 +249,7 @@ class MileageSettingsServiceTest {
         conversion.setRate(new BigDecimal("0.655000"));
         conversion.setCalculatedAmount(new BigDecimal("24.497000"));
         conversion.setRoundedAmount(new BigDecimal("24.50"));
+        conversion.setExpenseDate(LocalDate.parse("2026-05-24"));
         return conversion;
     }
 

@@ -31,6 +31,7 @@ import java.math.RoundingMode;
 import java.security.KeyPairGenerator;
 import java.security.interfaces.RSAPublicKey;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
@@ -259,6 +260,7 @@ class MileageApiControllerTest {
         assertThat(saved.getValue().getStatus()).isEqualTo(MileageConversionStatus.CONVERTED);
         assertThat(saved.getValue().getExpenseId()).isEqualTo("exp-1");
         assertThat(saved.getValue().getUserId()).isEqualTo("user-claims");
+        assertThat(saved.getValue().getExpenseDate()).isEqualTo(LocalDate.parse("2026-05-24"));
     }
 
     @Test

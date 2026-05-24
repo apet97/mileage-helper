@@ -57,6 +57,7 @@ Main product packages:
 - `EXPENSE_CREATED` and `EXPENSE_RESTORED` handlers accept either full payloads with `id` or reference payloads with `expenseId`.
 - Admin APIs: settings, Mileage category repair, diagnostics, category options, team mileage list/export, conversion list/detail/retry/export under `/api/mileage`.
 - Add-on previews and mileage tables show full `calculatedAmount` decimals first; Clockify Expenses still receives the rounded `roundedAmount`.
+- Mileage lists and CSV exports filter by actual `expenseDate`, defaulting to the current US week, Sunday through Saturday.
 - Tables: `mileage_workspace_settings`, `mileage_conversion`.
 - Historical pre-Mileage migrations V5/V10 are retained for Flyway validation only; V12 drops their leftover generic tables. New code/docs should not add `temp_addon_expenses*`, `clockify-expenses-api`, `Clockify Expenses API`, or `com.cake.clockify.addon.expenses` references.
 

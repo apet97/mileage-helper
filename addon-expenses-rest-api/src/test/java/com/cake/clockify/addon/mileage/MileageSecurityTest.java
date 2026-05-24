@@ -86,6 +86,9 @@ class MileageSecurityTest {
         String html = new MileageIframeController().mileage(requestWithRole("MEMBER")).getBody();
 
         assertThat(html).contains("data-tab-target=\"mine\"");
+        assertThat(html).contains("id=\"mine-range-preset\"");
+        assertThat(html).contains("id=\"mine-range-from\"");
+        assertThat(html).contains("id=\"mine-range-to\"");
         assertThat(html).doesNotContain("data-tab-target=\"team\"");
         assertThat(html).doesNotContain("data-tab-target=\"admin-settings\"");
         assertThat(html).doesNotContain("data-tab-target=\"conversion-log\"");
@@ -94,6 +97,8 @@ class MileageSecurityTest {
         assertThat(html).doesNotContain("id=\"tab-admin-settings\"");
         assertThat(html).doesNotContain("id=\"tab-conversion-log\"");
         assertThat(html).doesNotContain("id=\"tab-diagnostics\"");
+        assertThat(html).doesNotContain("id=\"team-range-preset\"");
+        assertThat(html).doesNotContain("id=\"conversion-range-preset\"");
     }
 
     @Test
@@ -105,6 +110,16 @@ class MileageSecurityTest {
         assertThat(html).contains("data-tab-target=\"admin-settings\"");
         assertThat(html).contains("data-tab-target=\"conversion-log\"");
         assertThat(html).contains("data-tab-target=\"diagnostics\"");
+        assertThat(html).contains("id=\"mine-range-preset\"");
+        assertThat(html).contains("id=\"team-range-preset\"");
+        assertThat(html).contains("id=\"conversion-range-preset\"");
+        assertThat(html).contains("<option value=\"this_week\" selected>This week</option>");
+        assertThat(html).contains("<option value=\"custom\">Custom</option>");
+        assertThat(html).contains("<option value=\"this_month\">This month</option>");
+        assertThat(html).contains("<option value=\"last_week\">Last week</option>");
+        assertThat(html).contains("<option value=\"last_month\">Last month</option>");
+        assertThat(html).contains("<option value=\"this_year\">This year</option>");
+        assertThat(html).contains("<option value=\"last_year\">Last year</option>");
     }
 
     @Test
@@ -176,6 +191,10 @@ class MileageSecurityTest {
         String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
 
         assertThat(javascript).contains("downloadCsv");
+        assertThat(javascript).contains("csvPath(\"mine\"");
+        assertThat(javascript).contains("rangeQuery(\"mine\"");
+        assertThat(javascript).contains("from=");
+        assertThat(javascript).contains("to=");
         assertThat(javascript).contains("blob()");
         assertThat(javascript).contains("Authorization");
         assertThat(javascript).doesNotContain("mine.csv?auth_token");
@@ -213,9 +232,26 @@ class MileageSecurityTest {
         assertThat(javascript).contains("userName");
         assertThat(javascript).contains("sourceLabel");
         assertThat(javascript).contains("formatDate");
+        assertThat(javascript).contains("formatExpenseDate");
         assertThat(javascript).contains("Intl.DateTimeFormat(\"en-US\"");
         assertThat(javascript).contains("mileageCategoryId");
         assertThat(javascript).contains("/api/mileage/settings/mileage-category");
+    }
+
+    @Test
+    void mileageJavascriptWiresDateRangePresetsToListsAndCsvExports() throws Exception {
+        String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
+
+        assertThat(javascript).contains("initDateRanges");
+        assertThat(javascript).contains("rangePresets");
+        assertThat(javascript).contains("dateRangeForPreset");
+        assertThat(javascript).contains("loadMine");
+        assertThat(javascript).contains("/api/mileage/mine?pageSize=50\" + rangeQuery(\"mine\")");
+        assertThat(javascript).contains("/api/mileage/team?pageSize=50\" + rangeQuery(\"team\")");
+        assertThat(javascript).contains("/api/mileage/conversions?pageSize=50\" + rangeQuery(\"conversion\")");
+        assertThat(javascript).contains("downloadCsv(csvPath(\"mine\"");
+        assertThat(javascript).contains("downloadCsv(csvPath(\"team\"");
+        assertThat(javascript).contains("downloadCsv(csvPath(\"conversion\"");
     }
 
     @Test

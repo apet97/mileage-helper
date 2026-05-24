@@ -9,6 +9,15 @@
   };
   let userIsAdmin = false;
   let tokenClaims = {};
+  const rangePresets = {
+    this_week: "This week",
+    custom: "Custom",
+    this_month: "This month",
+    last_week: "Last week",
+    last_month: "Last month",
+    this_year: "This year",
+    last_year: "Last year"
+  };
 
   if (authToken) {
     url.searchParams.delete("auth_token");
@@ -154,6 +163,147 @@
     }
   }
 
+  function initDateRanges() {
+    ["mine", "team", "conversion"].forEach(initDateRange);
+  }
+
+  function initDateRange(scope) {
+    const preset = element(scope + "-range-preset");
+    if (!preset) {
+      return;
+    }
+    applyDateRange(scope);
+    preset.addEventListener("change", () => {
+      applyDateRange(scope);
+      reloadRangeScope(scope);
+    });
+    ["from", "to"].forEach(part => {
+      const input = element(scope + "-range-" + part);
+      if (input) {
+        input.addEventListener("change", () => {
+          if (preset.value === "custom") {
+            reloadRangeScope(scope);
+          }
+        });
+      }
+    });
+  }
+
+  function applyDateRange(scope) {
+    const preset = element(scope + "-range-preset");
+    const custom = element(scope + "-range-custom");
+    if (!preset) {
+      return;
+    }
+    const isCustom = preset.value === "custom";
+    if (custom) {
+      custom.hidden = !isCustom;
+    }
+    if (!isCustom) {
+      const range = dateRangeForPreset(preset.value);
+      setRangeInputs(scope, range);
+    }
+  }
+
+  function reloadRangeScope(scope) {
+    if (scope === "mine") {
+      loadMine();
+    } else if (scope === "team" && userIsAdmin) {
+      loadTeam();
+    } else if (scope === "conversion" && userIsAdmin) {
+      loadConversions();
+    }
+  }
+
+  function rangeQuery(scope) {
+    const range = selectedDateRange(scope);
+    if (!range) {
+      return "";
+    }
+    return "&from=" + encodeURIComponent(range.from) + "&to=" + encodeURIComponent(range.to);
+  }
+
+  function csvPath(scope, path) {
+    const query = rangeQuery(scope);
+    return path + (query ? "?" + query.slice(1) : "");
+  }
+
+  function selectedDateRange(scope) {
+    const preset = element(scope + "-range-preset");
+    if (!preset) {
+      return dateRangeForPreset("this_week");
+    }
+    if (preset.value !== "custom") {
+      const range = dateRangeForPreset(preset.value);
+      setRangeInputs(scope, range);
+      return range;
+    }
+    const from = formValue(scope + "-range-from");
+    const to = formValue(scope + "-range-to");
+    return { from, to };
+  }
+
+  function setRangeInputs(scope, range) {
+    const from = element(scope + "-range-from");
+    const to = element(scope + "-range-to");
+    if (from) {
+      from.value = range.from;
+    }
+    if (to) {
+      to.value = range.to;
+    }
+  }
+
+  function dateRangeForPreset(preset) {
+    if (!Object.prototype.hasOwnProperty.call(rangePresets, preset)) {
+      preset = "this_week";
+    }
+    const today = todayLocalDate();
+    const weekStart = startOfWeek(today);
+    if (preset === "this_month") {
+      return rangeForDates(new Date(today.getFullYear(), today.getMonth(), 1),
+        new Date(today.getFullYear(), today.getMonth() + 1, 0));
+    }
+    if (preset === "last_week") {
+      return rangeForDates(addDays(weekStart, -7), addDays(weekStart, -1));
+    }
+    if (preset === "last_month") {
+      return rangeForDates(new Date(today.getFullYear(), today.getMonth() - 1, 1),
+        new Date(today.getFullYear(), today.getMonth(), 0));
+    }
+    if (preset === "this_year") {
+      return rangeForDates(new Date(today.getFullYear(), 0, 1), new Date(today.getFullYear(), 11, 31));
+    }
+    if (preset === "last_year") {
+      return rangeForDates(new Date(today.getFullYear() - 1, 0, 1), new Date(today.getFullYear() - 1, 11, 31));
+    }
+    return rangeForDates(weekStart, addDays(weekStart, 6));
+  }
+
+  function todayLocalDate() {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  }
+
+  function startOfWeek(date) {
+    return addDays(date, -date.getDay());
+  }
+
+  function addDays(date, days) {
+    return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
+  }
+
+  function rangeForDates(from, to) {
+    return { from: isoDate(from), to: isoDate(to) };
+  }
+
+  function isoDate(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return year + "-" + month + "-" + day;
+  }
+
   function mileagePayload() {
     const rateAllowed = Boolean(createContext.allowUserRateOverride);
     return {
@@ -282,7 +432,7 @@
     if (!rows) {
       return Promise.resolve();
     }
-    return apiFetch("/api/mileage/mine?pageSize=50")
+    return apiFetch("/api/mileage/mine?pageSize=50" + rangeQuery("mine"))
       .then(data => renderMileageRows(rows, data.conversions || [], false, "No mileage rows yet."))
       .catch(error => toast(error.message, "error"));
   }
@@ -292,7 +442,7 @@
     if (!rows) {
       return Promise.resolve();
     }
-    return apiFetch("/api/mileage/team?pageSize=50")
+    return apiFetch("/api/mileage/team?pageSize=50" + rangeQuery("team"))
       .then(data => renderMileageRows(rows, data.conversions || [], true, "No team mileage rows yet."))
       .catch(error => toast(error.message, "error"));
   }
@@ -300,11 +450,12 @@
   function renderMileageRows(rows, items, includeUser, emptyText) {
     rows.replaceChildren();
     if (!items.length) {
-      renderEmptyRow(rows, includeUser ? 8 : 7, emptyText);
+      renderEmptyRow(rows, includeUser ? 9 : 8, emptyText);
       return;
     }
     items.forEach(item => {
       const row = rows.insertRow();
+      appendTextCell(row, formatExpenseDate(item.expenseDate));
       appendTextCell(row, item.expenseId);
       if (includeUser) {
         appendTextCell(row, item.userName || item.userId);
@@ -408,15 +559,16 @@
     if (!rows) {
       return Promise.resolve();
     }
-    return apiFetch("/api/mileage/conversions?pageSize=50").then(data => {
+    return apiFetch("/api/mileage/conversions?pageSize=50" + rangeQuery("conversion")).then(data => {
       rows.replaceChildren();
       const items = data.conversions || [];
       if (!items.length) {
-        renderEmptyRow(rows, 8, "No conversion rows yet.");
+        renderEmptyRow(rows, 9, "No conversion rows yet.");
         return;
       }
       items.forEach(item => {
         const row = rows.insertRow();
+        appendTextCell(row, formatExpenseDate(item.expenseDate));
         appendTextCell(row, item.expenseId);
         appendTextCell(row, item.sourceLabel || sourceLabel(item.source));
         appendTextCell(row, item.userName || item.userId);
@@ -474,7 +626,7 @@
     if (!value) {
       return "";
     }
-    const options = { dateStyle: "short", timeStyle: "short" };
+    const options = { year: "numeric", month: "2-digit", day: "2-digit", hour: "numeric", minute: "2-digit" };
     const timezone = timezoneFromClaims();
     if (timezone) {
       options.timeZone = timezone;
@@ -482,8 +634,20 @@
     try {
       return new Intl.DateTimeFormat("en-US", options).format(new Date(value));
     } catch (e) {
-      return new Intl.DateTimeFormat("en-US", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
+      return new Intl.DateTimeFormat("en-US", { year: "numeric", month: "2-digit", day: "2-digit", hour: "numeric", minute: "2-digit" }).format(new Date(value));
     }
+  }
+
+  function formatExpenseDate(value) {
+    if (!value) {
+      return "";
+    }
+    const parts = String(value).split("-").map(part => Number(part));
+    if (parts.length !== 3 || parts.some(part => Number.isNaN(part))) {
+      return String(value);
+    }
+    return new Intl.DateTimeFormat("en-US", { year: "numeric", month: "2-digit", day: "2-digit" })
+      .format(new Date(parts[0], parts[1] - 1, parts[2]));
   }
 
   function renderEmptyRow(rows, colspan, text) {
@@ -536,11 +700,12 @@
   on("btn-refresh-team", "click", loadTeam);
   on("btn-refresh-conversions", "click", loadConversions);
   on("btn-refresh-diagnostics", "click", loadDiagnostics);
-  on("btn-export-mine", "click", () => downloadCsv("/api/mileage/mine.csv", "mileage-mine.csv"));
-  on("btn-export-team", "click", () => downloadCsv("/api/mileage/team.csv", "mileage-team.csv"));
-  on("btn-export-conversions", "click", () => downloadCsv("/api/mileage/conversions.csv", "mileage-conversions.csv"));
+  on("btn-export-mine", "click", () => downloadCsv(csvPath("mine", "/api/mileage/mine.csv"), "mileage-mine.csv"));
+  on("btn-export-team", "click", () => downloadCsv(csvPath("team", "/api/mileage/team.csv"), "mileage-team.csv"));
+  on("btn-export-conversions", "click", () => downloadCsv(csvPath("conversion", "/api/mileage/conversions.csv"), "mileage-conversions.csv"));
 
   userIsAdmin = applyRoleGate();
+  initDateRanges();
   defaultDate();
   loadCreateContext();
   loadProjects();

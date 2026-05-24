@@ -30,7 +30,11 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.nio.charset.StandardCharsets;
 import java.io.IOException;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeParseException;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Objects;
@@ -41,24 +45,29 @@ import java.util.stream.Collectors;
 public class MileageConversionController {
     private static final int MAX_PAGE_SIZE = 100;
     private static final int CSV_PAGE_SIZE = 5_000;
-    private static final Sort VISIBLE_LIST_SORT = Sort.by(Sort.Direction.DESC, "updatedAt");
+    private static final Sort VISIBLE_LIST_SORT = Sort.by(
+            Sort.Order.desc("expenseDate"),
+            Sort.Order.desc("updatedAt"));
     private static final MediaType CSV_MEDIA_TYPE = new MediaType("text", "csv", StandardCharsets.UTF_8);
-    private static final String CSV_HEADER = "expense_id,source,source_label,status,user_id,user_name,project_id,miles,rate,calculated_amount,expense_amount,rounding_mode,updated_at,converted_at,note_marker";
+    private static final String CSV_HEADER = "expense_id,source,source_label,status,user_id,user_name,project_id,miles,rate,calculated_amount,expense_amount,rounding_mode,expense_date,updated_at,converted_at,note_marker";
 
     private final MileageConversionRepository conversionRepository;
     private final MileageConversionService conversionService;
     private final MileageAuthorizationService authorizationService;
     private final ClockifyExpenseGateway gateway;
+    private final Clock clock;
 
     public MileageConversionController(
             MileageConversionRepository conversionRepository,
             MileageConversionService conversionService,
             MileageAuthorizationService authorizationService,
-            ClockifyExpenseGateway gateway) {
+            ClockifyExpenseGateway gateway,
+            Clock clock) {
         this.conversionRepository = conversionRepository;
         this.conversionService = conversionService;
         this.authorizationService = authorizationService;
         this.gateway = gateway;
+        this.clock = clock;
     }
 
     @GetMapping("/api/mileage/conversions")
@@ -66,12 +75,17 @@ public class MileageConversionController {
             HttpServletRequest request,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int pageSize,
-            @RequestParam(required = false) MileageConversionStatus status) {
+            @RequestParam(required = false) MileageConversionStatus status,
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to) {
         NormalizedClaims claims = adminClaims(request);
+        MileageDateRange range = dateRange(claims, from, to);
         PageRequest pageRequest = pageRequest(page, pageSize);
         Page<MileageConversion> conversions = status == null
-                ? conversionRepository.findAllByWorkspaceId(claims.workspaceId(), pageRequest)
-                : conversionRepository.findAllByWorkspaceIdAndStatus(claims.workspaceId(), status, pageRequest);
+                ? conversionRepository.findAllByWorkspaceIdAndExpenseDateBetween(
+                        claims.workspaceId(), range.from(), range.to(), pageRequest)
+                : conversionRepository.findAllByWorkspaceIdAndStatusAndExpenseDateBetween(
+                        claims.workspaceId(), status, range.from(), range.to(), pageRequest);
         return ResponseEntity.ok(MileageConversionListResponse.from(
                 conversions,
                 userNamesById(claims.workspaceId(), conversions.getContent())));
@@ -81,11 +95,16 @@ public class MileageConversionController {
     public ResponseEntity<MileageConversionListResponse> mine(
             HttpServletRequest request,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "50") int pageSize) {
+            @RequestParam(defaultValue = "50") int pageSize,
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to) {
         NormalizedClaims claims = userClaims(request);
-        Page<MileageConversion> conversions = conversionRepository.findAllByWorkspaceIdAndUserId(
+        MileageDateRange range = dateRange(claims, from, to);
+        Page<MileageConversion> conversions = conversionRepository.findAllByWorkspaceIdAndUserIdAndExpenseDateBetween(
                 claims.workspaceId(),
                 claims.userId(),
+                range.from(),
+                range.to(),
                 pageRequest(page, pageSize));
         return ResponseEntity.ok(MileageConversionListResponse.from(conversions));
     }
@@ -94,10 +113,15 @@ public class MileageConversionController {
     public ResponseEntity<MileageConversionListResponse> team(
             HttpServletRequest request,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "50") int pageSize) {
+            @RequestParam(defaultValue = "50") int pageSize,
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to) {
         NormalizedClaims claims = adminClaims(request);
-        Page<MileageConversion> conversions = conversionRepository.findAllByWorkspaceId(
+        MileageDateRange range = dateRange(claims, from, to);
+        Page<MileageConversion> conversions = conversionRepository.findAllByWorkspaceIdAndExpenseDateBetween(
                 claims.workspaceId(),
+                range.from(),
+                range.to(),
                 pageRequest(page, pageSize));
         return ResponseEntity.ok(MileageConversionListResponse.from(
                 conversions,
@@ -105,29 +129,47 @@ public class MileageConversionController {
     }
 
     @GetMapping(value = "/api/mileage/mine.csv", produces = "text/csv;charset=UTF-8")
-    public ResponseEntity<String> mineCsv(HttpServletRequest request) {
+    public ResponseEntity<String> mineCsv(
+            HttpServletRequest request,
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to) {
         NormalizedClaims claims = userClaims(request);
-        Page<MileageConversion> conversions = conversionRepository.findAllByWorkspaceIdAndUserId(
+        MileageDateRange range = dateRange(claims, from, to);
+        Page<MileageConversion> conversions = conversionRepository.findAllByWorkspaceIdAndUserIdAndExpenseDateBetween(
                 claims.workspaceId(),
                 claims.userId(),
+                range.from(),
+                range.to(),
                 PageRequest.of(0, CSV_PAGE_SIZE, VISIBLE_LIST_SORT));
         return csvResponse("mileage-mine.csv", conversions, Map.of());
     }
 
     @GetMapping(value = "/api/mileage/team.csv", produces = "text/csv;charset=UTF-8")
-    public ResponseEntity<String> teamCsv(HttpServletRequest request) {
+    public ResponseEntity<String> teamCsv(
+            HttpServletRequest request,
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to) {
         NormalizedClaims claims = adminClaims(request);
-        Page<MileageConversion> conversions = conversionRepository.findAllByWorkspaceId(
+        MileageDateRange range = dateRange(claims, from, to);
+        Page<MileageConversion> conversions = conversionRepository.findAllByWorkspaceIdAndExpenseDateBetween(
                 claims.workspaceId(),
+                range.from(),
+                range.to(),
                 PageRequest.of(0, CSV_PAGE_SIZE, VISIBLE_LIST_SORT));
         return csvResponse("mileage-team.csv", conversions, userNamesById(claims.workspaceId(), conversions.getContent()));
     }
 
     @GetMapping(value = "/api/mileage/conversions.csv", produces = "text/csv;charset=UTF-8")
-    public ResponseEntity<String> conversionsCsv(HttpServletRequest request) {
+    public ResponseEntity<String> conversionsCsv(
+            HttpServletRequest request,
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to) {
         NormalizedClaims claims = adminClaims(request);
-        Page<MileageConversion> conversions = conversionRepository.findAllByWorkspaceId(
+        MileageDateRange range = dateRange(claims, from, to);
+        Page<MileageConversion> conversions = conversionRepository.findAllByWorkspaceIdAndExpenseDateBetween(
                 claims.workspaceId(),
+                range.from(),
+                range.to(),
                 PageRequest.of(0, CSV_PAGE_SIZE, VISIBLE_LIST_SORT));
         return csvResponse("mileage-conversions.csv", conversions, userNamesById(claims.workspaceId(), conversions.getContent()));
     }
@@ -171,6 +213,50 @@ public class MileageConversionController {
         return PageRequest.of(Math.max(page, 0), Math.min(Math.max(pageSize, 1), MAX_PAGE_SIZE), VISIBLE_LIST_SORT);
     }
 
+    private MileageDateRange dateRange(NormalizedClaims claims, String from, String to) {
+        boolean hasFrom = hasText(from);
+        boolean hasTo = hasText(to);
+        if (!hasFrom && !hasTo) {
+            return defaultDateRange(claims);
+        }
+        if (hasFrom != hasTo) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Both from and to dates are required when filtering mileage rows");
+        }
+        LocalDate parsedFrom = parseDate(from);
+        LocalDate parsedTo = parseDate(to);
+        if (parsedFrom.isAfter(parsedTo)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "from must be on or before to");
+        }
+        return new MileageDateRange(parsedFrom, parsedTo);
+    }
+
+    private MileageDateRange defaultDateRange(NormalizedClaims claims) {
+        LocalDate today = LocalDate.now(clock.withZone(zoneId(claims.userTimeZone())));
+        int daysSinceSunday = today.getDayOfWeek().getValue() % 7;
+        LocalDate from = today.minusDays(daysSinceSunday);
+        return new MileageDateRange(from, from.plusDays(6));
+    }
+
+    private static LocalDate parseDate(String value) {
+        try {
+            return LocalDate.parse(value.trim());
+        } catch (DateTimeParseException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "from and to must use YYYY-MM-DD");
+        }
+    }
+
+    private static ZoneId zoneId(String value) {
+        if (!hasText(value)) {
+            return ZoneId.of("UTC");
+        }
+        try {
+            return ZoneId.of(value.trim());
+        } catch (RuntimeException e) {
+            return ZoneId.of("UTC");
+        }
+    }
+
     private static ResponseEntity<String> csvResponse(
             String filename,
             Page<MileageConversion> conversions,
@@ -197,6 +283,7 @@ public class MileageConversionController {
                     decimalText(conversion.getCalculatedAmount()),
                     roundedText(conversion.getRoundedAmount()),
                     conversion.getRoundingMode(),
+                    conversion.getExpenseDate(),
                     conversion.getUpdatedAt(),
                     conversion.getConvertedAt(),
                     conversion.getNoteMarker());
@@ -222,6 +309,10 @@ public class MileageConversionController {
             return instant.toString();
         }
         return String.valueOf(value);
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     private Map<String, String> userNamesById(String workspaceId, Collection<MileageConversion> conversions) {
@@ -261,5 +352,8 @@ public class MileageConversionController {
             return '"' + value.replace("\"", "\"\"") + '"';
         }
         return value;
+    }
+
+    private record MileageDateRange(LocalDate from, LocalDate to) {
     }
 }

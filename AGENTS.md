@@ -49,6 +49,7 @@ This is the standalone repository for Mileage for Clockify. It contains the add-
 - Mileage settings use one `Mileage` unit category with fixed unit `mile` and fixed `HALF_UP` rounding; existing input/output category settings normalize to that single category.
 - Generated Clockify notes are clean and exact, e.g. `Mileage reimbursement: 1 mile x 0.725 = 0.725. Created/converted by Mileage for Clockify.`
 - Add-on UI tables and previews display full `calculatedAmount` decimals as the primary amount. Clockify expense writes continue to use the rounded `roundedAmount`.
+- Mileage lists and CSV exports filter by `expenseDate`, defaulting to the current US week, Sunday through Saturday.
 - Native expense `EXPENSE_CREATED` and `EXPENSE_RESTORED` handlers accept either `id` or `expenseId` payload shapes.
 - Historical pre-Mileage migrations V5/V10 are retained for Flyway validation only; V12 drops their leftover generic tables. Do not add new `temp_addon_expenses*`, `clockify-expenses-api`, `Clockify Expenses API`, or `com.cake.clockify.addon.expenses` references.
 

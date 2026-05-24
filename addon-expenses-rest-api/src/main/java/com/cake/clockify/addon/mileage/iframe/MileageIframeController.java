@@ -123,12 +123,17 @@ public class MileageIframeController {
                               <h2 id="mine-history-title">My Mileage</h2>
                               <p>Calculated amount keeps every decimal. Expense amount is what Clockify receives.</p>
                             </div>
-                            <div class="actions">
-                              <button type="button" id="btn-refresh-mine">Refresh</button>
-                              <button type="button" id="btn-export-mine">CSV</button>
+                            <div class="list-actions">
+                """
+                + dateRangeControls("mine")
+                + """
+                              <div class="actions">
+                                <button type="button" id="btn-refresh-mine">Refresh</button>
+                                <button type="button" id="btn-export-mine">CSV</button>
+                              </div>
                             </div>
                           </div>
-                          <div class="table-wrap"><table><thead><tr><th>Expense</th><th>Source</th><th>Status</th><th>Miles</th><th>Rate</th><th>Amount</th><th>Updated</th></tr></thead><tbody id="mine-rows"></tbody></table></div>
+                          <div class="table-wrap"><table><thead><tr><th>Date</th><th>Expense</th><th>Source</th><th>Status</th><th>Miles</th><th>Rate</th><th>Amount</th><th>Updated</th></tr></thead><tbody id="mine-rows"></tbody></table></div>
                         </section>
                       </section>
                 """.formatted(active ? " active" : "");
@@ -149,12 +154,17 @@ public class MileageIframeController {
                             <h1>Team</h1>
                             <p>All mileage rows for this workspace.</p>
                           </div>
-                          <div class="actions">
-                            <button type="button" id="btn-refresh-team">Refresh</button>
-                            <button type="button" id="btn-export-team">CSV</button>
+                          <div class="list-actions">
+                """
+                + dateRangeControls("team")
+                + """
+                            <div class="actions">
+                              <button type="button" id="btn-refresh-team">Refresh</button>
+                              <button type="button" id="btn-export-team">CSV</button>
+                            </div>
                           </div>
                         </header>
-                        <div class="table-wrap"><table><thead><tr><th>Expense</th><th>User</th><th>Source</th><th>Status</th><th>Miles</th><th>Rate</th><th>Amount</th><th>Updated</th></tr></thead><tbody id="team-rows"></tbody></table></div>
+                        <div class="table-wrap"><table><thead><tr><th>Date</th><th>Expense</th><th>User</th><th>Source</th><th>Status</th><th>Miles</th><th>Rate</th><th>Amount</th><th>Updated</th></tr></thead><tbody id="team-rows"></tbody></table></div>
                       </section>
                 """.formatted(active ? " active" : "");
     }
@@ -190,14 +200,39 @@ public class MileageIframeController {
                             <h1>Conversions</h1>
                             <p>Technical audit trail for native and add-on mileage conversions.</p>
                           </div>
-                          <div class="actions">
-                            <button type="button" id="btn-refresh-conversions">Refresh</button>
-                            <button type="button" id="btn-export-conversions">CSV</button>
+                          <div class="list-actions">
+                """
+                + dateRangeControls("conversion")
+                + """
+                            <div class="actions">
+                              <button type="button" id="btn-refresh-conversions">Refresh</button>
+                              <button type="button" id="btn-export-conversions">CSV</button>
+                            </div>
                           </div>
                         </header>
-                        <div class="table-wrap"><table><thead><tr><th>Expense</th><th>Source</th><th>User</th><th>Status</th><th>Miles</th><th>Rate</th><th>Amount</th><th>Updated</th></tr></thead><tbody id="conversion-rows"></tbody></table></div>
+                        <div class="table-wrap"><table><thead><tr><th>Date</th><th>Expense</th><th>Source</th><th>User</th><th>Status</th><th>Miles</th><th>Rate</th><th>Amount</th><th>Updated</th></tr></thead><tbody id="conversion-rows"></tbody></table></div>
                       </section>
                 """.formatted(active ? " active" : "");
+    }
+
+    private static String dateRangeControls(String prefix) {
+        return """
+                              <div class="range-controls" data-range-scope="%1$s">
+                                <label><span>Range</span><select id="%1$s-range-preset">
+                                  <option value="this_week" selected>This week</option>
+                                  <option value="custom">Custom</option>
+                                  <option value="this_month">This month</option>
+                                  <option value="last_week">Last week</option>
+                                  <option value="last_month">Last month</option>
+                                  <option value="this_year">This year</option>
+                                  <option value="last_year">Last year</option>
+                                </select></label>
+                                <div class="range-custom" id="%1$s-range-custom" hidden>
+                                  <label><span>From</span><input id="%1$s-range-from" type="date"></label>
+                                  <label><span>To</span><input id="%1$s-range-to" type="date"></label>
+                                </div>
+                              </div>
+                """.formatted(prefix);
     }
 
     private static String diagnosticsPanel(boolean active) {

@@ -21,6 +21,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.io.IOException;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -225,6 +227,20 @@ public class MileageConversionService {
         conversion.setUserId(expense.userId());
         conversion.setProjectId(expense.projectId());
         conversion.setTaskId(expense.taskId());
+        conversion.setExpenseDate(expenseDate(expense.date()));
+    }
+
+    private static LocalDate expenseDate(String value) {
+        String cleaned = blankToNull(value);
+        if (cleaned == null) {
+            return null;
+        }
+        String datePortion = cleaned.length() >= 10 ? cleaned.substring(0, 10) : cleaned;
+        try {
+            return LocalDate.parse(datePortion);
+        } catch (DateTimeParseException e) {
+            return null;
+        }
     }
 
     private static void applyCalculation(

@@ -22,6 +22,7 @@ import org.mockito.ArgumentCaptor;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -71,6 +72,7 @@ class MileageConversionServiceTest {
         ArgumentCaptor<MileageConversion> saved = ArgumentCaptor.forClass(MileageConversion.class);
         verify(conversionRepository, org.mockito.Mockito.atLeastOnce()).saveAndFlush(saved.capture());
         assertThat(saved.getAllValues().getLast().getStatus()).isEqualTo(MileageConversionStatus.CONVERTED);
+        assertThat(saved.getAllValues().getLast().getExpenseDate()).isEqualTo(LocalDate.parse("2026-05-24"));
     }
 
     @Test
