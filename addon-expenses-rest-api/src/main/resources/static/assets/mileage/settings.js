@@ -102,8 +102,22 @@
     return tokenClaims.timeZone || tokenClaims.timezone || tokenClaims.tz || "";
   }
 
+  function themeFromClaims(claims) {
+    const theme = String(claims.theme || claims.uiTheme || "").toLowerCase();
+    if (theme === "dark" || theme === "light") {
+      return theme;
+    }
+    if (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+      return "dark";
+    }
+    return "light";
+  }
+
+  function applyTheme() {
+    document.documentElement.dataset.theme = themeFromClaims(tokenClaims);
+  }
+
   function applyRoleGate() {
-    tokenClaims = claimsFromToken();
     const role = roleFromClaims(tokenClaims);
     const isAdmin = role === "OWNER" || role === "ADMIN";
     document.querySelectorAll("[data-admin-only]").forEach(element => {
@@ -159,7 +173,7 @@
   function defaultDate() {
     const date = element("field-date");
     if (date && !date.value) {
-      date.value = new Date().toISOString().slice(0, 10);
+      date.value = isoDate(todayLocalDate());
     }
   }
 
@@ -704,6 +718,8 @@
   on("btn-export-team", "click", () => downloadCsv(csvPath("team", "/api/mileage/team.csv"), "mileage-team.csv"));
   on("btn-export-conversions", "click", () => downloadCsv(csvPath("conversion", "/api/mileage/conversions.csv"), "mileage-conversions.csv"));
 
+  tokenClaims = claimsFromToken();
+  applyTheme();
   userIsAdmin = applyRoleGate();
   initDateRanges();
   defaultDate();

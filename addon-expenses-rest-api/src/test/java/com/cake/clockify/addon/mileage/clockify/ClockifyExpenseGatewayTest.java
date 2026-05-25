@@ -17,6 +17,7 @@ import org.mockito.ArgumentCaptor;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -167,6 +168,19 @@ class ClockifyExpenseGatewayTest {
     }
 
     @Test
+    void listCategoriesReadsBeyondFirstPage() throws Exception {
+        when(expensesClient.getCategories(eq("ws-gateway"), eq(new ClockifyPageRequest(1, 200))))
+                .thenReturn(categoryPage(0, 200));
+        when(expensesClient.getCategories(eq("ws-gateway"), eq(new ClockifyPageRequest(2, 200))))
+                .thenReturn(categoryPage(200, 1));
+
+        assertThat(gateway.listCategories("ws-gateway"))
+                .hasSize(201)
+                .last()
+                .isEqualTo(new ClockifyCategoryOption("cat-200", "Category 200", "FLAT", null, null));
+    }
+
+    @Test
     void listProjectsSkipsArchivedProjects() throws Exception {
         var projects = objectMapper.createArrayNode();
         projects.addObject().put("id", "project-1").put("name", "Client Visit").put("archived", false);
@@ -175,6 +189,19 @@ class ClockifyExpenseGatewayTest {
 
         assertThat(gateway.listProjects("ws-gateway"))
                 .containsExactly(new ClockifyProjectOption("project-1", "Client Visit"));
+    }
+
+    @Test
+    void listProjectsReadsBeyondFirstPageAndStillSkipsArchivedProjects() throws Exception {
+        when(projectsClient.getProjects(eq("ws-gateway"), eq(new ClockifyPageRequest(1, 200))))
+                .thenReturn(projectPage(0, 200, false));
+        when(projectsClient.getProjects(eq("ws-gateway"), eq(new ClockifyPageRequest(2, 200))))
+                .thenReturn(projectPage(200, 1, false));
+
+        assertThat(gateway.listProjects("ws-gateway"))
+                .hasSize(201)
+                .last()
+                .isEqualTo(new ClockifyProjectOption("project-200", "Project 200"));
     }
 
     @Test
@@ -188,6 +215,19 @@ class ClockifyExpenseGatewayTest {
                 .containsExactly(
                         new ClockifyUserOption("user-1", "Ada Lovelace", "ada@example.test"),
                         new ClockifyUserOption("user-2", "grace@example.test", "grace@example.test"));
+    }
+
+    @Test
+    void listUsersReadsBeyondFirstPage() throws Exception {
+        when(usersClient.getUsersOfWorkspace(eq("ws-gateway"), eq(new ClockifyPageRequest(1, 200))))
+                .thenReturn(users(0, 200));
+        when(usersClient.getUsersOfWorkspace(eq("ws-gateway"), eq(new ClockifyPageRequest(2, 200))))
+                .thenReturn(users(200, 1));
+
+        assertThat(gateway.listUsers("ws-gateway"))
+                .hasSize(201)
+                .last()
+                .isEqualTo(new ClockifyUserOption("user-200", "User 200", "user-200@example.test"));
     }
 
     @Test
@@ -263,5 +303,30 @@ class ClockifyExpenseGatewayTest {
                 true,
                 "converted note",
                 RoundingMode.HALF_UP);
+    }
+
+    private ObjectNode categoryPage(int start, int count) {
+        ObjectNode root = objectMapper.createObjectNode();
+        var categories = root.putArray("categories");
+        for (int i = start; i < start + count; i++) {
+            categories.addObject().put("id", "cat-" + i).put("name", "Category " + i).put("hasUnitPrice", false);
+        }
+        return root;
+    }
+
+    private JsonNode projectPage(int start, int count, boolean archived) {
+        var projects = objectMapper.createArrayNode();
+        for (int i = start; i < start + count; i++) {
+            projects.addObject().put("id", "project-" + i).put("name", "Project " + i).put("archived", archived);
+        }
+        return projects;
+    }
+
+    private static List<User> users(int start, int count) {
+        List<User> users = new ArrayList<>();
+        for (int i = start; i < start + count; i++) {
+            users.add(new User("user-" + i, "user-" + i + "@example.test", "User " + i));
+        }
+        return users;
     }
 }

@@ -27,7 +27,6 @@ public class MileageNoteService {
             MileageCalculation calculation,
             String unit,
             UUID conversionId,
-            boolean preserveOriginalNotes,
             String template) {
         if (hasMileageMarker(originalNote)) {
             return originalNote;

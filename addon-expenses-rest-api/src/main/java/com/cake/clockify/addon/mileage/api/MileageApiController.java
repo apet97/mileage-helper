@@ -125,7 +125,6 @@ public class MileageApiController {
                 calculation,
                 settings.unit(),
                 conversionId,
-                settings.preserveOriginalNotes(),
                 settings.noteTemplate());
         CreateFlatExpenseCommand command = new CreateFlatExpenseCommand(
                 settings.outputCategoryId(),

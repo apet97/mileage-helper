@@ -90,7 +90,7 @@ class SecurityHeadersFilterTest {
     }
 
     @Test
-    void setsCacheControlNoStoreForApiRoutesOnly() throws ServletException, IOException {
+    void setsCacheControlNoStoreForApiAndIframeRoutesOnly() throws ServletException, IOException {
         // Non-api route
         MockHttpServletRequest nonApiReq = new MockHttpServletRequest("GET", "/test");
         MockHttpServletResponse nonApiResp = new MockHttpServletResponse();
@@ -107,5 +107,10 @@ class SecurityHeadersFilterTest {
         MockHttpServletResponse clockifyFacadeResp = new MockHttpServletResponse();
         filter.doFilter(clockifyFacadeReq, clockifyFacadeResp, new MockFilterChain());
         assertEquals("no-store", clockifyFacadeResp.getHeader("Cache-Control"));
+
+        MockHttpServletRequest iframeReq = new MockHttpServletRequest("GET", "/iframe/mileage");
+        MockHttpServletResponse iframeResp = new MockHttpServletResponse();
+        filter.doFilter(iframeReq, iframeResp, new MockFilterChain());
+        assertEquals("no-store", iframeResp.getHeader("Cache-Control"));
     }
 }

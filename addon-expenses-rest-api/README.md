@@ -75,4 +75,4 @@ mvn -pl addon-expenses-rest-api -am clean test
 - `reports.md` - relationship to native Clockify reports.
 - `docs/PRE_PUBLISH_CHECKLIST.md` - current local and manual pre-publish gates.
 
-`mileage-addon-handoff/` is retained as historical design and implementation context. Prefer current source, tests, and the active docs above for maintenance work.
+`docs/raw-evidence/` keeps historical Clockify/API evidence for route-shape audits. `mileage-addon-handoff/` keeps historical design and implementation context. Prefer current source, tests, and the active docs above for maintenance work.

@@ -107,7 +107,6 @@ public class MileageConversionService {
                     calculation,
                     settings.unit(),
                     conversion.getId(),
-                    settings.preserveOriginalNotes(),
                     settings.noteTemplate());
             applyCalculation(conversion, settings, calculation, marker);
             conversion.setStatus(MileageConversionStatus.CONVERTING);

@@ -7,7 +7,15 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.IntStream;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatNoException;
 
 class AddonWebhookEventServiceTest extends AbstractDbTest {
 
@@ -58,6 +66,49 @@ class AddonWebhookEventServiceTest extends AbstractDbTest {
         AddonWebhookEvent retryEvent = service.recordReceived("my-addon", "ws-1", "TIME_ENTRY_CREATED", "dedupe-1", "hash-1");
         assertThat(retryEvent.getId()).isEqualTo(event.getId());
         assertThat(retryEvent.getStatus()).isEqualTo("RECEIVED");
+    }
+
+    @Test
+    void recordEventHandlesConcurrentDuplicateReceiptWithoutLeakingConstraintFailure() throws Exception {
+        int attempts = 8;
+        ExecutorService executor = Executors.newFixedThreadPool(attempts);
+        CountDownLatch ready = new CountDownLatch(attempts);
+        CountDownLatch start = new CountDownLatch(1);
+        Callable<UUID> receipt = () -> {
+            ready.countDown();
+            assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+            start.await(5, TimeUnit.SECONDS);
+            return service.recordEvent("my-addon", "ws-race", "TIME_ENTRY_CREATED", "dedupe-race", "hash-1");
+        };
+
+        try {
+            var futures = IntStream.range(0, attempts)
+                    .mapToObj(ignored -> executor.submit(receipt))
+                    .toList();
+            start.countDown();
+
+            assertThat(futures)
+                    .extracting(this::getFutureValue)
+                    .doesNotContainNull()
+                    .containsOnly(futures.getFirst().get());
+            assertThat(repository.findByAddonKeyAndWorkspaceIdAndDedupeKey("my-addon", "ws-race", "dedupe-race"))
+                    .isPresent();
+        } finally {
+            executor.shutdownNow();
+            assertThatNoException().isThrownBy(() -> executor.awaitTermination(5, TimeUnit.SECONDS));
+        }
+    }
+
+    @Test
+    void recordReceivedDoesNotReopenActiveDuplicate() {
+        AddonWebhookEvent event = service.recordReceived("my-addon", "ws-active", "TIME_ENTRY_CREATED", "dedupe-active", "hash-1");
+        assertThat(service.tryStartProcessing(event.getId())).isTrue();
+
+        AddonWebhookEvent duplicate = service.recordReceived("my-addon", "ws-active", "TIME_ENTRY_CREATED", "dedupe-active", "hash-1");
+
+        assertThat(duplicate.getId()).isEqualTo(event.getId());
+        assertThat(duplicate.getStatus()).isEqualTo("PROCESSING");
+        assertThat(service.tryStartProcessing(duplicate.getId())).isFalse();
     }
 
     @Test
@@ -154,5 +205,13 @@ class AddonWebhookEventServiceTest extends AbstractDbTest {
         assertThat(redacted).doesNotContain("password-secret");
         assertThat(redacted).doesNotContain("bearer-secret");
         assertThat(redacted).doesNotContain("header-addon-secret");
+    }
+
+    private UUID getFutureValue(Future<UUID> future) {
+        try {
+            return future.get(10, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            throw new AssertionError(e);
+        }
     }
 }

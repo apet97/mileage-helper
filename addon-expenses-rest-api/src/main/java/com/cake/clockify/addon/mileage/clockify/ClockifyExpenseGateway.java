@@ -81,15 +81,18 @@ public class ClockifyExpenseGateway {
     }
 
     public List<ClockifyCategoryOption> listCategories(String workspaceId) throws IOException, InterruptedException {
-        JsonNode root = client(workspaceId).expenses().getCategories(workspaceId, new ClockifyPageRequest(1, CATEGORY_PAGE_SIZE));
-        JsonNode categories = root.isArray() ? root : root.path("categories");
-        List<ClockifyCategoryOption> out = new ArrayList<>();
-        if (categories instanceof ArrayNode array) {
-            for (JsonNode item : array) {
-                out.add(categoryOption(item));
+        ClockifyClient clockify = client(workspaceId);
+        return listAllPages(CATEGORY_PAGE_SIZE, (page, out) -> {
+            ArrayNode array = arrayNode(
+                    clockify.expenses().getCategories(workspaceId, new ClockifyPageRequest(page, CATEGORY_PAGE_SIZE)),
+                    "categories");
+            if (array != null) {
+                for (JsonNode item : array) {
+                    out.add(categoryOption(item));
+                }
             }
-        }
-        return out;
+            return sizeOf(array);
+        });
     }
 
     public ClockifyCategoryOption createOrRepairMileageCategory(String workspaceId, BigDecimal rate)
@@ -113,26 +116,31 @@ public class ClockifyExpenseGateway {
     }
 
     public List<ClockifyProjectOption> listProjects(String workspaceId) throws IOException, InterruptedException {
-        JsonNode root = client(workspaceId).projects().getProjects(workspaceId, new ClockifyPageRequest(1, PROJECT_PAGE_SIZE));
-        JsonNode projects = root.isArray() ? root : root.path("projects");
-        List<ClockifyProjectOption> out = new ArrayList<>();
-        if (projects instanceof ArrayNode array) {
-            for (JsonNode item : array) {
-                if (!item.path("archived").asBoolean(false)) {
-                    out.add(new ClockifyProjectOption(text(item, "id"), text(item, "name")));
+        ClockifyClient clockify = client(workspaceId);
+        return listAllPages(PROJECT_PAGE_SIZE, (page, out) -> {
+            ArrayNode array = arrayNode(
+                    clockify.projects().getProjects(workspaceId, new ClockifyPageRequest(page, PROJECT_PAGE_SIZE)),
+                    "projects");
+            if (array != null) {
+                for (JsonNode item : array) {
+                    if (!item.path("archived").asBoolean(false)) {
+                        out.add(new ClockifyProjectOption(text(item, "id"), text(item, "name")));
+                    }
                 }
             }
-        }
-        return out;
+            return sizeOf(array);
+        });
     }
 
     public List<ClockifyUserOption> listUsers(String workspaceId) throws IOException, InterruptedException {
-        List<User> users = client(workspaceId).users().getUsersOfWorkspace(workspaceId, new ClockifyPageRequest(1, USER_PAGE_SIZE));
-        List<ClockifyUserOption> out = new ArrayList<>();
-        for (User user : users) {
-            out.add(new ClockifyUserOption(user.id(), displayName(user), user.email()));
-        }
-        return out;
+        ClockifyClient clockify = client(workspaceId);
+        return listAllPages(USER_PAGE_SIZE, (page, out) -> {
+            List<User> users = clockify.users().getUsersOfWorkspace(workspaceId, new ClockifyPageRequest(page, USER_PAGE_SIZE));
+            for (User user : users) {
+                out.add(new ClockifyUserOption(user.id(), displayName(user), user.email()));
+            }
+            return users.size();
+        });
     }
 
     private ClockifyClient client(String workspaceId) {
@@ -196,6 +204,31 @@ public class ClockifyExpenseGateway {
                 decimal(item == null ? null : item.get("priceInCents")));
     }
 
+    private static <T> List<T> listAllPages(int pageSize, PageAppender<T> appender)
+            throws IOException, InterruptedException {
+        List<T> out = new ArrayList<>();
+        int page = 1;
+        while (true) {
+            int sourceCount = appender.append(page, out);
+            if (sourceCount < pageSize) {
+                return out;
+            }
+            page++;
+        }
+    }
+
+    private static ArrayNode arrayNode(JsonNode root, String field) {
+        if (root == null) {
+            return null;
+        }
+        JsonNode node = root.isArray() ? root : root.path(field);
+        return node instanceof ArrayNode array ? array : null;
+    }
+
+    private static int sizeOf(ArrayNode array) {
+        return array == null ? 0 : array.size();
+    }
+
     private static String displayName(User user) {
         if (user.name() != null && !user.name().isBlank()) {
             return user.name();
@@ -217,5 +250,10 @@ public class ClockifyExpenseGateway {
             return new BigDecimal(node.asText());
         }
         return null;
+    }
+
+    @FunctionalInterface
+    private interface PageAppender<T> {
+        int append(int page, List<T> out) throws IOException, InterruptedException;
     }
 }

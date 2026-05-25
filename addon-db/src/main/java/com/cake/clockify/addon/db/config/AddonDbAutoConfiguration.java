@@ -1,35 +1,31 @@
 package com.cake.clockify.addon.db.config;
 
+import com.cake.clockify.addon.core.config.AddonCoreAutoConfiguration;
+import com.cake.clockify.addon.core.config.ClockifyAddonProperties;
 import com.cake.clockify.addon.core.crypto.TokenCodec;
-import com.cake.clockify.addonsdk.clockify.model.ClockifyManifest;
+import com.cake.clockify.addon.core.webhook.WebhookTokenLookup;
+import com.cake.clockify.addon.db.lifecycle.JpaPersistenceLifecycleHandler;
 import com.cake.clockify.addon.db.repository.AddonInstallationRepository;
 import com.cake.clockify.addon.db.repository.AddonWebhookEventRepository;
+import com.cake.clockify.addon.db.repository.AddonWebhookTokenRepository;
 import com.cake.clockify.addon.db.repository.AddonWorkspaceSettingRepository;
 import com.cake.clockify.addon.db.service.AddonInstallationService;
-import com.cake.clockify.addon.db.service.AddonWebhookEventService;
 import com.cake.clockify.addon.db.service.AddonSettingsService;
+import com.cake.clockify.addon.db.service.AddonWebhookEventService;
 import com.cake.clockify.addon.db.service.ClockifyClientFactory;
+import com.cake.clockify.addonsdk.clockify.model.ClockifyManifest;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
-import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
+import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 
-import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
-import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration;
-
 import javax.sql.DataSource;
-
-import com.cake.clockify.addon.db.repository.AddonWebhookTokenRepository;
-import com.cake.clockify.addon.core.webhook.WebhookTokenLookup;
-
-import com.cake.clockify.addon.core.config.AddonCoreAutoConfiguration;
-
-import com.cake.clockify.addon.db.lifecycle.JpaPersistenceLifecycleHandler;
-import com.cake.clockify.addon.core.config.ClockifyAddonProperties;
 
 @AutoConfiguration(
         after = {DataSourceAutoConfiguration.class, HibernateJpaAutoConfiguration.class},

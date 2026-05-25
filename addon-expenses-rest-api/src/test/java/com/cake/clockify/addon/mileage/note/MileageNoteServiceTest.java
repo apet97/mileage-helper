@@ -27,7 +27,7 @@ class MileageNoteServiceTest {
 
     @Test
     void rendersExactCleanNoteWithoutVisibleMarkerOrExpenseAmountLine() {
-        String note = service.buildConvertedNote("", calculation, "mi", conversionId, true, null);
+        String note = service.buildConvertedNote("", calculation, "mi", conversionId, null);
 
         assertThat(note).isEqualTo("Mileage reimbursement: 37.4 miles x 0.655 = 24.497. Created/converted by Mileage for Clockify.");
         assertThat(note).doesNotContain("Expense amount");
@@ -36,7 +36,7 @@ class MileageNoteServiceTest {
 
     @Test
     void supportsCalculatedAndRoundedTemplateTokensWhileKeepingLegacyAmountRounded() {
-        String note = service.buildConvertedNote("", calculation, "mi", conversionId, true,
+        String note = service.buildConvertedNote("", calculation, "mi", conversionId,
                 "{{calculatedAmount}} / {{roundedAmount}} / {{amount}} / {{marker}}");
 
         assertThat(note).contains("24.497 / 24.50 / 24.50 / " + service.marker(conversionId));
@@ -51,21 +51,21 @@ class MileageNoteServiceTest {
                 new BigDecimal("0.73"),
                 RoundingMode.HALF_UP);
 
-        String note = service.buildConvertedNote("Native note that should be replaced", oneMile, "mile", conversionId, true, null);
+        String note = service.buildConvertedNote("Native note that should be replaced", oneMile, "mile", conversionId, null);
 
         assertThat(note).isEqualTo("Mileage reimbursement: 1 mile x 0.725 = 0.725. Created/converted by Mileage for Clockify.");
     }
 
     @Test
-    void preservesOriginalNoteWhenConfigured() {
-        String note = service.buildConvertedNote("Client site visit", calculation, "mi", conversionId, true, null);
+    void replacesOriginalNoteWithGeneratedMileageNote() {
+        String note = service.buildConvertedNote("Client site visit", calculation, "mi", conversionId, null);
 
         assertThat(note).isEqualTo("Mileage reimbursement: 37.4 miles x 0.655 = 24.497. Created/converted by Mileage for Clockify.");
     }
 
     @Test
-    void replacesOriginalNoteWhenPreserveFalse() {
-        String note = service.buildConvertedNote("Client site visit", calculation, "mi", conversionId, false, null);
+    void generatedNoteDoesNotStartWithOriginalNote() {
+        String note = service.buildConvertedNote("Client site visit", calculation, "mi", conversionId, null);
 
         assertThat(note).doesNotStartWith("Client site visit");
         assertThat(note).startsWith("Mileage reimbursement");
@@ -75,7 +75,7 @@ class MileageNoteServiceTest {
     void doesNotDuplicateMarker() {
         String original = "Already done " + service.marker(conversionId);
 
-        assertThat(service.buildConvertedNote(original, calculation, "mi", conversionId, true, null)).isEqualTo(original);
+        assertThat(service.buildConvertedNote(original, calculation, "mi", conversionId, null)).isEqualTo(original);
     }
 
     @Test

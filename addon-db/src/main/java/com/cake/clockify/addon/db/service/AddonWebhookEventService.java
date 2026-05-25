@@ -1,14 +1,13 @@
 package com.cake.clockify.addon.db.service;
 
+import com.cake.clockify.addon.core.webhook.WebhookEventService;
 import com.cake.clockify.addon.db.entity.AddonWebhookEvent;
 import com.cake.clockify.addon.db.repository.AddonWebhookEventRepository;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
-import com.cake.clockify.addon.core.webhook.WebhookEventService;
 
 /**
  * Service to handle webhook event tracking, deduplication, and status transitions.
@@ -25,30 +24,23 @@ public class AddonWebhookEventService implements WebhookEventService {
     /**
      * Records a newly received event in the database with RECEIVED status.
      */
-    @Transactional(noRollbackFor = DataIntegrityViolationException.class)
+    @Transactional
     public AddonWebhookEvent recordReceived(
             String addonKey,
             String workspaceId,
             String eventType,
             String dedupeKey,
             String payloadHash) {
-        
-        AddonWebhookEvent event = repository.findByAddonKeyAndWorkspaceIdAndDedupeKey(addonKey, workspaceId, dedupeKey)
-                .orElseGet(AddonWebhookEvent::new);
-        
-        event.setAddonKey(addonKey);
-        event.setWorkspaceId(workspaceId);
-        event.setEventType(eventType);
-        event.setDedupeKey(dedupeKey);
-        event.setPayloadHash(payloadHash);
-        event.setStatus("RECEIVED");
-        
-        try {
-            return repository.saveAndFlush(event);
-        } catch (DataIntegrityViolationException e) {
-            return repository.findByAddonKeyAndWorkspaceIdAndDedupeKey(addonKey, workspaceId, dedupeKey)
-                    .orElseThrow(() -> e);
-        }
+        UUID eventId = repository.upsertReceived(
+                UUID.randomUUID(),
+                addonKey,
+                workspaceId,
+                eventType,
+                dedupeKey,
+                payloadHash,
+                Instant.now());
+        return repository.findById(eventId)
+                .orElseThrow(() -> new IllegalStateException("Webhook event upsert returned an unknown id"));
     }
 
     /**

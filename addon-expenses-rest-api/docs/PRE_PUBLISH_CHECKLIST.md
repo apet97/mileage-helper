@@ -2,14 +2,15 @@
 
 ## Current Local Evidence
 
-Last local hardening pass: 2026-05-24.
+Last local hardening pass: 2026-05-25.
 
-- `mvn -pl addon-expenses-rest-api -am clean test`: passed with 114 product-module tests and full reactor `BUILD SUCCESS`.
+- `mvn -pl addon-expenses-rest-api -am test`: passed with 159 product-module tests and full reactor `BUILD SUCCESS`.
 - `docker compose -f addon-expenses-rest-api/docker-compose.yml build`: passed.
-- Runtime `/manifest` probe: returned key `mileage-for-clockify`, schema `1.5`, and packaged icon paths.
-- Runtime `/assets/mileage/icon.png` probe: returned a 512 x 512 PNG.
-- Runtime security header probe: CSP, `nosniff`, `no-referrer`, permissions policy, and HSTS under forwarded HTTPS.
+- Runtime `/manifest` probe: returned key `mileage-for-clockify` and schema `1.5`.
+- Runtime `/iframe/mileage` unauthenticated probe: returned `401` with CSP, `nosniff`, `no-referrer`, permissions policy, and `Cache-Control: no-store`.
 - Static stale/dead-code scan: no active-source hits for removed expense-boilerplate names, obsolete live shell probes, or legacy temp-addon schema names outside immutable Flyway history.
+- Static forbidden-number scan: no `double`, `Double`, `float`, or `Float` usage in Mileage source/tests.
+- `gitleaks detect --source . --no-git --redact --verbose`: no leaks found.
 - Flyway history keeps V5/V10 for existing database validation; V12 drops the leftover generic tables.
 - Git history was rewritten before publish-prep handoff to remove the obsolete live shell probe and its hardcoded API-key fallback.
 - Marketplace docs compliance pass reviewed lifecycle, UI component, webhook, authentication, environment/region, development checklist, and publishing/security guidance. User mileage creation now derives target `userId` from verified Clockify token claims instead of request parameters, and the create DTO/UI payload do not carry `userId`.

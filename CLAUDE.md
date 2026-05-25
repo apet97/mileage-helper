@@ -18,7 +18,7 @@ Read in this order:
 5. `addon-expenses-rest-api/webhooks.md`
 6. Relevant source and tests before editing
 
-Use `addon-expenses-rest-api/mileage-addon-handoff/` and `addon-expenses-rest-api/docs/IMPLEMENTATION_PLAN_MILEAGE_FOR_CLOCKIFY_DETAILED.md` as historical records unless the task specifically asks to audit the original implementation plan.
+Use `addon-expenses-rest-api/mileage-addon-handoff/` and `addon-expenses-rest-api/docs/raw-evidence/` as historical/reference material unless the task specifically asks to audit original evidence.
 
 ## Current Architecture
 

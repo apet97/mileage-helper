@@ -18,7 +18,7 @@ import java.util.List;
  *   <li>{@code Referrer-Policy: no-referrer}
  *   <li>{@code Permissions-Policy} denying camera, microphone, geolocation.
  *   <li>HSTS (if enabled and request is over HTTPS).
- *   <li>{@code Cache-Control: no-store} for API paths.
+ *   <li>{@code Cache-Control: no-store} for API and iframe paths.
  * </ul>
  */
 public class SecurityHeadersFilter extends OncePerRequestFilter {
@@ -67,8 +67,8 @@ public class SecurityHeadersFilter extends OncePerRequestFilter {
     private static boolean isNoStorePath(String uri) {
         return uri.equals("/api")
                 || uri.startsWith("/api/")
-                || uri.equals("/iframe/api")
-                || uri.startsWith("/iframe/api/")
+                || uri.equals("/iframe")
+                || uri.startsWith("/iframe/")
                 || uri.equals("/clockify")
                 || uri.startsWith("/clockify/");
     }

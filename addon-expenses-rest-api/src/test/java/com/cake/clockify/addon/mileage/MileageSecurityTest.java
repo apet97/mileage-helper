@@ -255,6 +255,31 @@ class MileageSecurityTest {
     }
 
     @Test
+    void mileageJavascriptDefaultsCreateDateFromLocalDateHelper() throws Exception {
+        String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
+
+        assertThat(javascript).contains("date.value = isoDate(todayLocalDate())");
+        assertThat(javascript).doesNotContain("date.value = new Date().toISOString().slice(0, 10)");
+    }
+
+    @Test
+    void mileageJavascriptAppliesTokenThemeWithoutExposingToken() throws Exception {
+        String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
+
+        assertThat(javascript).contains("function applyTheme()");
+        assertThat(javascript).contains("themeFromClaims");
+        assertThat(javascript).contains("document.documentElement.dataset.theme");
+    }
+
+    @Test
+    void mileageCssDefinesDarkThemeVariables() throws Exception {
+        String css = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.css"));
+
+        assertThat(css).contains(":root[data-theme=\"dark\"]");
+        assertThat(css).contains("color-scheme: dark");
+    }
+
+    @Test
     void mileageCssHidesEmptyPreviewAndWarningsContainers() throws Exception {
         String css = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.css"));
 

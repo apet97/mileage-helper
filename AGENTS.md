@@ -7,7 +7,7 @@ This is the standalone repository for Mileage for Clockify. It contains the add-
 1. Run `git status --short --branch`.
 2. Read this file, then `CLAUDE.md`, then [README.md](README.md).
 3. For product behavior, use [addon-expenses-rest-api/README.md](addon-expenses-rest-api/README.md), [addon-expenses-rest-api/endpoints.md](addon-expenses-rest-api/endpoints.md), [addon-expenses-rest-api/webhooks.md](addon-expenses-rest-api/webhooks.md), and the implemented tests before relying on old handoff docs.
-4. Treat `addon-expenses-rest-api/mileage-addon-handoff/` and `addon-expenses-rest-api/docs/IMPLEMENTATION_PLAN_MILEAGE_FOR_CLOCKIFY_DETAILED.md` as historical implementation records unless a task explicitly says to resume or audit them.
+4. Treat `addon-expenses-rest-api/mileage-addon-handoff/` and `addon-expenses-rest-api/docs/raw-evidence/` as historical/reference material unless a task explicitly says to audit them.
 
 ## Non-Negotiables
 

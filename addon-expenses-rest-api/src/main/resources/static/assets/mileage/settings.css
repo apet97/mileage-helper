@@ -10,6 +10,25 @@
   --focus: #f7c948;
   --danger: #b42318;
   --success: #067647;
+  --field: #ffffff;
+  --field-disabled: #eef2f6;
+  --panel-soft: rgba(255, 255, 255, .72);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #111827;
+  --panel: #182132;
+  --line: #334155;
+  --text: #e5e7eb;
+  --muted: #a7b1c2;
+  --accent: #5fb3bd;
+  --accent-soft: #1e3a42;
+  --danger: #f87171;
+  --success: #34d399;
+  --field: #111827;
+  --field-disabled: #223047;
+  --panel-soft: rgba(24, 33, 50, .72);
 }
 
 * { box-sizing: border-box; }
@@ -142,7 +161,7 @@ fieldset {
   margin: 0;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: rgba(255, 255, 255, .72);
+  background: var(--panel-soft);
   padding: 14px;
 }
 
@@ -164,7 +183,7 @@ textarea {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: #fff;
+  background: var(--field);
   color: var(--text);
   font: inherit;
   padding: 9px 10px;
@@ -173,7 +192,7 @@ textarea {
 input:disabled,
 select:disabled,
 textarea:disabled {
-  background: #eef2f6;
+  background: var(--field-disabled);
   color: var(--muted);
   cursor: not-allowed;
 }

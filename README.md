@@ -60,6 +60,7 @@ docker compose -f addon-expenses-rest-api/docker-compose.yml -f <(printf 'servic
 - [addon-expenses-rest-api/docs/PRE_PUBLISH_CHECKLIST.md](addon-expenses-rest-api/docs/PRE_PUBLISH_CHECKLIST.md) - local and manual gates before Marketplace submission.
 - [addon-expenses-rest-api/endpoints.md](addon-expenses-rest-api/endpoints.md), [models.md](addon-expenses-rest-api/models.md), [webhooks.md](addon-expenses-rest-api/webhooks.md), [edge-cases.md](addon-expenses-rest-api/edge-cases.md), [reports.md](addon-expenses-rest-api/reports.md) - active product docs.
 - `addon-expenses-rest-api/mileage-addon-handoff/` - historical design and implementation handoff, useful for audits but no longer the primary instruction set.
+- `addon-expenses-rest-api/docs/raw-evidence/` - historical Clockify/API evidence used to verify client behavior; not active product guidance.
 - `addon-expenses-rest-api/MARKETPLACE_OCS/` - copied Marketplace documentation reference.
 
 ## Configuration
