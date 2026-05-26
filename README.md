@@ -7,6 +7,7 @@ Current hosted test add-on:
 - App URL: `https://mileage-for-clockify-production.up.railway.app`
 - Manifest: `https://mileage-for-clockify-production.up.railway.app/manifest`
 - Latest verified Railway deployment: `d2758ee4-2bc2-4dce-8982-0a049a1e54af` on 2026-05-26
+- Latest local hardening review: 2026-05-27, covering shared multipart receipt/file upload handling, Clockify timezone claim aliases, and secret-scan proof.
 
 ## Repository Layout
 
@@ -31,6 +32,8 @@ The ignored local clone `addon-expenses-rest-api/addon-java-sdk/` is read-only r
 - The add-on displays full calculated mileage decimals in previews, Mine, Team, and Conversions while Clockify receives the rounded expense amount.
 - Mine and Team lists/CSVs hide deleted expenses. The admin Conversions view keeps deleted rows as audit history.
 - Expense webhooks accept both full payloads with `id` and reference payloads with `expenseId`.
+- Receipt uploads are sent through shared Clockify client multipart construction that rejects unsafe field names and sanitizes filename/content-type headers.
+- Clockify timezone claim aliases are normalized server-side and kept aligned with the settings UI fallback logic.
 
 ## API Surface
 

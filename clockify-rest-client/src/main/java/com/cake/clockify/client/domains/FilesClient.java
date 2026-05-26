@@ -8,7 +8,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -36,11 +35,8 @@ public final class FilesClient {
 
     private static byte[] multipartFile(String boundary, String field, String fileName, String contentType, byte[] bytes) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        out.write(("--" + boundary + "\r\n").getBytes(StandardCharsets.UTF_8));
-        out.write(("Content-Disposition: form-data; name=\"" + field + "\"; filename=\"" + fileName.replace("\"", "") + "\"\r\n").getBytes(StandardCharsets.UTF_8));
-        out.write(("Content-Type: " + contentType + "\r\n\r\n").getBytes(StandardCharsets.UTF_8));
-        out.write(bytes);
-        out.write(("\r\n--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
+        MultipartBodyBuilder.writeFile(out, boundary, field, fileName, contentType, bytes);
+        MultipartBodyBuilder.finish(out, boundary);
         return out.toByteArray();
     }
 }

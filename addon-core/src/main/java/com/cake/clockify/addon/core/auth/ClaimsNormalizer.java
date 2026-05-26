@@ -38,7 +38,7 @@ public final class ClaimsNormalizer {
                 pickString(claims, "workspaceRole"),
                 pickString(claims, "language"),
                 pickString(claims, "theme"),
-                pickString(claims, "userTimeZone", "userTimezone", "tz"),
+                pickString(claims, "userTimeZone", "userTimezone", "timeZone", "timezone", "tz"),
                 pickInstant(claims, "iat"));
     }
 

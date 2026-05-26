@@ -126,6 +126,20 @@ class ExpensesClientTest {
     }
 
     @Test
+    void createExpenseRejectsUnsafeMultipartFieldNames() {
+        RecordingTransport transport = new RecordingTransport(List.of("{}"));
+        ClockifyClient client = TestClockifyClient.client(transport);
+        com.fasterxml.jackson.databind.node.ObjectNode body = objectMapper.createObjectNode();
+        body.put("notes\r\nContent-Disposition: form-data; name=\"pwned\"", "safe");
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> client.expenses().createExpense("w1", body, "receipt.pdf", "application/pdf", new byte[]{1}));
+
+        assertTrue(ex.getMessage().contains("multipart field name"));
+        assertTrue(transport.requests.isEmpty());
+    }
+
+    @Test
     void updateExpenseWithFileAppendsFileToChangeFields() throws Exception {
         RecordingTransport transport = new RecordingTransport(List.of("{}"));
         ClockifyClient client = TestClockifyClient.client(transport);

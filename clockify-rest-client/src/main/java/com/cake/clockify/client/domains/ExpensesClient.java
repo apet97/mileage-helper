@@ -10,7 +10,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.StringJoiner;
@@ -266,51 +265,19 @@ public final class ExpensesClient {
             if (value.isNull() || "file".equals(name)) {
                 continue;
             }
-            out.write(("--" + boundary + "\r\n").getBytes(StandardCharsets.UTF_8));
             String stringValue;
             if (value.isTextual()) {
                 stringValue = value.asText();
             } else {
                 stringValue = value.toString();
             }
-            out.write(("Content-Disposition: form-data; name=\"" + name + "\"\r\n\r\n").getBytes(StandardCharsets.UTF_8));
-            out.write(stringValue.getBytes(StandardCharsets.UTF_8));
-            out.write("\r\n".getBytes(StandardCharsets.UTF_8));
+            MultipartBodyBuilder.writeField(out, boundary, name, stringValue);
         }
         if (fileBytes != null && fileBytes.length > 0) {
-            String actualFileName = safeMultipartFileName(fileName);
-            String actualContentType = safeMultipartContentType(contentType);
-            out.write(("--" + boundary + "\r\n").getBytes(StandardCharsets.UTF_8));
-            out.write(("Content-Disposition: form-data; name=\"file\"; filename=\"" + actualFileName + "\"\r\n").getBytes(StandardCharsets.UTF_8));
-            out.write(("Content-Type: " + actualContentType + "\r\n\r\n").getBytes(StandardCharsets.UTF_8));
-            out.write(fileBytes);
-            out.write("\r\n".getBytes(StandardCharsets.UTF_8));
+            MultipartBodyBuilder.writeFile(out, boundary, "file", fileName, contentType, fileBytes);
         }
-        out.write(("--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
+        MultipartBodyBuilder.finish(out, boundary);
         return out.toByteArray();
-    }
-
-    private static String safeMultipartFileName(String fileName) {
-        String cleaned = fileName == null ? "" : fileName.trim().replace('\\', '/');
-        int lastSlash = cleaned.lastIndexOf('/');
-        if (lastSlash >= 0) {
-            cleaned = cleaned.substring(lastSlash + 1);
-        }
-        cleaned = cleaned.replaceAll("[\\p{Cntrl}\";:]", "_")
-                .replaceAll("\\s+", " ")
-                .trim();
-        if (cleaned.isBlank()) {
-            return "file";
-        }
-        return cleaned.length() <= 120 ? cleaned : cleaned.substring(0, 120);
-    }
-
-    private static String safeMultipartContentType(String contentType) {
-        String cleaned = contentType == null ? "" : contentType.trim().toLowerCase(Locale.ROOT);
-        if (cleaned.isBlank() || !cleaned.matches("[a-z0-9!#$&^_.+-]+/[a-z0-9!#$&^_.+-]+")) {
-            return "application/octet-stream";
-        }
-        return cleaned;
     }
 
     private static String mapToChangeField(String key) {

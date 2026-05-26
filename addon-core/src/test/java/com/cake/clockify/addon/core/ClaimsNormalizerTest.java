@@ -4,6 +4,7 @@ import com.cake.clockify.addon.core.auth.ClaimsNormalizer;
 import com.cake.clockify.addon.core.auth.NormalizedClaims;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -40,6 +41,15 @@ class ClaimsNormalizerTest {
         assertEquals("ws-legacy", nc.workspaceId());
         // /api/v1 → /api
         assertEquals("https://api.clockify.me/api", nc.backendUrl());
+    }
+
+    @Test
+    void normalizesClockifyTimezoneClaimAliases() {
+        for (String alias : List.of("userTimeZone", "userTimezone", "timeZone", "timezone", "tz")) {
+            NormalizedClaims nc = ClaimsNormalizer.normalize(Map.of(alias, "Europe/Belgrade"));
+
+            assertEquals("Europe/Belgrade", nc.userTimeZone(), alias);
+        }
     }
 
     @Test

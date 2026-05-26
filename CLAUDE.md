@@ -62,6 +62,8 @@ Main product packages:
 - User-facing `Mine` and admin `Team` lists/CSVs exclude rows marked `DELETED`; admin `Conversions` keeps deleted rows as audit history.
 - Tables: `mileage_workspace_settings`, `mileage_conversion`.
 - `ClockifyClientFactory` builds per-workspace clients from installed backend/reports URLs. Missing backend URL is fatal; missing reports URL is allowed until a reports request is attempted.
+- Clockify token timezone normalization accepts `userTimeZone`, `userTimezone`, `timeZone`, `timezone`, and `tz`; keep this aligned with the settings UI timezone alias handling.
+- Receipt uploads in `clockify-rest-client` use the shared multipart helper. Expenses and Files clients must not hand-roll multipart headers because field names, filenames, and content types need the same defensive handling.
 - Historical pre-Mileage migrations V5/V10 are retained for Flyway validation only; V12 drops their leftover generic tables. New code/docs should not add `temp_addon_expenses*`, `clockify-expenses-api`, `Clockify Expenses API`, or `com.cake.clockify.addon.expenses` references.
 
 ## Hosted State
@@ -70,6 +72,7 @@ Main product packages:
 - Latest verified Railway deployment: `d2758ee4-2bc2-4dce-8982-0a049a1e54af` on 2026-05-26.
 - Verified hosted probes: `/actuator/health`, `/manifest`, settings JS asset, Clockify uninstall/install/settings/create/delete smoke.
 - Dev workspace receipt smoke on 2026-05-27 used the local `clockify-rest-client` to create, fetch, and delete a sacrificial Mileage PDF receipt expense; post-delete GET returned non-success.
+- Local hardening review on 2026-05-27 added shared multipart upload tests, Clockify timezone alias normalization tests, Mileage security tests, `node --check`, `git diff --check`, and `gitleaks` proof.
 - Railway Postgres currently logs a Flyway compatibility warning because the managed database is PostgreSQL 18.4 and the bundled Flyway version officially supports older versions. Boot and migrations still completed.
 
 ## Commands
@@ -130,6 +133,7 @@ Default CORS allows Clockify origins and the origin from `ADDON_BASE_URL`, which
 - Do not hardcode Clockify API URLs in add-on code.
 - Do not expose installation tokens to frontend JavaScript or HTML.
 - Do not log tokens, auth headers, receipt bytes, or raw upstream error bodies.
+- Do not hand-build multipart upload headers in individual Clockify clients; use the shared multipart helper and keep unsafe field names rejected.
 - Preserve workspace isolation in repository methods and service calls.
 - Webhook handlers must acknowledge safely with HTTP 2xx after internal failure recording/logging. Do not let Clockify blindly retry failures that should be retried from the admin/internal path.
 - Native expense conversion must aggressively prevent loops: skip mileage audit markers, output-category expenses, and already-converted expenses before writing back to Clockify.
@@ -150,6 +154,7 @@ Before claiming pre-publish readiness, complete `addon-expenses-rest-api/docs/PR
 
 - `docs/superpowers/plans/2026-05-26-mileage-final-hardening.md` is historical. The final hardening work landed on `main` at `4830230`; do not treat that plan as an active work queue.
 - Keep future work in maintenance mode: small diffs, focused regression tests, full add-on reactor verification for behavior changes, and hosted manifest/health probes after deployment changes.
+- After receipt/upload changes, run the Expenses and Files client tests together so shared multipart behavior is covered on both call paths.
 
 For documentation-only changes:
 

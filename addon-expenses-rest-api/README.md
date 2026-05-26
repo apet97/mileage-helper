@@ -15,6 +15,7 @@ This module is the implemented product module inside the standalone repository. 
 - Clockify remains the source of truth for expenses, receipts, approvals, reports, budgets, and invoices.
 - Mileage, rate, and money values are handled with `BigDecimal`.
 - Manual mileage creation defaults `billable` to true when omitted and derives the user from verified token claims.
+- Receipt uploads use the shared Clockify client multipart helper so Expenses and Files upload paths share field-name validation, filename sanitization, and content-type fallback behavior.
 - Rate override on the main page is available only when workspace settings allow it; otherwise the configured workspace rate is used and shown as read-only context.
 - Regular users see only `Mine`; admins also see `Team`, `Settings`, `Conversions`, and `Diagnostics`.
 - Mileage lists and CSV exports default to this US week, Sunday through Saturday, with presets for custom ranges, this/last month, this/last week, and this/last year.
@@ -30,6 +31,7 @@ This module is the implemented product module inside the standalone repository. 
 - Latest verified deployment: `d2758ee4-2bc2-4dce-8982-0a049a1e54af`
 - Verified on 2026-05-26 with health, manifest, settings asset, Clockify reinstall, settings load, mileage create/use, and delete-list behavior.
 - Dev workspace receipt smoke on 2026-05-27 created, fetched, and deleted a sacrificial Mileage PDF receipt expense through the local `clockify-rest-client`; post-delete GET returned non-success.
+- Local hardening review on 2026-05-27 covered multipart receipt/header sanitization, timezone claim alias parity, focused client/security tests, and `gitleaks` proof.
 
 ## Non-goals
 
