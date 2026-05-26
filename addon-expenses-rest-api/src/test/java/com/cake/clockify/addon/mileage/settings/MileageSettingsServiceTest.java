@@ -5,6 +5,7 @@ import com.cake.clockify.addon.mileage.api.model.MileageSettingsRequest;
 import com.cake.clockify.addon.mileage.api.model.MileageSettingsResponse;
 import com.cake.clockify.addon.mileage.audit.MileageConversion;
 import com.cake.clockify.addon.mileage.audit.MileageConversionRepository;
+import com.cake.clockify.addon.mileage.audit.MileageConversionReservationRepository;
 import com.cake.clockify.addon.mileage.audit.MileageConversionSource;
 import com.cake.clockify.addon.mileage.audit.MileageConversionStatus;
 import com.cake.clockify.addon.mileage.security.MileageAuthorizationService;
@@ -52,6 +53,7 @@ class MileageSettingsServiceTest {
 
     @Autowired MileageSettingsRepository settingsRepository;
     @Autowired MileageConversionRepository conversionRepository;
+    @Autowired MileageConversionReservationRepository reservationRepository;
     @Autowired MileageSettingsService settingsService;
     @Autowired MileageAuthorizationService authorizationService;
 
@@ -77,6 +79,29 @@ class MileageSettingsServiceTest {
         assertThatThrownBy(() -> conversionRepository.saveAndFlush(
                 conversion("ws-unique", "exp-unique", MileageConversionStatus.RECEIVED)))
                 .hasRootCauseInstanceOf(org.postgresql.util.PSQLException.class);
+    }
+
+    @Test
+    void conversionReservationReturnsSameIdForDuplicateWorkspaceExpense() {
+        UUID first = reservationRepository.reserve(
+                "ws-reserve",
+                "exp-reserve",
+                MileageConversionSource.WEBHOOK_CREATED,
+                "EXPENSE_CREATED");
+        UUID second = reservationRepository.reserve(
+                "ws-reserve",
+                "exp-reserve",
+                MileageConversionSource.WEBHOOK_UPDATED,
+                "EXPENSE_UPDATED");
+
+        assertThat(second).isEqualTo(first);
+        assertThat(conversionRepository.countByWorkspaceIdAndExpenseId("ws-reserve", "exp-reserve"))
+                .isEqualTo(1);
+        MileageConversion conversion = conversionRepository
+                .findByWorkspaceIdAndExpenseId("ws-reserve", "exp-reserve")
+                .orElseThrow();
+        assertThat(conversion.getSource()).isEqualTo(MileageConversionSource.WEBHOOK_CREATED);
+        assertThat(conversion.getStatus()).isEqualTo(MileageConversionStatus.RECEIVED);
     }
 
     @Test
