@@ -21,6 +21,7 @@ public class ClockifyExpenseGateway {
     private static final int CATEGORY_PAGE_SIZE = 200;
     private static final int PROJECT_PAGE_SIZE = 200;
     private static final int USER_PAGE_SIZE = 200;
+    private static final int MAX_OPTION_PAGES = 100;
     private static final String MILEAGE_CATEGORY_NAME = "Mileage";
     private static final String MILEAGE_UNIT = "mile";
 
@@ -208,13 +209,14 @@ public class ClockifyExpenseGateway {
             throws IOException, InterruptedException {
         List<T> out = new ArrayList<>();
         int page = 1;
-        while (true) {
+        while (page <= MAX_OPTION_PAGES) {
             int sourceCount = appender.append(page, out);
             if (sourceCount < pageSize) {
                 return out;
             }
             page++;
         }
+        throw new IllegalStateException("Clockify pagination exceeded " + MAX_OPTION_PAGES + " pages");
     }
 
     private static ArrayNode arrayNode(JsonNode root, String field) {

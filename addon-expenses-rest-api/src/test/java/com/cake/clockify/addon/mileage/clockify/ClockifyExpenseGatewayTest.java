@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -178,6 +179,20 @@ class ClockifyExpenseGatewayTest {
                 .hasSize(201)
                 .last()
                 .isEqualTo(new ClockifyCategoryOption("cat-200", "Category 200", "FLAT", null, null));
+    }
+
+    @Test
+    void listCategoriesFailsWhenClockifyKeepsReturningFullPages() throws Exception {
+        when(expensesClient.getCategories(eq("ws-gateway"), any(ClockifyPageRequest.class)))
+                .thenAnswer(invocation -> {
+                    ClockifyPageRequest request = invocation.getArgument(1);
+                    int count = request.page() > 100 ? 1 : 200;
+                    return categoryPage((request.page() - 1) * 200, count);
+                });
+
+        assertThatThrownBy(() -> gateway.listCategories("ws-gateway"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Clockify pagination exceeded 100 pages");
     }
 
     @Test
