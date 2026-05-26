@@ -18,6 +18,15 @@
     this_year: "This year",
     last_year: "Last year"
   };
+  const maxReceiptBytes = 10 * 1024 * 1024;
+  const allowedReceiptTypes = new Set([
+    "image/png",
+    "image/jpeg",
+    "image/gif",
+    "image/webp",
+    "image/heic",
+    "application/pdf"
+  ]);
 
   if (authToken) {
     url.searchParams.delete("auth_token");
@@ -57,6 +66,9 @@
   }
 
   function downloadCsv(path, fallbackName) {
+    if (path === null) {
+      return Promise.resolve();
+    }
     return fetch(path, { headers: authHeaders() }).then(async response => {
       if (!response.ok) {
         throw new Error("CSV export failed.");
@@ -230,15 +242,18 @@
   }
 
   function rangeQuery(scope) {
-    const range = selectedDateRange(scope);
+    const range = validSelectedDateRange(scope);
     if (!range) {
-      return "";
+      return null;
     }
     return "&from=" + encodeURIComponent(range.from) + "&to=" + encodeURIComponent(range.to);
   }
 
   function csvPath(scope, path) {
     const query = rangeQuery(scope);
+    if (query === null) {
+      return null;
+    }
     return path + (query ? "?" + query.slice(1) : "");
   }
 
@@ -255,6 +270,22 @@
     const from = formValue(scope + "-range-from");
     const to = formValue(scope + "-range-to");
     return { from, to };
+  }
+
+  function validSelectedDateRange(scope) {
+    const range = selectedDateRange(scope);
+    if (!range) {
+      return null;
+    }
+    if (!range.from || !range.to) {
+      toast("Choose both From and To dates.", "error");
+      return null;
+    }
+    if (range.from > range.to) {
+      toast("From date must be on or before To date.", "error");
+      return null;
+    }
+    return range;
   }
 
   function setRangeInputs(scope, range) {
@@ -402,9 +433,27 @@
     submit.textContent = busy ? "Creating..." : "Create Expense";
   }
 
+  function validateReceipt(file) {
+    if (!file) {
+      return true;
+    }
+    if (file.size > maxReceiptBytes) {
+      toast("Receipt file exceeds 10 MB.", "error");
+      return false;
+    }
+    if (!allowedReceiptTypes.has(file.type || "")) {
+      toast("Unsupported receipt file type.", "error");
+      return false;
+    }
+    return true;
+  }
+
   function createMileage(event) {
     event.preventDefault();
     const file = element("field-receipt").files[0];
+    if (!validateReceipt(file)) {
+      return;
+    }
     setCreateBusy(true);
     if (file) {
       const body = new FormData();
@@ -446,7 +495,11 @@
     if (!rows) {
       return Promise.resolve();
     }
-    return apiFetch("/api/mileage/mine?pageSize=50" + rangeQuery("mine"))
+    const query = rangeQuery("mine");
+    if (query === null) {
+      return Promise.resolve();
+    }
+    return apiFetch("/api/mileage/mine?pageSize=50" + query)
       .then(data => renderMileageRows(rows, data.conversions || [], false, "No mileage rows yet."))
       .catch(error => toast(error.message, "error"));
   }
@@ -456,7 +509,11 @@
     if (!rows) {
       return Promise.resolve();
     }
-    return apiFetch("/api/mileage/team?pageSize=50" + rangeQuery("team"))
+    const query = rangeQuery("team");
+    if (query === null) {
+      return Promise.resolve();
+    }
+    return apiFetch("/api/mileage/team?pageSize=50" + query)
       .then(data => renderMileageRows(rows, data.conversions || [], true, "No team mileage rows yet."))
       .catch(error => toast(error.message, "error"));
   }
@@ -518,15 +575,21 @@
     if (!element("settings-form")) {
       return Promise.resolve();
     }
-    return Promise.all([apiFetch("/api/mileage/settings"), loadCategories()])
-      .then(([settings]) => {
+    const settingsPromise = apiFetch("/api/mileage/settings");
+    const categoriesPromise = loadCategories().catch(error => {
+      toast("Mileage categories could not be loaded: " + error.message, "error");
+    });
+    return settingsPromise
+      .then(settings => {
         element("settings-enabled").checked = settings.enabled;
         element("settings-rate").value = settings.rate || "";
-        element("settings-mileage-category").value = settings.mileageCategoryId || settings.inputCategoryId || settings.outputCategoryId || "";
-        element("settings-convert-create").checked = settings.convertOnCreate;
-        element("settings-convert-update").checked = settings.convertOnUpdate;
-        element("settings-rate-override").checked = settings.allowUserRateOverride;
-        element("settings-status").textContent = settings.completeForNativeConversion ? "Ready" : "Needs configuration";
+        return categoriesPromise.then(() => {
+          element("settings-mileage-category").value = settings.mileageCategoryId || settings.inputCategoryId || settings.outputCategoryId || "";
+          element("settings-convert-create").checked = settings.convertOnCreate;
+          element("settings-convert-update").checked = settings.convertOnUpdate;
+          element("settings-rate-override").checked = settings.allowUserRateOverride;
+          element("settings-status").textContent = settings.completeForNativeConversion ? "Ready" : "Needs configuration";
+        });
       })
       .catch(error => toast(error.message, "error"));
   }
@@ -553,6 +616,14 @@
   }
 
   function setupMileageCategory() {
+    const button = element("btn-setup-mileage-category");
+    if (button && button.disabled) {
+      return;
+    }
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Repairing...";
+    }
     apiFetch("/api/mileage/settings/mileage-category", { method: "POST" })
       .then(settings => {
         toast("Mileage category is ready.");
@@ -565,7 +636,13 @@
           loadDiagnostics();
         });
       })
-      .catch(error => toast(error.message, "error"));
+      .catch(error => toast(error.message, "error"))
+      .finally(() => {
+        if (button) {
+          button.disabled = false;
+          button.textContent = "Create or Repair Mileage Category";
+        }
+      });
   }
 
   function loadConversions() {
@@ -573,7 +650,11 @@
     if (!rows) {
       return Promise.resolve();
     }
-    return apiFetch("/api/mileage/conversions?pageSize=50" + rangeQuery("conversion")).then(data => {
+    const query = rangeQuery("conversion");
+    if (query === null) {
+      return Promise.resolve();
+    }
+    return apiFetch("/api/mileage/conversions?pageSize=50" + query).then(data => {
       rows.replaceChildren();
       const items = data.conversions || [];
       if (!items.length) {
@@ -640,15 +721,19 @@
     if (!value) {
       return "";
     }
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return String(value);
+    }
     const options = { year: "numeric", month: "2-digit", day: "2-digit", hour: "numeric", minute: "2-digit" };
     const timezone = timezoneFromClaims();
     if (timezone) {
       options.timeZone = timezone;
     }
     try {
-      return new Intl.DateTimeFormat("en-US", options).format(new Date(value));
+      return new Intl.DateTimeFormat("en-US", options).format(date);
     } catch (e) {
-      return new Intl.DateTimeFormat("en-US", { year: "numeric", month: "2-digit", day: "2-digit", hour: "numeric", minute: "2-digit" }).format(new Date(value));
+      return new Intl.DateTimeFormat("en-US", { year: "numeric", month: "2-digit", day: "2-digit", hour: "numeric", minute: "2-digit" }).format(date);
     }
   }
 

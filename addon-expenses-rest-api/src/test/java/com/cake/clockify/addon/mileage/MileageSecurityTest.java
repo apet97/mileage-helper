@@ -246,9 +246,12 @@ class MileageSecurityTest {
         assertThat(javascript).contains("rangePresets");
         assertThat(javascript).contains("dateRangeForPreset");
         assertThat(javascript).contains("loadMine");
-        assertThat(javascript).contains("/api/mileage/mine?pageSize=50\" + rangeQuery(\"mine\")");
-        assertThat(javascript).contains("/api/mileage/team?pageSize=50\" + rangeQuery(\"team\")");
-        assertThat(javascript).contains("/api/mileage/conversions?pageSize=50\" + rangeQuery(\"conversion\")");
+        assertThat(javascript).contains("const query = rangeQuery(\"mine\")");
+        assertThat(javascript).contains("/api/mileage/mine?pageSize=50\" + query");
+        assertThat(javascript).contains("const query = rangeQuery(\"team\")");
+        assertThat(javascript).contains("/api/mileage/team?pageSize=50\" + query");
+        assertThat(javascript).contains("const query = rangeQuery(\"conversion\")");
+        assertThat(javascript).contains("/api/mileage/conversions?pageSize=50\" + query");
         assertThat(javascript).contains("downloadCsv(csvPath(\"mine\"");
         assertThat(javascript).contains("downloadCsv(csvPath(\"team\"");
         assertThat(javascript).contains("downloadCsv(csvPath(\"conversion\"");
@@ -260,6 +263,26 @@ class MileageSecurityTest {
 
         assertThat(javascript).contains("date.value = isoDate(todayLocalDate())");
         assertThat(javascript).doesNotContain("date.value = new Date().toISOString().slice(0, 10)");
+    }
+
+    @Test
+    void mileageJavascriptHardensSettingsDateReceiptAndRepairFailureStates() throws Exception {
+        String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
+
+        assertThat(javascript).contains("const settingsPromise = apiFetch(\"/api/mileage/settings\")");
+        assertThat(javascript).contains("const categoriesPromise = loadCategories().catch");
+        assertThat(javascript).contains("Mileage categories could not be loaded: ");
+        assertThat(javascript).contains("function validSelectedDateRange(scope)");
+        assertThat(javascript).contains("const range = validSelectedDateRange(scope)");
+        assertThat(javascript).contains("Choose both From and To dates.");
+        assertThat(javascript).contains("if (query === null)");
+        assertThat(javascript).contains("const maxReceiptBytes = 10 * 1024 * 1024");
+        assertThat(javascript).contains("const allowedReceiptTypes = new Set");
+        assertThat(javascript).contains("function validateReceipt(file)");
+        assertThat(javascript).contains("if (!validateReceipt(file))");
+        assertThat(javascript).contains("Number.isNaN(date.getTime())");
+        assertThat(javascript).contains("button.textContent = \"Repairing...\"");
+        assertThat(javascript).contains("button.textContent = \"Create or Repair Mileage Category\"");
     }
 
     @Test
