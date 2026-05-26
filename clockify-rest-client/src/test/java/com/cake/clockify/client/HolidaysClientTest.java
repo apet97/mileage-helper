@@ -15,7 +15,7 @@ class HolidaysClientTest {
     @Test
     void holidayMethodsUseDocumentedPathsAndBackendBase() throws Exception {
         RecordingTransport transport = new RecordingTransport(List.of("[]", "[]", "{}", "{}", "{}"));
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), transport);
+        ClockifyClient client = TestClockifyClient.client(transport);
 
         assertTrue(client.holidays().getHolidays("w1").isArray());
         assertTrue(client.holidays().getHolidaysInPeriod("w1", "2026-01-01", "2026-12-31").isArray());
@@ -32,7 +32,7 @@ class HolidaysClientTest {
 
     @Test
     void requiredIdsAndBodiesAreValidated() {
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), new RecordingTransport(List.of()));
+        ClockifyClient client = TestClockifyClient.client(new RecordingTransport(List.of()));
         assertThrows(IllegalArgumentException.class, () -> client.holidays().getHolidays(" "));
         assertThrows(NullPointerException.class, () -> client.holidays().createHoliday("w1", null));
         assertThrows(IllegalArgumentException.class, () -> client.holidays().updateHoliday("w1", " ", objectMapper.createObjectNode()));

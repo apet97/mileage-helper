@@ -15,7 +15,7 @@ class ExpensesClientTest {
     @Test
     void expenseMethodsUseDocumentedBackendPaths() throws Exception {
         RecordingTransport transport = new RecordingTransport(List.of("[]", "{}", "{}", "{}", "{}"));
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), transport);
+        ClockifyClient client = TestClockifyClient.client(transport);
 
         client.expenses().getExpenses("w1", new ClockifyPageRequest(2, 25));
         client.expenses().createExpense("w1", body());
@@ -33,7 +33,7 @@ class ExpensesClientTest {
     @Test
     void categoryMethodsUseDocumentedBackendPaths() throws Exception {
         RecordingTransport transport = new RecordingTransport(List.of("[]", "{}", "{}", "{}", "{}"));
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), transport);
+        ClockifyClient client = TestClockifyClient.client(transport);
 
         client.expenses().getCategories("w1", new ClockifyPageRequest(1, 10));
         client.expenses().createCategory("w1", body());
@@ -51,7 +51,7 @@ class ExpensesClientTest {
     @Test
     void downloadFileUsesBinaryHandling() throws Exception {
         RecordingTransport transport = new RecordingTransport(List.of());
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), transport);
+        ClockifyClient client = TestClockifyClient.client(transport);
 
         ClockifyBinaryResponse response = client.expenses().downloadFile("w1", "e1", "f1");
 
@@ -63,7 +63,7 @@ class ExpensesClientTest {
 
     @Test
     void requiredIdsAndBodiesAreValidated() {
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), new RecordingTransport(List.of()));
+        ClockifyClient client = TestClockifyClient.client(new RecordingTransport(List.of()));
         assertThrows(IllegalArgumentException.class, () -> client.expenses().getExpenses(" ", new ClockifyPageRequest(1, 10)));
         assertThrows(NullPointerException.class, () -> client.expenses().getExpenses("w1", null));
         assertThrows(IllegalArgumentException.class, () -> client.expenses().getExpense("w1", " "));
@@ -73,7 +73,7 @@ class ExpensesClientTest {
     @Test
     void getExpensesWithUserIdFilter() throws Exception {
         RecordingTransport transport = new RecordingTransport(List.of("[]"));
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), transport);
+        ClockifyClient client = TestClockifyClient.client(transport);
 
         client.expenses().getExpenses("w1", "user-123", new ClockifyPageRequest(1, 50));
 
@@ -83,7 +83,7 @@ class ExpensesClientTest {
     @Test
     void getCategoriesWithFilteringAndSorting() throws Exception {
         RecordingTransport transport = new RecordingTransport(List.of("[]"));
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), transport);
+        ClockifyClient client = TestClockifyClient.client(transport);
 
         client.expenses().getCategories("w1", "NAME", "DESCENDING", true, "travel", new ClockifyPageRequest(1, 10));
 
@@ -93,7 +93,7 @@ class ExpensesClientTest {
     @Test
     void createExpenseWithFile() throws Exception {
         RecordingTransport transport = new RecordingTransport(List.of("{}"));
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), transport);
+        ClockifyClient client = TestClockifyClient.client(transport);
 
         client.expenses().createExpense("w1", body(), "receipt.pdf", "application/pdf", new byte[]{1, 2, 3});
 
@@ -109,7 +109,7 @@ class ExpensesClientTest {
     @Test
     void updateExpenseWithFileAppendsFileToChangeFields() throws Exception {
         RecordingTransport transport = new RecordingTransport(List.of("{}"));
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), transport);
+        ClockifyClient client = TestClockifyClient.client(transport);
 
         client.expenses().updateExpense("w1", "e1", body(), "receipt.pdf", "application/pdf", new byte[]{1, 2, 3});
 
@@ -125,7 +125,7 @@ class ExpensesClientTest {
     @Test
     void updateExpenseWithChangeFieldsJsonArray() throws Exception {
         RecordingTransport transport = new RecordingTransport(List.of("{}"));
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), transport);
+        ClockifyClient client = TestClockifyClient.client(transport);
 
         com.fasterxml.jackson.databind.node.ObjectNode body = objectMapper.createObjectNode();
         com.fasterxml.jackson.databind.node.ArrayNode array = objectMapper.createArrayNode().add("USER").add("amount");
@@ -143,7 +143,7 @@ class ExpensesClientTest {
     @Test
     void updateCategoryStatusActiveMapsToArchivedFalse() throws Exception {
         RecordingTransport transport = new RecordingTransport(List.of("{}"));
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), transport);
+        ClockifyClient client = TestClockifyClient.client(transport);
 
         com.fasterxml.jackson.databind.node.ObjectNode body = objectMapper.createObjectNode().put("status", "ACTIVE");
         client.expenses().updateCategoryStatus("w1", "c1", body);
@@ -154,7 +154,7 @@ class ExpensesClientTest {
     @Test
     void updateExpenseGeneratesChangeFields() throws Exception {
         RecordingTransport transport = new RecordingTransport(List.of("{}"));
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), transport);
+        ClockifyClient client = TestClockifyClient.client(transport);
 
         com.fasterxml.jackson.databind.node.ObjectNode body = objectMapper.createObjectNode()
                 .put("notes", "New Notes")
@@ -185,7 +185,7 @@ class ExpensesClientTest {
     @Test
     void updateExpensePreservesExplicitChangeFields() throws Exception {
         RecordingTransport transport = new RecordingTransport(List.of("{}"));
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), transport);
+        ClockifyClient client = TestClockifyClient.client(transport);
 
         com.fasterxml.jackson.databind.node.ObjectNode body = objectMapper.createObjectNode()
                 .put("notes", "New Notes")

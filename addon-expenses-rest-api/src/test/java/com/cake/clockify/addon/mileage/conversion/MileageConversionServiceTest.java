@@ -26,6 +26,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -263,6 +264,19 @@ class MileageConversionServiceTest {
         assertThat(existing.getDeletedAt()).isNotNull();
         verify(conversionRepository).saveAndFlush(existing);
         verify(conversionRepository, never()).delete(any());
+    }
+
+    @Test
+    void retryUsesWorkspaceScopedLookup() {
+        UUID conversionId = UUID.fromString("00000000-0000-0000-0000-000000000321");
+        when(conversionRepository.findByIdAndWorkspaceId(conversionId, "ws-native")).thenReturn(Optional.empty());
+
+        ConversionResult result = service.retry(claims(), conversionId);
+
+        assertThat(result.status()).isEqualTo(MileageConversionStatus.SKIPPED);
+        assertThat(result.expenseId()).isNull();
+        assertThat(result.skipReason()).isEqualTo(MileageSkipReason.API_RESOURCE_NOT_FOUND);
+        verify(conversionRepository).findByIdAndWorkspaceId(conversionId, "ws-native");
     }
 
     @Test

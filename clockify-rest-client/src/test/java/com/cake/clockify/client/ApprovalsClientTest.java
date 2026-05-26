@@ -15,7 +15,7 @@ class ApprovalsClientTest {
     @Test
     void approvalMethodsUseDocumentedPaths() throws Exception {
         RecordingTransport transport = new RecordingTransport(List.of("[]", "{}", "{}", "{}", "{}", "{}"));
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), transport);
+        ClockifyClient client = TestClockifyClient.client(transport);
 
         client.approvals().getApprovalRequests("w1", new ClockifyPageRequest(2, 25));
         client.approvals().createApprovalRequest("w1", body());
@@ -34,7 +34,7 @@ class ApprovalsClientTest {
 
     @Test
     void requiredIdsAndBodiesAreValidated() {
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), new RecordingTransport(List.of()));
+        ClockifyClient client = TestClockifyClient.client(new RecordingTransport(List.of()));
         assertThrows(IllegalArgumentException.class, () -> client.approvals().getApprovalRequests(" ", new ClockifyPageRequest(1, 10)));
         assertThrows(NullPointerException.class, () -> client.approvals().getApprovalRequests("w1", null));
         assertThrows(IllegalArgumentException.class, () -> client.approvals().createApprovalForOther("w1", " ", body()));

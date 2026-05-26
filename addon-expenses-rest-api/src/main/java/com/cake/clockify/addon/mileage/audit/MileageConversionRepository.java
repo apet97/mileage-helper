@@ -9,6 +9,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface MileageConversionRepository extends JpaRepository<MileageConversion, UUID> {
+    Optional<MileageConversion> findByIdAndWorkspaceId(UUID id, String workspaceId);
     Optional<MileageConversion> findByWorkspaceIdAndExpenseId(String workspaceId, String expenseId);
     Page<MileageConversion> findAllByWorkspaceId(String workspaceId, Pageable pageable);
     Page<MileageConversion> findAllByWorkspaceIdAndUserId(String workspaceId, String userId, Pageable pageable);

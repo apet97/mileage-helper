@@ -20,14 +20,12 @@ public record ClockifyClientConfig(
         boolean followRedirects,
         boolean allowCrossHostRedirects
 ) {
-    public static final URI DEFAULT_BACKEND_BASE_URL = URI.create("https://api.clockify.me/api");
-    public static final URI DEFAULT_REPORTS_BASE_URL = URI.create("https://reports.api.clockify.me");
     public static final int DEFAULT_MAX_RESPONSE_BYTES = 10 * 1024 * 1024;
     public static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(30);
 
     public ClockifyClientConfig {
         backendBaseUrl = normalizeBaseUrl(Objects.requireNonNull(backendBaseUrl, "backendBaseUrl"));
-        reportsBaseUrl = normalizeBaseUrl(Objects.requireNonNull(reportsBaseUrl, "reportsBaseUrl"));
+        reportsBaseUrl = reportsBaseUrl == null ? null : normalizeBaseUrl(reportsBaseUrl);
         Objects.requireNonNull(authProvider, "authProvider");
         workspaceId = workspaceId == null || workspaceId.isBlank() ? null : workspaceId.trim();
         userAgent = userAgent == null || userAgent.isBlank() ? "clockify-rest-client/0.1" : userAgent.trim();
@@ -41,7 +39,12 @@ public record ClockifyClientConfig(
     public URI baseUrl(ClockifyBaseUrlFamily family) {
         return switch (family) {
             case BACKEND -> backendBaseUrl;
-            case REPORTS -> reportsBaseUrl;
+            case REPORTS -> {
+                if (reportsBaseUrl == null) {
+                    throw new IllegalStateException("reportsBaseUrl is required for reports requests");
+                }
+                yield reportsBaseUrl;
+            }
         };
     }
 

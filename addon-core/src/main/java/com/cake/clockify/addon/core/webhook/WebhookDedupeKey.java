@@ -28,9 +28,7 @@ final class WebhookDedupeKey {
     }
 
     static Optional<String> from(String eventType, byte[] body, ObjectMapper objectMapper) {
-        if (body == null || body.length == 0) {
-            return Optional.empty();
-        }
+        body = body == null ? new byte[0] : body;
         String normalizedEvent = normalizeEventType(eventType);
         String payloadHash = payloadHash(body);
         try {

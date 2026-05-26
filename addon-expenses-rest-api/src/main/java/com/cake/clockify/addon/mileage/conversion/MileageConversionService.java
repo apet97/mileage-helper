@@ -167,12 +167,8 @@ public class MileageConversionService {
             return new ConversionResult(null, null, MileageConversionStatus.SKIPPED,
                     MileageSkipReason.API_RESOURCE_NOT_FOUND, "Conversion id is required");
         }
-        return conversionRepository.findById(conversionId)
+        return conversionRepository.findByIdAndWorkspaceId(conversionId, claims.workspaceId())
                 .map(conversion -> {
-                    if (!claims.workspaceId().equals(conversion.getWorkspaceId())) {
-                        return new ConversionResult(conversionId, conversion.getExpenseId(), MileageConversionStatus.SKIPPED,
-                                MileageSkipReason.WORKSPACE_MISMATCH, "Conversion belongs to another workspace");
-                    }
                     MileageConversionSource source = conversion.getSource() == null
                             ? MileageConversionSource.WEBHOOK_UPDATED
                             : conversion.getSource();

@@ -23,8 +23,8 @@ To use the client, you can use the builder or rely on Spring Boot Auto-configura
 ClockifyClient client = ClockifyClient.builder()
         .apiKey(System.getenv("CLOCKIFY_API_KEY")) // or .addonToken(installationToken)
         .workspaceId(System.getenv("CLOCKIFY_WORKSPACE_ID"))
-        .backendBaseUrl("http://localhost:8081") // String or URI overload
-        .reportsBaseUrl("http://localhost:8082") // String or URI overload
+        .backendBaseUrl(System.getenv("CLOCKIFY_BACKEND_BASE_URL"))
+        .reportsBaseUrl(System.getenv("CLOCKIFY_REPORTS_BASE_URL"))
         .retryPolicy(ClockifyRetryPolicy.defaults())
         .build();
 
@@ -33,7 +33,7 @@ User me = client.users().current();
 
 ## Spring Boot Auto-Configuration
 
-This library includes optional auto-configuration for Spring Boot applications. The configuration registers a `ClockifyClient` bean only when `clockify.apiKey` or `clockify.addonToken` is explicitly configured. Add-on applications that use per-workspace installation tokens should normally build clients through their installation-token factory instead of configuring a global static credential.
+This library includes optional auto-configuration for Spring Boot applications. The configuration registers a `ClockifyClient` bean only when `clockify.backendBaseUrl` and either `clockify.apiKey` or `clockify.addonToken` are explicitly configured. Add-on applications that use per-workspace installation tokens should normally build clients through their installation-token factory instead of configuring a global static credential.
 
 ### Configuration Properties
 
@@ -44,8 +44,8 @@ clockify.apiKey=${CLOCKIFY_API_KEY}
 # OR clockify.addonToken=${CLOCKIFY_ADDON_TOKEN} (addonToken takes precedence if both are set)
 
 clockify.workspaceId=your-workspace-id
-clockify.backendBaseUrl=https://api.clockify.me/api
-clockify.reportsBaseUrl=https://reports.api.clockify.me
+clockify.backendBaseUrl=${CLOCKIFY_BACKEND_BASE_URL}
+clockify.reportsBaseUrl=${CLOCKIFY_REPORTS_BASE_URL}
 clockify.requestTimeout=30s
 clockify.maxResponseBytes=10485760
 clockify.followRedirects=false
@@ -53,7 +53,7 @@ clockify.followRedirects=false
 
 ### Data Region & Subdomain Base URL Routing Guidelines
 
-Configure `clockify.backendBaseUrl` (Regular APIs) and `clockify.reportsBaseUrl` (Reports APIs) depending on the subdomain and data region settings of your workspace:
+Do not hardcode these URLs in an add-on. Add-ons should take the backend and reports URLs from verified token claims or stored installation context. Static-key tools can still configure `clockify.backendBaseUrl` (Regular APIs) and `clockify.reportsBaseUrl` (Reports APIs) from their deployment environment.
 
 * **Global** (Workspaces with or without subdomains):
   * **Regular Base URL**: `https://api.clockify.me/api`
@@ -67,20 +67,6 @@ Configure `clockify.backendBaseUrl` (Regular APIs) and `clockify.reportsBaseUrl`
 * **Developer Environment**:
   * **Regular Base URL**: `https://developer.clockify.me/api`
   * **Reports Base URL**: `https://developer.clockify.me/report`
-
----
-
-
-## Spring MVC controller facade
-
-`com.cake.clockify.client.spring.ClockifyRestController` is an optional thin Spring MVC facade over typed `ClockifyClient` methods. It is disabled by default and is registered only when `clockify.rest-controller.enabled=true` and a `ClockifyClient` bean exists. Do not expose this facade from public add-on iframes unless you add your own application authorization layer.
-
-### Error Handling
-
-The rest controller includes a localized exception handler (`handleClockifyApiException`) that catches `ClockifyApiException` and passes the response status and sanitized error body transparently back to callers, ensuring consistent error contracts without leaking secrets.
-
-Current controller coverage is tracked in `docs/rest-controller-openapi-coverage.md`: 191 supported official facade operations are exposed when the facade is explicitly enabled. Two add-on settings routes are separate add-on/prose endpoints. Full typed Java model/client coverage remains a separate provenance-driven task.
-
 
 ## Add-on Authentication & Security
 

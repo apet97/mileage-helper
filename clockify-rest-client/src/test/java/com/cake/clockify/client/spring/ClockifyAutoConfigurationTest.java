@@ -61,11 +61,23 @@ class ClockifyAutoConfigurationTest {
     }
 
     @Test
+    void shouldNotRegisterClockifyClientBeanWithoutBackendBaseUrl() {
+        this.contextRunner
+                .withPropertyValues("clockify.addonToken=test-addon-token")
+                .run(context -> {
+                    assertThat(context).doesNotHaveBean(ClockifyClient.class);
+                    assertThat(context).hasSingleBean(ClockifyTokenVerifier.class);
+                });
+    }
+
+    @Test
     void shouldRegisterClockifyClientBeanWithAddonToken() {
         this.contextRunner
                 .withPropertyValues(
                         "clockify.apiKey=",
-                        "clockify.addonToken=test-addon-token"
+                        "clockify.addonToken=test-addon-token",
+                        "clockify.backendBaseUrl=https://custom-api.clockify.me",
+                        "clockify.reportsBaseUrl=https://custom-reports.clockify.me"
                 )
                 .run(context -> {
                     assertThat(context).hasSingleBean(ClockifyClient.class);
@@ -83,7 +95,9 @@ class ClockifyAutoConfigurationTest {
         this.contextRunner
                 .withPropertyValues(
                         "clockify.apiKey=test-api-key",
-                        "clockify.addonToken=test-addon-token"
+                        "clockify.addonToken=test-addon-token",
+                        "clockify.backendBaseUrl=https://custom-api.clockify.me",
+                        "clockify.reportsBaseUrl=https://custom-reports.clockify.me"
                 )
                 .run(context -> {
                     assertThat(context).hasSingleBean(ClockifyClient.class);
@@ -93,20 +107,4 @@ class ClockifyAutoConfigurationTest {
                 });
     }
 
-    @Test
-    void restControllerFacadeIsDisabledByDefault() {
-        this.contextRunner
-                .withPropertyValues("clockify.apiKey=test-api-key")
-                .run(context -> assertThat(context).doesNotHaveBean(ClockifyRestController.class));
-    }
-
-    @Test
-    void restControllerFacadeRequiresExplicitOptIn() {
-        this.contextRunner
-                .withPropertyValues(
-                        "clockify.apiKey=test-api-key",
-                        "clockify.rest-controller.enabled=true"
-                )
-                .run(context -> assertThat(context).hasSingleBean(ClockifyRestController.class));
-    }
 }

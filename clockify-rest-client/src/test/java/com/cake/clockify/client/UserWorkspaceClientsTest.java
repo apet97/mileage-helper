@@ -17,7 +17,7 @@ class UserWorkspaceClientsTest {
                 "[{\"id\":\"w1\",\"name\":\"Workspace\"}]",
                 "{\"id\":\"w1\",\"name\":\"Workspace\"}"
         ));
-        ClockifyClientConfig config = ClockifyClient.builder().apiKey("secret").buildConfig();
+        ClockifyClientConfig config = TestClockifyClient.config();
         ClockifyClient client = new ClockifyClient(config, transport);
 
         com.cake.clockify.client.models.User user = client.users().getLoggedUser();
@@ -36,7 +36,7 @@ class UserWorkspaceClientsTest {
     @Test
     void getUsersOfWorkspaceUsesDocumentedPathAndPagination() throws Exception {
         RecordingTransport transport = new RecordingTransport(List.of("[{\"id\":\"u1\"}]"));
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), transport);
+        ClockifyClient client = TestClockifyClient.client(transport);
 
         assertNotNull(client.users().getUsersOfWorkspace("w1", new ClockifyPageRequest(2, 50)));
 
@@ -53,7 +53,7 @@ class UserWorkspaceClientsTest {
                 "[]",
                 "[{\"id\":\"u1\"}]"
         ));
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), transport);
+        ClockifyClient client = TestClockifyClient.client(transport);
 
         assertEquals("u1", client.users().getMemberProfile("w1", "u1").id());
         assertNotNull(client.users().getManagersOfUser("w1", "u1", new ClockifyPageRequest(1, 20)));
@@ -69,7 +69,7 @@ class UserWorkspaceClientsTest {
     @Test
     void exchangeUserTokenCallsDocumentedPathAndReturnsRawString() throws Exception {
         RecordingTransport transport = new RecordingTransport(List.of("mock-user-token-123"));
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), transport);
+        ClockifyClient client = TestClockifyClient.client(transport);
 
         String userToken = client.users().exchangeUserToken("u1");
 
@@ -82,7 +82,7 @@ class UserWorkspaceClientsTest {
 
     @Test
     void workspaceIdIsRequired() {
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), new RecordingTransport(List.of()));
+        ClockifyClient client = TestClockifyClient.client(new RecordingTransport(List.of()));
         assertThrows(IllegalArgumentException.class, () -> client.workspaces().getWorkspaceOfUser(" "));
         assertThrows(IllegalArgumentException.class, () -> client.users().getUsersOfWorkspace(" ", new ClockifyPageRequest(1, 10)));
         assertThrows(NullPointerException.class, () -> client.users().getUsersOfWorkspace("w1", null));
@@ -94,7 +94,8 @@ class UserWorkspaceClientsTest {
 
     @Test
     void defaultTransportJoinsBaseUrlWithoutDroppingApiPrefix() {
-        assertEquals("https://api.clockify.me/api/v1/user", DefaultClockifyTransport.join(ClockifyClientConfig.DEFAULT_BACKEND_BASE_URL, "/v1/user").toString());
+        assertEquals("https://backend.example.test/api/v1/user",
+                DefaultClockifyTransport.join(java.net.URI.create("https://backend.example.test/api"), "/v1/user").toString());
     }
 
     static final class RecordingTransport implements ClockifyTransport {

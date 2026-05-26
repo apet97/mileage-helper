@@ -14,7 +14,7 @@ class TimeEntriesClientTest {
     @Test
     void getTimeEntriesUsesDocumentedUserScopedPathAndPagination() throws Exception {
         RecordingTransport transport = new RecordingTransport();
-        ClockifyClient clockifyClient = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), transport);
+        ClockifyClient clockifyClient = TestClockifyClient.client(transport);
         TimeEntriesClient client = clockifyClient.timeEntries();
 
         assertNotNull(client.getTimeEntries("w1", "u1", new ClockifyPageRequest(3, 25)));

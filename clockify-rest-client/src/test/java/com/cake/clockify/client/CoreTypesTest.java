@@ -28,11 +28,20 @@ class CoreTypesTest {
     }
 
     @Test
-    void configDefaultsAndBaseFamiliesAreSeparate() {
+    void builderRequiresExplicitBackendBaseUrl() {
+        assertThrows(IllegalStateException.class, () -> ClockifyClient.builder().apiKey("secret").buildConfig());
+    }
+
+    @Test
+    void configBaseFamiliesAreSeparate() {
         String secret = "super-secret-value";
-        ClockifyClientConfig config = ClockifyClient.builder().apiKey(secret).buildConfig();
-        assertEquals(URI.create("https://api.clockify.me/api"), config.baseUrl(ClockifyBaseUrlFamily.BACKEND));
-        assertEquals(URI.create("https://reports.api.clockify.me"), config.baseUrl(ClockifyBaseUrlFamily.REPORTS));
+        ClockifyClientConfig config = ClockifyClient.builder()
+                .apiKey(secret)
+                .backendBaseUrl("https://backend.example.test/api")
+                .reportsBaseUrl("https://reports.example.test")
+                .buildConfig();
+        assertEquals(URI.create("https://backend.example.test/api"), config.baseUrl(ClockifyBaseUrlFamily.BACKEND));
+        assertEquals(URI.create("https://reports.example.test"), config.baseUrl(ClockifyBaseUrlFamily.REPORTS));
         assertArrayEquals(new ClockifyBaseUrlFamily[]{ClockifyBaseUrlFamily.BACKEND, ClockifyBaseUrlFamily.REPORTS},
                 ClockifyBaseUrlFamily.values());
         assertFalse(config.followRedirects());

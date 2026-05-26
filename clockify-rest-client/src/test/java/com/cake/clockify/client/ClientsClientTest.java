@@ -22,7 +22,7 @@ class ClientsClientTest {
                 "{}",
                 "{\"id\":\"c1\",\"archived\":true}"
         ));
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), transport);
+        ClockifyClient client = TestClockifyClient.client(transport);
 
         assertTrue(client.clients().getClients("w1", new ClockifyPageRequest(2, 25)).isArray());
         client.clients().createClient("w1", objectMapper.createObjectNode().put("name", "example"));
@@ -41,7 +41,7 @@ class ClientsClientTest {
 
     @Test
     void requiredIdsAndBodiesAreValidated() {
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), new RecordingTransport(List.of()));
+        ClockifyClient client = TestClockifyClient.client(new RecordingTransport(List.of()));
         assertThrows(IllegalArgumentException.class, () -> client.clients().getClients(" ", new ClockifyPageRequest(1, 10)));
         assertThrows(NullPointerException.class, () -> client.clients().getClients("w1", null));
         assertThrows(IllegalArgumentException.class, () -> client.clients().getClient("w1", " "));

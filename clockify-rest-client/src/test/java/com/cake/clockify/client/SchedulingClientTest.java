@@ -15,7 +15,7 @@ class SchedulingClientTest {
     @Test
     void assignmentMethodsUseDocumentedPaths() throws Exception {
         RecordingTransport t = new RecordingTransport(5);
-        ClockifyClient c = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), t);
+        ClockifyClient c = TestClockifyClient.client(t);
         c.scheduling().createAssignment("w1", body());
         c.scheduling().getAllAssignments("w1");
         c.scheduling().replaceAssignment("w1", "a1", body());
@@ -29,7 +29,7 @@ class SchedulingClientTest {
     @Test
     void totalsAndRecurringMethodsUseDocumentedPaths() throws Exception {
         RecordingTransport t = new RecordingTransport(8);
-        ClockifyClient c = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), t);
+        ClockifyClient c = TestClockifyClient.client(t);
         c.scheduling().getAssignmentsPerProjectTotals("w1", body());
         c.scheduling().getProjectAssignmentsTotals("w1", "p1");
         c.scheduling().publishAssignments("w1", body());
@@ -49,7 +49,7 @@ class SchedulingClientTest {
     @Test
     void userTotalsMethodsUseDocumentedPaths() throws Exception {
         RecordingTransport t = new RecordingTransport(3);
-        ClockifyClient c = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), t);
+        ClockifyClient c = TestClockifyClient.client(t);
         c.scheduling().getUsersCapacityTotals("w1", body());
         c.scheduling().getAssignmentsUsersTotals("w1", body());
         c.scheduling().getUserCapacityTotal("w1", "u1");
@@ -61,7 +61,7 @@ class SchedulingClientTest {
     @Test
     void deleteMethodsUseDocumentedPaths() throws Exception {
         RecordingTransport t = new RecordingTransport(2);
-        ClockifyClient c = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), t);
+        ClockifyClient c = TestClockifyClient.client(t);
         c.scheduling().deleteRecurringAssignment("w1", "a1");
         c.scheduling().deleteAssignment("w1", "a1");
         assertRequest(t.requests.get(0), "DELETE", "/v1/workspaces/w1/scheduling/assignments/recurring/a1", false);
@@ -70,7 +70,7 @@ class SchedulingClientTest {
 
     @Test
     void requiredIdsAndBodiesAreValidated() {
-        ClockifyClient c = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), new RecordingTransport(1));
+        ClockifyClient c = TestClockifyClient.client(new RecordingTransport(1));
         assertThrows(IllegalArgumentException.class, () -> c.scheduling().getAllAssignments(" "));
         assertThrows(IllegalArgumentException.class, () -> c.scheduling().getUserCapacityTotal("w1", " "));
         assertThrows(NullPointerException.class, () -> c.scheduling().createAssignment("w1", null));

@@ -36,6 +36,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.io.IOException;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -119,7 +120,7 @@ public class MileageApiController {
             MultipartFile file) throws IOException, InterruptedException {
         MileageCalculation calculation = calculation(request.miles(), request.rate(), settings);
         UUID conversionId = UUID.randomUUID();
-        LocalDate expenseDate = LocalDate.parse(required("date", request.date()));
+        LocalDate expenseDate = parseExpenseDate(request.date());
         String note = noteService.buildConvertedNote(
                 request.notes(),
                 calculation,
@@ -183,6 +184,14 @@ public class MileageApiController {
                     "Mileage settings are incomplete: " + String.join(", ", settings.diagnostics()));
         }
         return settings;
+    }
+
+    private static LocalDate parseExpenseDate(String raw) {
+        try {
+            return LocalDate.parse(required("date", raw));
+        } catch (DateTimeParseException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "date must use YYYY-MM-DD", e);
+        }
     }
 
     private MileageCalculation calculation(String miles, String requestedRate, MileageSettingsValidation settings) {

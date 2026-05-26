@@ -21,7 +21,7 @@ class TagsClientTest {
                 "{\"id\":\"t1\"}",
                 "{}"
         ));
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), transport);
+        ClockifyClient client = TestClockifyClient.client(transport);
 
         assertTrue(client.tags().getTags("w1", new ClockifyPageRequest(1, 50)).isArray());
         client.tags().createTag("w1", objectMapper.createObjectNode().put("name", "example"));
@@ -38,7 +38,7 @@ class TagsClientTest {
 
     @Test
     void requiredIdsAndBodiesAreValidated() {
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), new RecordingTransport(List.of()));
+        ClockifyClient client = TestClockifyClient.client(new RecordingTransport(List.of()));
         assertThrows(IllegalArgumentException.class, () -> client.tags().getTags(" ", new ClockifyPageRequest(1, 10)));
         assertThrows(NullPointerException.class, () -> client.tags().getTags("w1", null));
         assertThrows(IllegalArgumentException.class, () -> client.tags().getTag("w1", " "));

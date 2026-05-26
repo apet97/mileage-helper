@@ -12,7 +12,7 @@ class EntityChangesClientTest {
     @Test
     void entityChangeMethodsUseDocumentedPathsAndPagination() throws Exception {
         RecordingTransport transport = new RecordingTransport(List.of("{}", "{}", "{}"));
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), transport);
+        ClockifyClient client = TestClockifyClient.client(transport);
 
         client.entityChanges().created("w1", 1, 10);
         client.entityChanges().updated("w1", 2, 20);
@@ -25,7 +25,7 @@ class EntityChangesClientTest {
 
     @Test
     void entityChangeMethodsValidateInputs() {
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), new RecordingTransport(List.of()));
+        ClockifyClient client = TestClockifyClient.client(new RecordingTransport(List.of()));
         assertThrows(IllegalArgumentException.class, () -> client.entityChanges().created(" ", 1, 10));
         assertThrows(IllegalArgumentException.class, () -> client.entityChanges().created("w1", 0, 10));
         assertThrows(IllegalArgumentException.class, () -> client.entityChanges().created("w1", 1, 0));

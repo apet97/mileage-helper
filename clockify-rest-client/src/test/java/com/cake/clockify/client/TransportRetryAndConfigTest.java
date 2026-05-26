@@ -92,7 +92,7 @@ class TransportRetryAndConfigTest {
     @Test
     void reportsAndFilesClientsUseExpectedHostsAndBodyTypes() throws Exception {
         ClientsClientTest.RecordingTransport transport = new ClientsClientTest.RecordingTransport(List.of("{}", "{}"));
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), transport);
+        ClockifyClient client = TestClockifyClient.client(transport);
         client.reports().summary("w1", objectMapper.createObjectNode().put("dateRangeStart", "2026-01-01"));
         client.files().uploadImage("a.png", "image/png", new byte[]{1, 2});
         assertEquals(ClockifyBaseUrlFamily.REPORTS, transport.requests.get(0).baseUrlFamily());

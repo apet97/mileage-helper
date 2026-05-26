@@ -47,16 +47,27 @@ public class ClockifyClientFactory {
 
     private ClockifyClient clientForInstallation(String workspaceId, AddonInstallation inst) {
         String token = installationService.decryptToken(inst);
+        String backendUrl = requiredInstalledUrl("backendUrl", workspaceId, inst.getBackendUrl());
+        String reportsUrl = blankToNull(inst.getReportsUrl());
 
         ClockifyClientBuilder builder = new ClockifyClientBuilder()
-                .backendBaseUrl(inst.getBackendUrl())
+                .backendBaseUrl(backendUrl)
                 .addonToken(token)
                 .workspaceId(workspaceId);
-
-        if (inst.getReportsUrl() != null && !inst.getReportsUrl().isBlank()) {
-            builder.reportsBaseUrl(inst.getReportsUrl());
+        if (reportsUrl != null) {
+            builder.reportsBaseUrl(reportsUrl);
         }
-
         return builder.build();
+    }
+
+    private static String requiredInstalledUrl(String field, String workspaceId, String value) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalStateException("Installed " + field + " is required for workspace: " + workspaceId);
+        }
+        return value;
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value;
     }
 }

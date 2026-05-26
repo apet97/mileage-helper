@@ -91,14 +91,6 @@ public final class WebhooksClient {
         return sendJson("POST", webhookPath(workspaceId, webhookId) + "/logs", requestBody);
     }
 
-    /**
-     * @deprecated Use {@link #generateNewToken(String, String, JsonNode)} to match Clockify's documented operation.
-     */
-    @Deprecated(forRemoval = false)
-    public JsonNode updateWebhookToken(String workspaceId, String webhookId, JsonNode requestBody) throws IOException, InterruptedException {
-        return generateNewToken(workspaceId, webhookId, requestBody);
-    }
-
     private JsonNode sendJson(String method, String path, JsonNode requestBody) throws IOException, InterruptedException {
         Objects.requireNonNull(requestBody, "requestBody");
         ClockifyRequest request = ClockifyRequest.builder(method, path)

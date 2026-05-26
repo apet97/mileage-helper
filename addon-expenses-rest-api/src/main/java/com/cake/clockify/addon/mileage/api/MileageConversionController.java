@@ -179,8 +179,7 @@ public class MileageConversionController {
             HttpServletRequest request,
             @PathVariable UUID id) {
         NormalizedClaims claims = adminClaims(request);
-        MileageConversion conversion = conversionRepository.findById(id)
-                .filter(row -> claims.workspaceId().equals(row.getWorkspaceId()))
+        MileageConversion conversion = conversionRepository.findByIdAndWorkspaceId(id, claims.workspaceId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Mileage conversion was not found"));
         return ResponseEntity.ok(MileageConversionDetailResponse.from(
                 conversion,

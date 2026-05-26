@@ -17,7 +17,7 @@ class PaginationRawAndStubTest {
                 new ClockifyResponse<>(200, Map.of(), "[{\"id\":\"w1\",\"name\":\"Workspace\",\"extra\":true}]"),
                 new ClockifyResponse<>(200, Map.of(), "{\"id\":\"w1\",\"name\":\"Workspace\"}")
         ));
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), transport);
+        ClockifyClient client = TestClockifyClient.client(transport);
         assertEquals("u1", client.users().current().id());
         assertEquals("w1", client.workspaces().list().get(0).id());
         assertEquals("Workspace", client.workspaces().get("w1").name());
@@ -29,7 +29,7 @@ class PaginationRawAndStubTest {
                 new ClockifyResponse<>(200, Map.of("Last-Page", List.of("false")), "[{\"id\":\"p1\",\"name\":\"one\"},{\"id\":\"p2\",\"name\":\"two\"}]"),
                 new ClockifyResponse<>(200, Map.of("Last-Page", List.of("true")), "[{\"id\":\"p3\",\"name\":\"three\"}]")
         ));
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), transport);
+        ClockifyClient client = TestClockifyClient.client(transport);
 
         List<Project> projects = client.projects().listAll("w1", 3, 2);
 

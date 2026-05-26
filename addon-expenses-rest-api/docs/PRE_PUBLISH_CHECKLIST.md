@@ -2,18 +2,33 @@
 
 ## Current Local Evidence
 
-Last local hardening pass: 2026-05-25.
+Last local hardening pass: 2026-05-26.
 
-- `mvn -pl addon-expenses-rest-api -am test`: passed with 159 product-module tests and full reactor `BUILD SUCCESS`.
+- `mvn -pl addon-expenses-rest-api -am clean test`: passed with full reactor `BUILD SUCCESS`:
+  `addon-core` 71 tests, `clockify-rest-client` 101 tests, `addon-db` 37 tests,
+  and `addon-expenses-rest-api` 162 tests.
 - `docker compose -f addon-expenses-rest-api/docker-compose.yml build`: passed.
-- Runtime `/manifest` probe: returned key `mileage-for-clockify` and schema `1.5`.
-- Runtime `/iframe/mileage` unauthenticated probe: returned `401` with CSP, `nosniff`, `no-referrer`, permissions policy, and `Cache-Control: no-store`.
-- Static stale/dead-code scan: no active-source hits for removed expense-boilerplate names, obsolete live shell probes, or legacy temp-addon schema names outside immutable Flyway history.
-- Static forbidden-number scan: no `double`, `Double`, `float`, or `Float` usage in Mileage source/tests.
+- Runtime `/manifest` probe with the compose stack: returned schema `1.5`, key
+  `mileage-for-clockify`, scopes `EXPENSE_READ`, `EXPENSE_WRITE`, `USER_READ`,
+  `PROJECT_READ`, `WORKSPACE_READ`, and the four expense webhooks
+  `EXPENSE_CREATED`, `EXPENSE_UPDATED`, `EXPENSE_DELETED`, `EXPENSE_RESTORED`.
+- Runtime `/iframe/mileage` unauthenticated probe: returned `401` with CSP,
+  `nosniff`, `no-referrer`, permissions policy, and `Cache-Control: no-store`.
+- Runtime `/assets/mileage/icon.png` probe: returned `200` with
+  `Content-Type: image/png`.
+- Static forbidden-number scan: no `double`, `Double`, `float`, or `Float`
+  usage in Java source/tests.
+- Static Clockify-host scan: no hardcoded Clockify API hosts in active main
+  code; add-on clients require URLs from installation/token context.
+- Static stale/dead-code scan: no active hits for removed expense-boilerplate
+  names, deleted REST facade types, legacy handoff docs, old live-evidence docs,
+  or deprecated webhook alias names.
+- Workspace-isolation review: mileage conversion detail and retry paths now use
+  workspace-scoped repository lookups; remaining ID-only repository lookups are
+  workspace primary-key reads or internal webhook event status updates.
 - `gitleaks detect --source . --no-git --redact --verbose`: no leaks found.
-- Flyway history keeps V5/V10 for existing database validation; V12 drops the leftover generic tables.
-- Git history was rewritten before publish-prep handoff to remove the obsolete live shell probe and its hardcoded API-key fallback.
-- Marketplace docs compliance pass reviewed lifecycle, UI component, webhook, authentication, environment/region, development checklist, and publishing/security guidance. User mileage creation now derives target `userId` from verified Clockify token claims instead of request parameters, and the create DTO/UI payload do not carry `userId`.
+- Flyway history keeps V5/V10 for existing database validation; V12 drops the
+  leftover generic tables.
 
 ## Required Local Gates
 

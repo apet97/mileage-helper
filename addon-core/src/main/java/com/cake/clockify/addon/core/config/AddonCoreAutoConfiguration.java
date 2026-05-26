@@ -22,18 +22,14 @@ import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.boot.web.client.ClientHttpRequestFactories;
-import org.springframework.boot.web.client.ClientHttpRequestFactorySettings;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.Ordered;
-import org.springframework.web.client.RestClient;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.CorsFilter;
 
 import java.security.interfaces.RSAPublicKey;
-import java.time.Duration;
 import java.util.List;
 
 /**
@@ -213,27 +209,4 @@ public class AddonCoreAutoConfiguration {
         return new HealthController();
     }
 
-    /** Shared RestClient for Clockify backend API calls. Add-ons can override by defining their own bean. */
-    @Bean(name = "clockifyRestClient")
-    @ConditionalOnMissingBean(name = "clockifyRestClient")
-    public RestClient clockifyRestClient() {
-        ClientHttpRequestFactorySettings settings = ClientHttpRequestFactorySettings.DEFAULTS
-                .withConnectTimeout(Duration.ofSeconds(10))
-                .withReadTimeout(Duration.ofSeconds(30));
-        return RestClient.builder()
-                .requestFactory(ClientHttpRequestFactories.get(settings))
-                .build();
-    }
-
-    /** Shared RestClient for Clockify reports API (longer read timeout for large report payloads). */
-    @Bean(name = "clockifyReportsRestClient")
-    @ConditionalOnMissingBean(name = "clockifyReportsRestClient")
-    public RestClient clockifyReportsRestClient() {
-        ClientHttpRequestFactorySettings settings = ClientHttpRequestFactorySettings.DEFAULTS
-                .withConnectTimeout(Duration.ofSeconds(10))
-                .withReadTimeout(Duration.ofSeconds(60));
-        return RestClient.builder()
-                .requestFactory(ClientHttpRequestFactories.get(settings))
-                .build();
-    }
 }

@@ -15,7 +15,7 @@ class AddonSettingsClientTest {
     @Test
     void addonSettingsUsesDocumentedPathsAndBackendBase() throws Exception {
         RecordingTransport transport = new RecordingTransport("{}");
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().addonToken("secret").buildConfig(), transport);
+        ClockifyClient client = TestClockifyClient.addonClient(transport);
 
         client.addonSettings().getSettings("w1");
         ClockifyRequest getRequest = transport.requests.get(0);
@@ -33,7 +33,7 @@ class AddonSettingsClientTest {
 
     @Test
     void requiredIdsAndBodiesAreValidated() {
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().addonToken("secret").buildConfig(), new RecordingTransport("[]"));
+        ClockifyClient client = TestClockifyClient.addonClient(new RecordingTransport("[]"));
         assertThrows(IllegalArgumentException.class, () -> client.addonSettings().getSettings(" "));
         assertThrows(IllegalArgumentException.class, () -> client.addonSettings().updateSettings("", objectMapper.createObjectNode()));
         assertThrows(NullPointerException.class, () -> client.addonSettings().updateSettings("w1", (com.fasterxml.jackson.databind.JsonNode) null));

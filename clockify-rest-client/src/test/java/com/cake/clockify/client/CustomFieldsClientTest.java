@@ -15,7 +15,7 @@ class CustomFieldsClientTest {
     @Test
     void workspaceCustomFieldMethodsUseDocumentedPaths() throws Exception {
         RecordingTransport transport = new RecordingTransport(List.of("[]", "{}", "{}", "{}"));
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), transport);
+        ClockifyClient client = TestClockifyClient.client(transport);
 
         client.customFields().getCustomFields("w1");
         client.customFields().createCustomField("w1", body());
@@ -31,7 +31,7 @@ class CustomFieldsClientTest {
     @Test
     void projectCustomFieldMethodsUseDocumentedPaths() throws Exception {
         RecordingTransport transport = new RecordingTransport(List.of("[]", "{}", "{}"));
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), transport);
+        ClockifyClient client = TestClockifyClient.client(transport);
 
         client.customFields().getProjectCustomFields("w1", "p1");
         client.customFields().updateProjectCustomField("w1", "p1", "cf1", body());
@@ -44,7 +44,7 @@ class CustomFieldsClientTest {
 
     @Test
     void requiredIdsAndBodiesAreValidated() {
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), new RecordingTransport(List.of()));
+        ClockifyClient client = TestClockifyClient.client(new RecordingTransport(List.of()));
         assertThrows(IllegalArgumentException.class, () -> client.customFields().getCustomFields(" "));
         assertThrows(IllegalArgumentException.class, () -> client.customFields().getProjectCustomFields("w1", " "));
         assertThrows(IllegalArgumentException.class, () -> client.customFields().updateCustomField("w1", " ", body()));

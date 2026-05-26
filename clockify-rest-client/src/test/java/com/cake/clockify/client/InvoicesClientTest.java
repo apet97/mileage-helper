@@ -17,7 +17,7 @@ class InvoicesClientTest {
         RecordingTransport transport = new RecordingTransport(List.of(
                 "[]", "{}", "{}", "{}", "{}", "{}", "{}", "{}", "{}", "{}"
         ));
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), transport);
+        ClockifyClient client = TestClockifyClient.client(transport);
 
         client.invoices().getInvoices("w1", new ClockifyPageRequest(2, 25));
         client.invoices().createInvoice("w1", body());
@@ -45,7 +45,7 @@ class InvoicesClientTest {
     @Test
     void invoiceItemAndPaymentMethodsUseDocumentedPaths() throws Exception {
         RecordingTransport transport = new RecordingTransport(List.of("{}", "{}", "{}", "[]", "{}", "{}"));
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), transport);
+        ClockifyClient client = TestClockifyClient.client(transport);
 
         client.invoices().addInvoiceItem("w1", "i1", body());
         client.invoices().importInvoiceItems("w1", "i1", body());
@@ -65,7 +65,7 @@ class InvoicesClientTest {
     @Test
     void invoiceExportUsesBinaryHandling() throws Exception {
         RecordingTransport transport = new RecordingTransport(List.of());
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), transport);
+        ClockifyClient client = TestClockifyClient.client(transport);
 
         ClockifyBinaryResponse response = client.invoices().exportInvoice("w1", "i1");
 
@@ -77,7 +77,7 @@ class InvoicesClientTest {
 
     @Test
     void requiredIdsAndBodiesAreValidated() {
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), new RecordingTransport(List.of()));
+        ClockifyClient client = TestClockifyClient.client(new RecordingTransport(List.of()));
         assertThrows(IllegalArgumentException.class, () -> client.invoices().getInvoices(" ", new ClockifyPageRequest(1, 10)));
         assertThrows(NullPointerException.class, () -> client.invoices().getInvoices("w1", null));
         assertThrows(IllegalArgumentException.class, () -> client.invoices().getInvoice("w1", " "));

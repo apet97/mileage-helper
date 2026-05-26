@@ -21,16 +21,11 @@ Authoritative detailed ledger: `endpoint-provenance.md`.
 | Expenses | implemented | expense CRUD, categories CRUD/status, receipt/file download uses binary handling |
 | Custom fields | implemented | workspace custom fields and project custom field values/settings |
 | Approvals | implemented | approval list/create/resubmit/user variants/status update |
-| Webhooks | implemented | workspace/add-on webhooks, CRUD, token rotation/update, delivery logs |
+| Webhooks | implemented | workspace/add-on webhooks, CRUD, token rotation, delivery logs |
 | Entity changes | implemented/experimental | created/updated/deleted via backend with `page` + `limit`; OpenAPI marks group experimental |
 | Scheduling | implemented | assignments, recurring assignments, project/user totals, publish/copy/delete |
 | Time off | implemented | policies, requests, user requests, balances update/read |
 | Shared reports | implemented | list, get data/info, create, update, delete |
-
-
-## Controller/raw-facade coverage
-
-`ClockifyRestController` is disabled by default. When explicitly enabled with `clockify.rest-controller.enabled=true`, it exposes 191 supported official Spring MVC/raw facade operations plus two add-on settings prose endpoints. This is intentionally separate from typed domain-client coverage.
 
 ## Deferred typed coverage
 

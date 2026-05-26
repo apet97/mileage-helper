@@ -15,7 +15,7 @@ class WebhooksClientTest {
     @Test
     void webhookMethodsUseDocumentedPaths() throws Exception {
         RecordingTransport transport = new RecordingTransport(List.of("[]", "{}", "{}", "{}", "{}", "{}"));
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), transport);
+        ClockifyClient client = TestClockifyClient.client(transport);
 
         client.webhooks().getAddonWebhooks("w1", "addon1");
         client.webhooks().getWebhooks("w1", new ClockifyPageRequest(2, 25));
@@ -34,23 +34,21 @@ class WebhooksClientTest {
 
     @Test
     void webhookLogAndTokenMethodsUseDocumentedPaths() throws Exception {
-        RecordingTransport transport = new RecordingTransport(List.of("{}", "[]", "{}", "{}"));
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), transport);
+        RecordingTransport transport = new RecordingTransport(List.of("{}", "[]", "{}"));
+        ClockifyClient client = TestClockifyClient.client(transport);
 
         client.webhooks().generateNewToken("w1", "wh1", body());
         client.webhooks().getWebhookLogs("w1", "wh1", new ClockifyPageRequest(1, 10));
         client.webhooks().filterWebhookLogs("w1", "wh1", body());
-        client.webhooks().updateWebhookToken("w1", "wh1", body());
 
         assertRequest(transport.requests.get(0), "PATCH", "/v1/workspaces/w1/webhooks/wh1/token", "marker");
         assertRequest(transport.requests.get(1), "GET", "/v1/workspaces/w1/webhooks/wh1/logs?page=1&page-size=10", null);
         assertRequest(transport.requests.get(2), "POST", "/v1/workspaces/w1/webhooks/wh1/logs", "marker");
-        assertRequest(transport.requests.get(3), "PATCH", "/v1/workspaces/w1/webhooks/wh1/token", "marker");
     }
 
     @Test
     void requiredIdsAndBodiesAreValidated() {
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), new RecordingTransport(List.of()));
+        ClockifyClient client = TestClockifyClient.client(new RecordingTransport(List.of()));
         assertThrows(IllegalArgumentException.class, () -> client.webhooks().getWebhooks(" ", new ClockifyPageRequest(1, 10)));
         assertThrows(NullPointerException.class, () -> client.webhooks().getWebhooks("w1", null));
         assertThrows(IllegalArgumentException.class, () -> client.webhooks().getWebhook("w1", " "));

@@ -3,8 +3,6 @@ package com.cake.clockify.client.spring;
 import com.cake.clockify.client.ClockifyClient;
 import com.cake.clockify.client.ClockifyClientBuilder;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -22,7 +20,7 @@ import java.time.Duration;
 public class ClockifyAutoConfiguration {
 
     @Bean
-    @Conditional(ClockifyCredentialsConfiguredCondition.class)
+    @Conditional(ClockifyClientConfiguredCondition.class)
     @ConditionalOnMissingBean
     public ClockifyClient clockifyClient(ClockifyProperties properties) {
         ClockifyClientBuilder builder = new ClockifyClientBuilder();
@@ -75,24 +73,30 @@ public class ClockifyAutoConfiguration {
         }
     }
 
-    @Bean
-    @ConditionalOnBean(ClockifyClient.class)
-    @ConditionalOnMissingBean
-    @ConditionalOnProperty(prefix = "clockify.rest-controller", name = "enabled", havingValue = "true")
-    public ClockifyRestController clockifyRestController(ClockifyClient clockifyClient) {
-        return new ClockifyRestController(clockifyClient);
-    }
-
-    static final class ClockifyCredentialsConfiguredCondition implements Condition {
+    static final class ClockifyClientConfiguredCondition implements Condition {
         @Override
         public boolean matches(ConditionContext context, AnnotatedTypeMetadata metadata) {
-            String apiKey = context.getEnvironment().getProperty("clockify.api-key");
-            String addonToken = context.getEnvironment().getProperty("clockify.addon-token");
-            return hasText(apiKey) || hasText(addonToken);
+            String apiKey = firstText(
+                    context.getEnvironment().getProperty("clockify.api-key"),
+                    context.getEnvironment().getProperty("clockify.apiKey")
+            );
+            String addonToken = firstText(
+                    context.getEnvironment().getProperty("clockify.addon-token"),
+                    context.getEnvironment().getProperty("clockify.addonToken")
+            );
+            String backendBaseUrl = firstText(
+                    context.getEnvironment().getProperty("clockify.backend-base-url"),
+                    context.getEnvironment().getProperty("clockify.backendBaseUrl")
+            );
+            return hasText(backendBaseUrl) && (hasText(apiKey) || hasText(addonToken));
         }
 
         private static boolean hasText(String value) {
             return value != null && !value.isBlank();
+        }
+
+        private static String firstText(String first, String second) {
+            return hasText(first) ? first : second;
         }
     }
 

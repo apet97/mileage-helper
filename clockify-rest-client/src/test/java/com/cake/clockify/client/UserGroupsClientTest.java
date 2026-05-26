@@ -15,7 +15,7 @@ class UserGroupsClientTest {
     @Test
     void userGroupMethodsUseDocumentedPathsAndBackendBase() throws Exception {
         RecordingTransport transport = new RecordingTransport(List.of("[]", "{}", "{}", "{}", "{}", "{}"));
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), transport);
+        ClockifyClient client = TestClockifyClient.client(transport);
 
         assertTrue(client.userGroups().getUserGroups("w1", new ClockifyPageRequest(1, 50)).isArray());
         client.userGroups().createUserGroup("w1", objectMapper.createObjectNode().put("name", "example"));
@@ -34,7 +34,7 @@ class UserGroupsClientTest {
 
     @Test
     void requiredIdsAndBodiesAreValidated() {
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), new RecordingTransport(List.of()));
+        ClockifyClient client = TestClockifyClient.client(new RecordingTransport(List.of()));
         assertThrows(IllegalArgumentException.class, () -> client.userGroups().getUserGroups(" ", new ClockifyPageRequest(1, 10)));
         assertThrows(NullPointerException.class, () -> client.userGroups().getUserGroups("w1", null));
         assertThrows(NullPointerException.class, () -> client.userGroups().createUserGroup("w1", null));

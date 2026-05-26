@@ -280,6 +280,38 @@ class MileageApiControllerTest {
     }
 
     @Test
+    void createMileageExpenseRejectsInvalidJsonDate() throws Exception {
+        when(settingsService.validateForAddonCreate("ws-api")).thenReturn(settings(false));
+
+        mockMvc.perform(post("/api/mileage/expenses")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"date":"05/24/2026","projectId":"project-1","miles":"37.4"}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("date must use YYYY-MM-DD"));
+
+        verify(gateway, never()).createFlatExpense(any(), any());
+    }
+
+    @Test
+    void createMileageExpenseRejectsInvalidMultipartDate() throws Exception {
+        when(settingsService.validateForAddonCreate("ws-api")).thenReturn(settings(false));
+        MockMultipartFile file = new MockMultipartFile("file", "receipt.png", "image/png", new byte[] {1});
+
+        mockMvc.perform(multipart("/api/mileage/expenses")
+                        .file(file)
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims())
+                        .param("date", "05/24/2026")
+                        .param("miles", "37.4"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("date must use YYYY-MM-DD"));
+
+        verify(gateway, never()).createFlatExpenseWithReceipt(any(), any(), any(), any(), any());
+    }
+
+    @Test
     void createMileageExpenseRejectsUserRateOverrideWhenDisabled() throws Exception {
         when(settingsService.validateForAddonCreate("ws-api")).thenReturn(settings(false));
         when(gateway.createFlatExpense(eq("ws-api"), any(CreateFlatExpenseCommand.class))).thenReturn(createdExpense("exp-1"));

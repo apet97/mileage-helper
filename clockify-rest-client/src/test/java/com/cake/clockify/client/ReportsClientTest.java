@@ -15,7 +15,7 @@ class ReportsClientTest {
     @Test
     void allReportMethodsUseReportsHost() throws Exception {
         RecordingTransport transport = new RecordingTransport(List.of("{}", "{}", "{}", "{}", "{}"));
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), transport);
+        ClockifyClient client = TestClockifyClient.client(transport);
 
         client.reports().summary("w1", body());
         client.reports().detailed("w1", body());
@@ -32,7 +32,7 @@ class ReportsClientTest {
 
     @Test
     void reportMethodsValidateIdsAndBodies() {
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), new RecordingTransport(List.of()));
+        ClockifyClient client = TestClockifyClient.client(new RecordingTransport(List.of()));
         assertThrows(IllegalArgumentException.class, () -> client.reports().attendance(" ", body()));
         assertThrows(NullPointerException.class, () -> client.reports().expenseDetailed("w1", null));
     }

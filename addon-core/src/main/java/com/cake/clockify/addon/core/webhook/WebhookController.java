@@ -96,16 +96,34 @@ public class WebhookController {
 
         try {
             targetHandler.handle(claims, eventType, body);
-            if (eventService != null && eventId != null) {
-                eventService.markProcessed(eventId);
-            }
+            markProcessed(eventId);
             return ResponseEntity.ok().build();
         } catch (Exception e) {
             log.error("webhook.handler.failed: workspace={} event={}", claims.workspaceId(), eventType, e);
-            if (eventService != null && eventId != null) {
-                eventService.markFailed(eventId, e.getMessage());
-            }
-            throw e;
+            markFailed(eventId, e);
+            return ResponseEntity.ok().build();
+        }
+    }
+
+    private void markProcessed(UUID eventId) {
+        if (eventService == null || eventId == null) {
+            return;
+        }
+        try {
+            eventService.markProcessed(eventId);
+        } catch (Exception e) {
+            log.error("webhook.handler.status-update-failed: eventId={} status=PROCESSED", eventId, e);
+        }
+    }
+
+    private void markFailed(UUID eventId, Exception failure) {
+        if (eventService == null || eventId == null) {
+            return;
+        }
+        try {
+            eventService.markFailed(eventId, failure.getMessage());
+        } catch (Exception e) {
+            log.error("webhook.handler.status-update-failed: eventId={} status=FAILED", eventId, e);
         }
     }
 }

@@ -10,8 +10,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 public final class ClockifyClientBuilder {
-    private URI backendBaseUrl = ClockifyClientConfig.DEFAULT_BACKEND_BASE_URL;
-    private URI reportsBaseUrl = ClockifyClientConfig.DEFAULT_REPORTS_BASE_URL;
+    private URI backendBaseUrl;
+    private URI reportsBaseUrl;
     private ClockifyAuthProvider authProvider;
     private String workspaceId;
     private String userAgent;
@@ -41,6 +41,9 @@ public final class ClockifyClientBuilder {
     public ClockifyClientBuilder transport(ClockifyTransport transport) { this.transport = transport; return this; }
 
     public ClockifyClientConfig buildConfig() {
+        if (backendBaseUrl == null) {
+            throw new IllegalStateException("backendBaseUrl is required");
+        }
         return new ClockifyClientConfig(backendBaseUrl, reportsBaseUrl, authProvider,
                 workspaceId, userAgent, customHeaders, retryPolicy, requestTimeout, maxResponseBytes,
                 followRedirects, allowCrossHostRedirects);

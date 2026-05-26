@@ -176,7 +176,8 @@ class MileageConversionControllerTest {
 
     @Test
     void adminCanReadConversionDetail() throws Exception {
-        when(conversionRepository.findById(CONVERSION_ID)).thenReturn(Optional.of(conversion("ws-admin")));
+        when(conversionRepository.findByIdAndWorkspaceId(CONVERSION_ID, "ws-admin"))
+                .thenReturn(Optional.of(conversion("ws-admin")));
 
         mockMvc.perform(get("/api/mileage/conversions/{id}", CONVERSION_ID)
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("ADMIN")))
@@ -184,6 +185,8 @@ class MileageConversionControllerTest {
                 .andExpect(jsonPath("$.id").value(CONVERSION_ID.toString()))
                 .andExpect(jsonPath("$.sourceLabel").value("Created through Expenses"))
                 .andExpect(jsonPath("$.roundedAmount").value("24.50"));
+
+        verify(conversionRepository).findByIdAndWorkspaceId(CONVERSION_ID, "ws-admin");
     }
 
     @Test

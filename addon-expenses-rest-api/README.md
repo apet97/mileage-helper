@@ -74,5 +74,3 @@ mvn -pl addon-expenses-rest-api -am clean test
 - `edge-cases.md` - skip/failure behavior and default create behavior.
 - `reports.md` - relationship to native Clockify reports.
 - `docs/PRE_PUBLISH_CHECKLIST.md` - current local and manual pre-publish gates.
-
-`docs/raw-evidence/` keeps historical Clockify/API evidence for route-shape audits. `mileage-addon-handoff/` keeps historical design and implementation context. Prefer current source, tests, and the active docs above for maintenance work.

@@ -21,7 +21,7 @@ class TasksClientTest {
                 "{\"id\":\"t1\"}",
                 "{}"
         ));
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), transport);
+        ClockifyClient client = TestClockifyClient.client(transport);
 
         assertTrue(client.tasks().getTasks("w1", "p1", new ClockifyPageRequest(1, 50)).isArray());
         client.tasks().createTask("w1", "p1", objectMapper.createObjectNode().put("name", "example"));
@@ -38,7 +38,7 @@ class TasksClientTest {
 
     @Test
     void requiredIdsAndBodiesAreValidated() {
-        ClockifyClient client = new ClockifyClient(ClockifyClient.builder().apiKey("secret").buildConfig(), new RecordingTransport(List.of()));
+        ClockifyClient client = TestClockifyClient.client(new RecordingTransport(List.of()));
         assertThrows(IllegalArgumentException.class, () -> client.tasks().getTasks(" ", "p1", new ClockifyPageRequest(1, 10)));
         assertThrows(IllegalArgumentException.class, () -> client.tasks().getTasks("w1", " ", new ClockifyPageRequest(1, 10)));
         assertThrows(NullPointerException.class, () -> client.tasks().getTasks("w1", "p1", null));
