@@ -75,22 +75,28 @@ public class WebhookController {
 
         UUID eventId = null;
         if (eventService != null) {
-            Optional<String> dedupeKeyOpt = WebhookDedupeKey.from(eventType, body, objectMapper);
-            if (dedupeKeyOpt.isPresent()) {
-                String dedupeKey = dedupeKeyOpt.get();
-                if (eventService.isDuplicate(properties.key(), claims.workspaceId(), dedupeKey)) {
-                    log.info("webhook.handler.duplicate: workspace={} event={} dedupeKey={}",
-                            claims.workspaceId(), eventType, dedupeKey);
-                    return ResponseEntity.ok().build();
-                }
+            try {
+                Optional<String> dedupeKeyOpt = WebhookDedupeKey.from(eventType, body, objectMapper);
+                if (dedupeKeyOpt.isPresent()) {
+                    String dedupeKey = dedupeKeyOpt.get();
+                    if (eventService.isDuplicate(properties.key(), claims.workspaceId(), dedupeKey)) {
+                        log.info("webhook.handler.duplicate: workspace={} event={} dedupeKey={}",
+                                claims.workspaceId(), eventType, dedupeKey);
+                        return ResponseEntity.ok().build();
+                    }
 
-                String payloadHash = WebhookDedupeKey.payloadHash(body);
-                eventId = eventService.recordEvent(properties.key(), claims.workspaceId(), eventType, dedupeKey, payloadHash);
+                    String payloadHash = WebhookDedupeKey.payloadHash(body);
+                    eventId = eventService.recordEvent(properties.key(), claims.workspaceId(), eventType, dedupeKey, payloadHash);
 
-                if (eventId != null && !eventService.tryStartProcessing(eventId)) {
-                    log.info("webhook.handler.processing-conflict: eventId={}", eventId);
-                    return ResponseEntity.ok().build();
+                    if (eventId != null && !eventService.tryStartProcessing(eventId)) {
+                        log.info("webhook.handler.processing-conflict: eventId={}", eventId);
+                        return ResponseEntity.ok().build();
+                    }
                 }
+            } catch (Exception e) {
+                log.error("webhook.handler.audit-start-failed: workspace={} event={}",
+                        claims.workspaceId(), eventType, e);
+                return ResponseEntity.ok().build();
             }
         }
 
