@@ -3,6 +3,7 @@ package com.cake.clockify.addon.mileage.conversion;
 import com.cake.clockify.addon.core.auth.NormalizedClaims;
 import com.cake.clockify.addon.mileage.audit.MileageConversion;
 import com.cake.clockify.addon.mileage.audit.MileageConversionRepository;
+import com.cake.clockify.addon.mileage.audit.MileageConversionReservationRepository;
 import com.cake.clockify.addon.mileage.audit.MileageConversionSource;
 import com.cake.clockify.addon.mileage.audit.MileageConversionStatus;
 import com.cake.clockify.addon.mileage.audit.MileageSkipReason;
@@ -15,11 +16,13 @@ import com.cake.clockify.addon.mileage.note.MileageNoteService;
 import com.cake.clockify.addon.mileage.settings.MileageSettingsService;
 import com.cake.clockify.addon.mileage.settings.MileageSettingsValidation;
 import com.cake.clockify.client.ClockifyApiException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.io.IOException;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
@@ -32,23 +35,30 @@ public class MileageConversionService {
     private final MileageSettingsService settingsService;
     private final ClockifyExpenseGateway gateway;
     private final MileageConversionRepository conversionRepository;
+    private final MileageConversionReservationRepository reservationRepository;
     private final MileageEligibilityService eligibilityService;
     private final MileageCalculator calculator;
     private final MileageNoteService noteService;
+    private final Clock clock;
 
+    @Autowired
     public MileageConversionService(
             MileageSettingsService settingsService,
             ClockifyExpenseGateway gateway,
             MileageConversionRepository conversionRepository,
+            MileageConversionReservationRepository reservationRepository,
             MileageEligibilityService eligibilityService,
             MileageCalculator calculator,
-            MileageNoteService noteService) {
+            MileageNoteService noteService,
+            Clock clock) {
         this.settingsService = settingsService;
         this.gateway = gateway;
         this.conversionRepository = conversionRepository;
+        this.reservationRepository = reservationRepository;
         this.eligibilityService = eligibilityService;
         this.calculator = calculator;
         this.noteService = noteService;
+        this.clock = clock;
     }
 
     @Transactional
@@ -62,27 +72,26 @@ public class MileageConversionService {
             return new ConversionResult(null, null, MileageConversionStatus.SKIPPED,
                     MileageSkipReason.API_RESOURCE_NOT_FOUND, "Expense id is required");
         }
-        MileageConversion conversion = newConversion(claims.workspaceId(), cleanedExpenseId, source, sourceEventType);
+        UUID reservedId = reservationRepository.reserve(claims.workspaceId(), cleanedExpenseId, source, sourceEventType);
+        MileageConversion conversion = conversionRepository.findByIdAndWorkspaceId(reservedId, claims.workspaceId())
+                .orElseThrow(() -> new IllegalStateException("Reserved mileage conversion was not found"));
+        boolean wasSuccessfullyConverted = isSuccessfullyConverted(Optional.of(conversion));
         try {
             MileageSettingsValidation settings = settingsService.validateForNativeConversion(claims.workspaceId());
             ClockifyExpenseSnapshot expense = gateway.getExpense(claims.workspaceId(), cleanedExpenseId);
-            Optional<MileageConversion> existing = conversionRepository.findByWorkspaceIdAndExpenseId(
-                    claims.workspaceId(), cleanedExpenseId);
-            conversion = existing.orElse(conversion);
-            ensureId(conversion);
             applySnapshot(conversion, expense);
             conversion.setSource(source);
             conversion.setSourceEventType(sourceEventType);
 
             if (source == MileageConversionSource.WEBHOOK_RESTORED
-                    && (isSuccessfullyConverted(existing) || noteService.hasMileageMarker(expense.notes()))) {
+                    && (wasSuccessfullyConverted || noteService.hasMileageMarker(expense.notes()))) {
                 conversion.setStatus(MileageConversionStatus.RESTORED_IGNORED);
                 conversion.setSkipReason(MileageSkipReason.ALREADY_CONVERTED);
                 conversionRepository.saveAndFlush(conversion);
                 return result(conversion, "Restored expense already appears converted");
             }
 
-            EligibilityDecision decision = eligibilityService.evaluate(settings, expense, isSuccessfullyConverted(existing));
+            EligibilityDecision decision = eligibilityService.evaluate(settings, expense, wasSuccessfullyConverted);
             if (decision.dryRun()) {
                 MileageCalculation calculation = calculator.calculate(expense.quantity().toPlainString(),
                         settings.rate().toPlainString(), settings.roundingMode());
@@ -180,6 +189,9 @@ public class MileageConversionService {
 
     private ConversionResult fail(MileageConversion conversion, String errorCode, String message) {
         ensureId(conversion);
+        if (conversion.getExpenseDate() == null) {
+            conversion.setExpenseDate(LocalDate.now(clock));
+        }
         conversion.setStatus(MileageConversionStatus.FAILED);
         conversion.setErrorCode(errorCode);
         conversion.setErrorMessage(message);
@@ -194,21 +206,6 @@ public class MileageConversionService {
                 conversion.getStatus(),
                 conversion.getSkipReason(),
                 message);
-    }
-
-    private static MileageConversion newConversion(
-            String workspaceId,
-            String expenseId,
-            MileageConversionSource source,
-            String sourceEventType) {
-        MileageConversion conversion = new MileageConversion();
-        conversion.setId(UUID.randomUUID());
-        conversion.setWorkspaceId(workspaceId);
-        conversion.setExpenseId(expenseId);
-        conversion.setSource(source);
-        conversion.setSourceEventType(sourceEventType);
-        conversion.setStatus(MileageConversionStatus.RECEIVED);
-        return conversion;
     }
 
     private static void ensureId(MileageConversion conversion) {

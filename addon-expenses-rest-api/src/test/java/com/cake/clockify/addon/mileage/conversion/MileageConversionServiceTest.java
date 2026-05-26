@@ -3,6 +3,7 @@ package com.cake.clockify.addon.mileage.conversion;
 import com.cake.clockify.addon.core.auth.NormalizedClaims;
 import com.cake.clockify.addon.mileage.audit.MileageConversion;
 import com.cake.clockify.addon.mileage.audit.MileageConversionRepository;
+import com.cake.clockify.addon.mileage.audit.MileageConversionReservationRepository;
 import com.cake.clockify.addon.mileage.audit.MileageConversionSource;
 import com.cake.clockify.addon.mileage.audit.MileageConversionStatus;
 import com.cake.clockify.addon.mileage.audit.MileageSkipReason;
@@ -21,8 +22,10 @@ import org.mockito.ArgumentCaptor;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -41,27 +44,32 @@ class MileageConversionServiceTest {
     private MileageSettingsService settingsService;
     private ClockifyExpenseGateway gateway;
     private MileageConversionRepository conversionRepository;
+    private MileageConversionReservationRepository reservationRepository;
     private MileageConversionService service;
+    private final Clock clock = Clock.fixed(Instant.parse("2026-05-27T12:00:00Z"), ZoneOffset.UTC);
 
     @BeforeEach
     void setUp() {
         settingsService = mock(MileageSettingsService.class);
         gateway = mock(ClockifyExpenseGateway.class);
         conversionRepository = mock(MileageConversionRepository.class);
+        reservationRepository = mock(MileageConversionReservationRepository.class);
         service = new MileageConversionService(
                 settingsService,
                 gateway,
                 conversionRepository,
+                reservationRepository,
                 new MileageEligibilityService(),
                 new MileageCalculator(),
-                new MileageNoteService());
+                new MileageNoteService(),
+                clock);
         when(conversionRepository.saveAndFlush(any(MileageConversion.class))).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
     @Test
     void eligibleCreatedWebhookConvertsExpenseOnce() throws Exception {
+        reservedConversion("exp-1", MileageConversionSource.WEBHOOK_CREATED, "EXPENSE_CREATED");
         when(settingsService.validateForNativeConversion("ws-native")).thenReturn(settings(false));
-        when(conversionRepository.findByWorkspaceIdAndExpenseId("ws-native", "exp-1")).thenReturn(Optional.empty());
         when(gateway.getExpense("ws-native", "exp-1")).thenReturn(inputExpense("exp-1"));
         when(gateway.updateFlatExpense(eq("ws-native"), eq("exp-1"), any(UpdateFlatExpenseCommand.class)))
                 .thenReturn(objectMapper.createObjectNode().put("id", "exp-1"));
@@ -78,8 +86,8 @@ class MileageConversionServiceTest {
 
     @Test
     void conversionUsesFetchedQuantityAsMiles() throws Exception {
+        reservedConversion("exp-1", MileageConversionSource.WEBHOOK_CREATED, "EXPENSE_CREATED");
         when(settingsService.validateForNativeConversion("ws-native")).thenReturn(settings(false));
-        when(conversionRepository.findByWorkspaceIdAndExpenseId("ws-native", "exp-1")).thenReturn(Optional.empty());
         when(gateway.getExpense("ws-native", "exp-1")).thenReturn(inputExpense("exp-1"));
         when(gateway.updateFlatExpense(eq("ws-native"), eq("exp-1"), any(UpdateFlatExpenseCommand.class)))
                 .thenReturn(objectMapper.createObjectNode().put("id", "exp-1"));
@@ -93,8 +101,8 @@ class MileageConversionServiceTest {
 
     @Test
     void conversionUpdatesSameExpenseToOutputCategory() throws Exception {
+        reservedConversion("exp-1", MileageConversionSource.WEBHOOK_CREATED, "EXPENSE_CREATED");
         when(settingsService.validateForNativeConversion("ws-native")).thenReturn(settings(false));
-        when(conversionRepository.findByWorkspaceIdAndExpenseId("ws-native", "exp-1")).thenReturn(Optional.empty());
         when(gateway.getExpense("ws-native", "exp-1")).thenReturn(inputExpense("exp-1"));
         when(gateway.updateFlatExpense(eq("ws-native"), eq("exp-1"), any(UpdateFlatExpenseCommand.class)))
                 .thenReturn(objectMapper.createObjectNode().put("id", "exp-1"));
@@ -115,8 +123,8 @@ class MileageConversionServiceTest {
 
     @Test
     void distinctCategoryConversionSendsRoundedExpenseAmount() throws Exception {
+        reservedConversion("exp-1", MileageConversionSource.WEBHOOK_CREATED, "EXPENSE_CREATED");
         when(settingsService.validateForNativeConversion("ws-native")).thenReturn(distinctCategorySettings(false));
-        when(conversionRepository.findByWorkspaceIdAndExpenseId("ws-native", "exp-1")).thenReturn(Optional.empty());
         when(gateway.getExpense("ws-native", "exp-1")).thenReturn(distinctInputExpense("exp-1"));
         when(gateway.updateFlatExpense(eq("ws-native"), eq("exp-1"), any(UpdateFlatExpenseCommand.class)))
                 .thenReturn(objectMapper.createObjectNode().put("id", "exp-1"));
@@ -132,10 +140,10 @@ class MileageConversionServiceTest {
 
     @Test
     void conversionReplacesNativeNoteWithCleanExactGeneratedNote() throws Exception {
+        reservedConversion("exp-1", MileageConversionSource.WEBHOOK_CREATED, "EXPENSE_CREATED");
         when(settingsService.validateForNativeConversion("ws-native")).thenReturn(new MileageSettingsValidation(
                 "ws-native", true, true, new BigDecimal("0.725"), "mile",
                 "cat-mileage", "cat-mileage", RoundingMode.HALF_UP, true, true, false, false, false, null, List.of()));
-        when(conversionRepository.findByWorkspaceIdAndExpenseId("ws-native", "exp-1")).thenReturn(Optional.empty());
         when(gateway.getExpense("ws-native", "exp-1")).thenReturn(new ClockifyExpenseSnapshot(
                 "exp-1", "ws-native", "user-1", "2026-05-24T12:00:00Z", "project-1", "task-1",
                 "cat-mileage", "Native mileage", new BigDecimal("1"), true, null, null, false));
@@ -154,8 +162,8 @@ class MileageConversionServiceTest {
 
     @Test
     void singleCategoryMileageExpenseDoesNotSkipAsAlreadyOutputCategory() throws Exception {
+        reservedConversion("exp-1", MileageConversionSource.WEBHOOK_CREATED, "EXPENSE_CREATED");
         when(settingsService.validateForNativeConversion("ws-native")).thenReturn(settings(false));
-        when(conversionRepository.findByWorkspaceIdAndExpenseId("ws-native", "exp-1")).thenReturn(Optional.empty());
         when(gateway.getExpense("ws-native", "exp-1")).thenReturn(inputExpense("exp-1"));
         when(gateway.updateFlatExpense(eq("ws-native"), eq("exp-1"), any(UpdateFlatExpenseCommand.class)))
                 .thenReturn(objectMapper.createObjectNode().put("id", "exp-1"));
@@ -169,8 +177,8 @@ class MileageConversionServiceTest {
 
     @Test
     void dryRunCreatesDryRunAuditAndDoesNotUpdateClockify() throws Exception {
+        reservedConversion("exp-1", MileageConversionSource.WEBHOOK_CREATED, "EXPENSE_CREATED");
         when(settingsService.validateForNativeConversion("ws-native")).thenReturn(settings(true));
-        when(conversionRepository.findByWorkspaceIdAndExpenseId("ws-native", "exp-1")).thenReturn(Optional.empty());
         when(gateway.getExpense("ws-native", "exp-1")).thenReturn(inputExpense("exp-1"));
 
         ConversionResult result = service.convertIfEligible(claims(), "exp-1", MileageConversionSource.WEBHOOK_CREATED, "EXPENSE_CREATED");
@@ -181,9 +189,8 @@ class MileageConversionServiceTest {
 
     @Test
     void existingConvertedAuditPreventsSecondUpdate() throws Exception {
-        MileageConversion existing = existing(MileageConversionStatus.CONVERTED);
+        reservedExisting("exp-1", MileageConversionStatus.CONVERTED, MileageConversionSource.WEBHOOK_CREATED, "EXPENSE_CREATED");
         when(settingsService.validateForNativeConversion("ws-native")).thenReturn(settings(false));
-        when(conversionRepository.findByWorkspaceIdAndExpenseId("ws-native", "exp-1")).thenReturn(Optional.of(existing));
         when(gateway.getExpense("ws-native", "exp-1")).thenReturn(inputExpense("exp-1"));
 
         ConversionResult result = service.convertIfEligible(claims(), "exp-1", MileageConversionSource.WEBHOOK_CREATED, "EXPENSE_CREATED");
@@ -195,8 +202,8 @@ class MileageConversionServiceTest {
 
     @Test
     void outputCategoryPreventsSecondUpdate() throws Exception {
+        reservedConversion("exp-1", MileageConversionSource.WEBHOOK_UPDATED, "EXPENSE_UPDATED");
         when(settingsService.validateForNativeConversion("ws-native")).thenReturn(distinctCategorySettings(false));
-        when(conversionRepository.findByWorkspaceIdAndExpenseId("ws-native", "exp-1")).thenReturn(Optional.empty());
         when(gateway.getExpense("ws-native", "exp-1")).thenReturn(outputExpense("exp-1"));
 
         ConversionResult result = service.convertIfEligible(claims(), "exp-1", MileageConversionSource.WEBHOOK_UPDATED, "EXPENSE_UPDATED");
@@ -208,8 +215,8 @@ class MileageConversionServiceTest {
 
     @Test
     void markerPreventsSecondUpdate() throws Exception {
+        reservedConversion("exp-1", MileageConversionSource.WEBHOOK_UPDATED, "EXPENSE_UPDATED");
         when(settingsService.validateForNativeConversion("ws-native")).thenReturn(settings(false));
-        when(conversionRepository.findByWorkspaceIdAndExpenseId("ws-native", "exp-1")).thenReturn(Optional.empty());
         when(gateway.getExpense("ws-native", "exp-1")).thenReturn(markedExpense("exp-1"));
 
         ConversionResult result = service.convertIfEligible(claims(), "exp-1", MileageConversionSource.WEBHOOK_UPDATED, "EXPENSE_UPDATED");
@@ -221,8 +228,8 @@ class MileageConversionServiceTest {
 
     @Test
     void clockifyConflictRecordsFailedSanitized() throws Exception {
+        reservedConversion("exp-1", MileageConversionSource.WEBHOOK_UPDATED, "EXPENSE_UPDATED");
         when(settingsService.validateForNativeConversion("ws-native")).thenReturn(settings(false));
-        when(conversionRepository.findByWorkspaceIdAndExpenseId("ws-native", "exp-1")).thenReturn(Optional.empty());
         when(gateway.getExpense("ws-native", "exp-1")).thenReturn(inputExpense("exp-1"));
         when(gateway.updateFlatExpense(eq("ws-native"), eq("exp-1"), any(UpdateFlatExpenseCommand.class)))
                 .thenThrow(ClockifyApiException.forStatus(409, Map.of("Authorization", List.of("Bearer super-secret")), "{\"message\":\"locked\"}"));
@@ -240,8 +247,8 @@ class MileageConversionServiceTest {
 
     @Test
     void crossWorkspaceFetchedExpenseIsSkipped() throws Exception {
+        reservedConversion("exp-1", MileageConversionSource.WEBHOOK_CREATED, "EXPENSE_CREATED");
         when(settingsService.validateForNativeConversion("ws-native")).thenReturn(settings(false));
-        when(conversionRepository.findByWorkspaceIdAndExpenseId("ws-native", "exp-1")).thenReturn(Optional.empty());
         when(gateway.getExpense("ws-native", "exp-1")).thenReturn(new ClockifyExpenseSnapshot(
                 "exp-1", "other-ws", "user-1", "2026-05-24", "project-1", "task-1",
                 "cat-input", "Native mileage", new BigDecimal("37.4"), true, null, null, false));
@@ -281,9 +288,8 @@ class MileageConversionServiceTest {
 
     @Test
     void restoredAlreadyConvertedExpenseReturnsRestoredIgnored() throws Exception {
-        MileageConversion existing = existing(MileageConversionStatus.CONVERTED);
+        reservedExisting("exp-1", MileageConversionStatus.CONVERTED, MileageConversionSource.WEBHOOK_RESTORED, "EXPENSE_RESTORED");
         when(settingsService.validateForNativeConversion("ws-native")).thenReturn(settings(false));
-        when(conversionRepository.findByWorkspaceIdAndExpenseId("ws-native", "exp-1")).thenReturn(Optional.of(existing));
         when(gateway.getExpense("ws-native", "exp-1")).thenReturn(outputExpense("exp-1"));
 
         ConversionResult result = service.convertIfEligible(claims(), "exp-1", MileageConversionSource.WEBHOOK_RESTORED, "EXPENSE_RESTORED");
@@ -294,8 +300,8 @@ class MileageConversionServiceTest {
 
     @Test
     void restoredInputCategoryExpenseConvertsWhenNoSuccessfulConversionExists() throws Exception {
+        reservedConversion("exp-1", MileageConversionSource.WEBHOOK_RESTORED, "EXPENSE_RESTORED");
         when(settingsService.validateForNativeConversion("ws-native")).thenReturn(settings(false));
-        when(conversionRepository.findByWorkspaceIdAndExpenseId("ws-native", "exp-1")).thenReturn(Optional.empty());
         when(gateway.getExpense("ws-native", "exp-1")).thenReturn(inputExpense("exp-1"));
         when(gateway.updateFlatExpense(eq("ws-native"), eq("exp-1"), any(UpdateFlatExpenseCommand.class)))
                 .thenReturn(objectMapper.createObjectNode().put("id", "exp-1"));
@@ -304,6 +310,49 @@ class MileageConversionServiceTest {
 
         assertThat(result.status()).isEqualTo(MileageConversionStatus.CONVERTED);
         verify(gateway).updateFlatExpense(eq("ws-native"), eq("exp-1"), any(UpdateFlatExpenseCommand.class));
+    }
+
+    @Test
+    void failedFetchKeepsAuditRowVisibleWithFallbackExpenseDate() throws Exception {
+        reservedConversion("exp-fail", MileageConversionSource.WEBHOOK_CREATED, "EXPENSE_CREATED");
+        when(settingsService.validateForNativeConversion("ws-native")).thenReturn(settings(false));
+        when(gateway.getExpense("ws-native", "exp-fail")).thenThrow(new java.io.IOException("network down"));
+
+        ConversionResult result = service.convertIfEligible(
+                claims(),
+                "exp-fail",
+                MileageConversionSource.WEBHOOK_CREATED,
+                "EXPENSE_CREATED");
+
+        assertThat(result.status()).isEqualTo(MileageConversionStatus.FAILED);
+        ArgumentCaptor<MileageConversion> saved = ArgumentCaptor.forClass(MileageConversion.class);
+        verify(conversionRepository).saveAndFlush(saved.capture());
+        assertThat(saved.getValue().getExpenseDate()).isEqualTo(LocalDate.parse("2026-05-27"));
+    }
+
+    private MileageConversion reservedConversion(String expenseId, MileageConversionSource source, String eventType) {
+        MileageConversion conversion = new MileageConversion();
+        conversion.setId(UUID.randomUUID());
+        conversion.setWorkspaceId("ws-native");
+        conversion.setExpenseId(expenseId);
+        conversion.setSource(source);
+        conversion.setSourceEventType(eventType);
+        conversion.setStatus(MileageConversionStatus.RECEIVED);
+        when(reservationRepository.reserve("ws-native", expenseId, source, eventType)).thenReturn(conversion.getId());
+        when(conversionRepository.findByIdAndWorkspaceId(conversion.getId(), "ws-native")).thenReturn(Optional.of(conversion));
+        return conversion;
+    }
+
+    private MileageConversion reservedExisting(
+            String expenseId,
+            MileageConversionStatus status,
+            MileageConversionSource source,
+            String eventType) {
+        MileageConversion conversion = existing(status);
+        conversion.setExpenseId(expenseId);
+        when(reservationRepository.reserve("ws-native", expenseId, source, eventType)).thenReturn(conversion.getId());
+        when(conversionRepository.findByIdAndWorkspaceId(conversion.getId(), "ws-native")).thenReturn(Optional.of(conversion));
+        return conversion;
     }
 
     private static NormalizedClaims claims() {
@@ -344,6 +393,7 @@ class MileageConversionServiceTest {
 
     private static MileageConversion existing(MileageConversionStatus status) {
         MileageConversion conversion = new MileageConversion();
+        conversion.setId(UUID.randomUUID());
         conversion.setWorkspaceId("ws-native");
         conversion.setExpenseId("exp-1");
         conversion.setStatus(status);
