@@ -28,8 +28,8 @@ This module is the implemented product module inside the standalone repository. 
 
 - URL: `https://mileage-for-clockify-production.up.railway.app`
 - Manifest: `https://mileage-for-clockify-production.up.railway.app/manifest`
-- Latest verified deployment: `d2758ee4-2bc2-4dce-8982-0a049a1e54af`
-- Verified on 2026-05-26 with health, manifest, settings asset, Clockify reinstall, settings load, mileage create/use, and delete-list behavior.
+- Recorded deployment proof for the 2026-05-27 hardening pass: `789acdd8-38ef-42f9-9a41-45dded009743`
+- Verified on 2026-05-27 with health, manifest, and settings asset probes. Clockify reinstall, settings load, mileage create/use, and delete-list behavior were last user-tested on 2026-05-26.
 - Dev workspace receipt smoke on 2026-05-27 created, fetched, and deleted a sacrificial Mileage PDF receipt expense through the local `clockify-rest-client`; post-delete GET returned non-success.
 - Local hardening review on 2026-05-27 covered multipart receipt/header sanitization, timezone claim alias parity, focused client/security tests, and `gitleaks` proof.
 

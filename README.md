@@ -6,7 +6,7 @@ Current hosted test add-on:
 
 - App URL: `https://mileage-for-clockify-production.up.railway.app`
 - Manifest: `https://mileage-for-clockify-production.up.railway.app/manifest`
-- Latest verified Railway deployment: `d2758ee4-2bc2-4dce-8982-0a049a1e54af` on 2026-05-26
+- Recorded Railway deployment proof for the 2026-05-27 hardening pass: `789acdd8-38ef-42f9-9a41-45dded009743`
 - Latest local hardening review: 2026-05-27, covering shared multipart receipt/file upload handling, Clockify timezone claim aliases, and secret-scan proof.
 
 ## Repository Layout

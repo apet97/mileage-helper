@@ -69,7 +69,7 @@ Main product packages:
 ## Hosted State
 
 - Production test URL: `https://mileage-for-clockify-production.up.railway.app`.
-- Latest verified Railway deployment: `d2758ee4-2bc2-4dce-8982-0a049a1e54af` on 2026-05-26.
+- Recorded Railway deployment proof for the 2026-05-27 hardening pass: `789acdd8-38ef-42f9-9a41-45dded009743`. Use `railway deployment list` for the current latest deployment ID.
 - Verified hosted probes: `/actuator/health`, `/manifest`, settings JS asset, Clockify uninstall/install/settings/create/delete smoke.
 - Dev workspace receipt smoke on 2026-05-27 used the local `clockify-rest-client` to create, fetch, and delete a sacrificial Mileage PDF receipt expense; post-delete GET returned non-success.
 - Local hardening review on 2026-05-27 added shared multipart upload tests, Clockify timezone alias normalization tests, Mileage security tests, `node --check`, `git diff --check`, and `gitleaks` proof.

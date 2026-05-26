@@ -67,7 +67,7 @@ This is the standalone repository for Mileage for Clockify. It contains the add-
 ## Hosted Verification Snapshot
 
 - Current hosted add-on URL: `https://mileage-for-clockify-production.up.railway.app`.
-- Latest live Railway deployment verified in this workspace: `d2758ee4-2bc2-4dce-8982-0a049a1e54af` on 2026-05-26.
+- Recorded live Railway deployment proof for the 2026-05-27 hardening pass: `789acdd8-38ef-42f9-9a41-45dded009743`. Use `railway deployment list` for the current latest deployment ID.
 - Hosted probes passed for `/actuator/health`, `/manifest`, and the settings asset.
 - Live Clockify uninstall/install/settings/create/delete smoke passed after the deleted-expense webhook fix.
 - Dev workspace receipt smoke on 2026-05-27 used the local `clockify-rest-client` to create, fetch, and delete a sacrificial Mileage PDF receipt expense; post-delete GET returned non-success. Never persist dev API keys in docs, logs, or commits.

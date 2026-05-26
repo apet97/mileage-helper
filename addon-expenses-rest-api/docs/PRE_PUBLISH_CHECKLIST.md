@@ -42,8 +42,8 @@ Last local/live stabilization pass: 2026-05-27.
   workspace primary-key reads or internal webhook event status updates.
 - Flyway history keeps V5/V10 for existing database validation; V12 drops the
   leftover generic tables.
-- Hosted Railway deployment `d2758ee4-2bc2-4dce-8982-0a049a1e54af` reached
-  `Online`; hosted `/actuator/health`, `/manifest`, and settings asset probes
+- Hosted Railway deployment `789acdd8-38ef-42f9-9a41-45dded009743` reached
+  `SUCCESS`; hosted `/actuator/health`, `/manifest`, and settings asset probes
   passed.
 - Live Clockify uninstall/install/settings/create/delete smoke passed after the
   deleted-expense webhook fix. Production audit rows for stale test deletes were
