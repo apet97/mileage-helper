@@ -53,10 +53,13 @@ Main product packages:
 - Mileage settings use one `Mileage` unit category with fixed unit `mile` and fixed `HALF_UP` rounding; existing input/output category settings normalize to that single category.
 - Generated Clockify notes are clean and exact, e.g. `Mileage reimbursement: 1 mile x 0.725 = 0.725. Created/converted by Mileage for Clockify.`
 - `EXPENSE_CREATED` and `EXPENSE_RESTORED` handlers accept either full payloads with `id` or reference payloads with `expenseId`.
+- Webhook dispatch records/dedupes events, marks processing outcomes internally, and still returns HTTP 2xx after handler or audit-status failures.
+- Native conversion eligibility skips disabled/incomplete settings, workspace mismatches, output categories, mileage note markers, existing successful conversions, non-input categories, missing/invalid quantity, and locked/finalized expenses.
 - Admin APIs: settings, Mileage category repair, diagnostics, category options, team mileage list/export, conversion list/detail/retry/export under `/api/mileage`.
 - Add-on previews and mileage tables show full `calculatedAmount` decimals first; Clockify Expenses still receives the rounded `roundedAmount`.
 - Mileage lists and CSV exports filter by actual `expenseDate`, defaulting to the current US week, Sunday through Saturday.
 - Tables: `mileage_workspace_settings`, `mileage_conversion`.
+- `ClockifyClientFactory` builds per-workspace clients from installed backend/reports URLs. Missing backend URL is fatal; missing reports URL is allowed until a reports request is attempted.
 - Historical pre-Mileage migrations V5/V10 are retained for Flyway validation only; V12 drops their leftover generic tables. New code/docs should not add `temp_addon_expenses*`, `clockify-expenses-api`, `Clockify Expenses API`, or `com.cake.clockify.addon.expenses` references.
 
 ## Commands
@@ -105,16 +108,26 @@ Default CORS allows Clockify origins and the origin from `ADDON_BASE_URL`, which
 - Do not expose installation tokens to frontend JavaScript or HTML.
 - Do not log tokens, auth headers, receipt bytes, or raw upstream error bodies.
 - Preserve workspace isolation in repository methods and service calls.
+- Webhook handlers must acknowledge safely with HTTP 2xx after internal failure recording/logging. Do not let Clockify blindly retry failures that should be retried from the admin/internal path.
+- Native expense conversion must aggressively prevent loops: skip mileage audit markers, output-category expenses, and already-converted expenses before writing back to Clockify.
 - Do not trust request-supplied `userId` for user-facing mileage creation; derive the target user from verified Clockify token claims. Do not add `userId` back to the create request DTO, multipart allowlist, iframe form, or frontend payload.
 - Do not add a task selector, task options endpoint, `taskId` create field, or `TASK_READ` scope for user-facing mileage creation unless product requirements change and live scope evidence is captured first.
 - Do not expose the rate override input on the main page unless `/api/mileage/create-context` reports `allowUserRateOverride=true`.
 - Keep `addon-core` and `addon-db` changes narrow; ask before structural platform changes.
 - Keep copied Marketplace docs under `addon-expenses-rest-api/MARKETPLACE_OCS/` as source reference material.
+- Do not restore default Clockify API hosts in `clockify-rest-client`; builders and tests must pass explicit backend URLs, add-ons must route from verified token claims or installation context, and reports URLs may only be omitted for clients that do not use reports APIs.
+- Do not restore the deleted `clockify-rest-client` Spring MVC facade or WebClient transport. Keep the typed client thin.
 - Do not restore deleted live shell probes. Do not add new legacy temp-addon migrations; keep V5/V10 only as immutable Flyway history and use forward migrations for cleanup.
 
 ## Verification Expectations
 
 Before claiming pre-publish readiness, complete `addon-expenses-rest-api/docs/PRE_PUBLISH_CHECKLIST.md` and paste the exact command outputs into the session summary.
+
+## Final Hardening Workflow
+
+- For the final hardening plan, implement `docs/superpowers/plans/2026-05-26-mileage-final-hardening.md` task-by-task.
+- After implementation, run an adversarial review over DB defaults, webhook 2xx resilience, audit idempotency, CSV export safety, pagination bounds, and iframe UI failure states.
+- Do not push until the adversarial review is complete and the full verification commands pass.
 
 For documentation-only changes:
 
