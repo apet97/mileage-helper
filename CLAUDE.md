@@ -69,8 +69,11 @@ Main product packages:
 ## Hosted State
 
 - Production test URL: `https://mileage-for-clockify-production.up.railway.app`.
-- Recorded Railway deployment proof for the 2026-05-27 hardening pass: `789acdd8-38ef-42f9-9a41-45dded009743`. Use `railway deployment list` for the current latest deployment ID.
-- Verified hosted probes: `/actuator/health`, `/manifest`, settings JS asset, Clockify uninstall/install/settings/create/delete smoke.
+- Production manifest URL: `https://mileage-for-clockify-production.up.railway.app/manifest`.
+- Use `railway deployment list` for the current Railway deployment ID. Do not treat old deployment IDs in notes, chats, or previous evidence as current truth.
+- Dated deployment evidence belongs in the pre-publish checklist after each deploy.
+- Last evidence snapshot, dated 2026-05-27: hosted probes passed for `/actuator/health`, `/manifest`, and the settings JS asset.
+- Historical live Clockify smoke, dated 2026-05-27: uninstall/install/settings/create/delete passed after the deleted-expense webhook fix. Treat this as historical unless rerun.
 - Dev workspace receipt smoke on 2026-05-27 used the local `clockify-rest-client` to create, fetch, and delete a sacrificial Mileage PDF receipt expense; post-delete GET returned non-success.
 - Local hardening review on 2026-05-27 added shared multipart upload tests, Clockify timezone alias normalization tests, Mileage security tests, `node --check`, `git diff --check`, and `gitleaks` proof.
 - Railway Postgres currently logs a Flyway compatibility warning because the managed database is PostgreSQL 18.4 and the bundled Flyway version officially supports older versions. Boot and migrations still completed.
@@ -78,6 +81,9 @@ Main product packages:
 ## Commands
 
 ```bash
+# Repo-local publish safety bundle
+./scripts/verify-publish.sh
+
 # Fast focused add-on reactor
 mvn -pl addon-expenses-rest-api -am test
 
@@ -123,6 +129,7 @@ Runtime configuration uses these names:
 
 Live sacrificial Clockify checks may use shell environment variables such as `CLOCKIFY_API_BASE_URL`, `CLOCKIFY_API_KEY`, `CLOCKIFY_WORKSPACE_ID`, `CLOCKIFY_TEST_USER_ID`, and `CLOCKIFY_TEST_PROJECT_ID`. Never print secret values.
 Pass live secrets through environment variables, stdin, or a local secret store; never write real keys into repo files, command transcripts intended for docs, or final reports.
+Live Clockify smoke is optional and requires local secrets. Never commit or echo API keys/tokens. If not run, final output must say it was skipped.
 
 Default CORS allows Clockify origins and the origin from `ADDON_BASE_URL`, which keeps local ngrok iframe/API testing working without adding a broad wildcard.
 
@@ -148,7 +155,7 @@ Default CORS allows Clockify origins and the origin from `ADDON_BASE_URL`, which
 
 ## Verification Expectations
 
-Before claiming pre-publish readiness, complete `addon-expenses-rest-api/docs/PRE_PUBLISH_CHECKLIST.md` and paste the exact command outputs into the session summary.
+Before claiming pre-publish readiness, run `./scripts/verify-publish.sh`, complete `addon-expenses-rest-api/docs/PRE_PUBLISH_CHECKLIST.md`, and paste the exact command outputs into the session summary.
 
 ## Final Hardening History
 

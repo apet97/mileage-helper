@@ -28,10 +28,12 @@ This module is the implemented product module inside the standalone repository. 
 
 - URL: `https://mileage-for-clockify-production.up.railway.app`
 - Manifest: `https://mileage-for-clockify-production.up.railway.app/manifest`
-- Recorded deployment proof for the 2026-05-27 hardening pass: `789acdd8-38ef-42f9-9a41-45dded009743`
-- Verified on 2026-05-27 with health, manifest, and settings asset probes. Clockify reinstall, settings load, mileage create/use, and delete-list behavior were last user-tested on 2026-05-26.
+- Railway deployment ID: use `railway deployment list` for the current Railway deployment ID.
+- Dated deployment evidence belongs in the pre-publish checklist after each deploy; old deployment IDs are historical evidence, not current truth.
+- Last evidence snapshot, dated 2026-05-27: health, manifest, and settings asset probes passed. Clockify reinstall, settings load, mileage create/use, and delete-list behavior were last user-tested on 2026-05-26.
 - Dev workspace receipt smoke on 2026-05-27 created, fetched, and deleted a sacrificial Mileage PDF receipt expense through the local `clockify-rest-client`; post-delete GET returned non-success.
 - Local hardening review on 2026-05-27 covered multipart receipt/header sanitization, timezone claim alias parity, focused client/security tests, and `gitleaks` proof.
+- Live Clockify smoke is optional and requires local secrets. Never commit or echo API keys/tokens. If not run, final output must say it was skipped.
 
 ## Non-goals
 
@@ -74,6 +76,7 @@ docker compose -f addon-expenses-rest-api/docker-compose.yml -f <(printf 'servic
 ## Tests
 
 ```bash
+./scripts/verify-publish.sh
 mvn -pl addon-expenses-rest-api -am test
 mvn -pl addon-expenses-rest-api -am clean test
 ```

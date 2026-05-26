@@ -6,8 +6,10 @@ Current hosted test add-on:
 
 - App URL: `https://mileage-for-clockify-production.up.railway.app`
 - Manifest: `https://mileage-for-clockify-production.up.railway.app/manifest`
-- Recorded Railway deployment proof for the 2026-05-27 hardening pass: `789acdd8-38ef-42f9-9a41-45dded009743`
-- Latest local hardening review: 2026-05-27, covering shared multipart receipt/file upload handling, Clockify timezone claim aliases, and secret-scan proof.
+- Railway deployment ID: use `railway deployment list` for the current Railway deployment ID.
+- Dated deployment evidence belongs in the pre-publish checklist after each deploy; old deployment IDs are historical evidence, not current truth.
+- Dated local hardening review snapshot: 2026-05-27, covering shared multipart receipt/file upload handling, Clockify timezone claim aliases, and secret-scan proof.
+- Live Clockify smoke is optional and requires local secrets. Never commit or echo API keys/tokens. If not run, final output must say it was skipped.
 
 ## Repository Layout
 
@@ -46,6 +48,7 @@ The ignored local clone `addon-expenses-rest-api/addon-java-sdk/` is read-only r
 Run from the repository root:
 
 ```bash
+./scripts/verify-publish.sh
 mvn -pl addon-expenses-rest-api -am test
 mvn -pl addon-expenses-rest-api -am clean test
 ```

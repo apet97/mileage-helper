@@ -67,17 +67,21 @@ This is the standalone repository for Mileage for Clockify. It contains the add-
 ## Hosted Verification Snapshot
 
 - Current hosted add-on URL: `https://mileage-for-clockify-production.up.railway.app`.
-- Recorded live Railway deployment proof for the 2026-05-27 hardening pass: `789acdd8-38ef-42f9-9a41-45dded009743`. Use `railway deployment list` for the current latest deployment ID.
-- Hosted probes passed for `/actuator/health`, `/manifest`, and the settings asset.
-- Live Clockify uninstall/install/settings/create/delete smoke passed after the deleted-expense webhook fix.
+- Current hosted manifest URL: `https://mileage-for-clockify-production.up.railway.app/manifest`.
+- Use `railway deployment list` for the current Railway deployment ID. Do not treat old deployment IDs in notes, chats, or previous evidence as current truth.
+- Dated deployment evidence belongs in the pre-publish checklist after each deploy.
+- Last evidence snapshot, dated 2026-05-27: hosted probes passed for `/actuator/health`, `/manifest`, and the settings asset.
+- Historical live Clockify smoke, dated 2026-05-27: uninstall/install/settings/create/delete passed after the deleted-expense webhook fix. Treat this as historical unless rerun.
 - Dev workspace receipt smoke on 2026-05-27 used the local `clockify-rest-client` to create, fetch, and delete a sacrificial Mileage PDF receipt expense; post-delete GET returned non-success. Never persist dev API keys in docs, logs, or commits.
 - Local hardening review on 2026-05-27 covered multipart receipt/header sanitization, shared file-upload behavior, server/frontend timezone alias parity, and secret-scan proof.
+- Live Clockify smoke is optional and requires local secrets. Never commit or echo API keys/tokens. If not run, final output must say it was skipped.
 
 ## Commands
 
 Run from the repository root.
 
 ```bash
+./scripts/verify-publish.sh
 mvn -pl addon-expenses-rest-api -am test
 mvn -pl addon-expenses-rest-api -am clean test
 docker compose -f addon-expenses-rest-api/docker-compose.yml build

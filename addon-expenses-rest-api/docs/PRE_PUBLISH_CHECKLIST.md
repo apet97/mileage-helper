@@ -1,9 +1,57 @@
 # Mileage for Clockify Pre-Publish Checklist
 
-## Current Evidence
+## Required Gates Run Now
+
+Run from the repository root before claiming publish readiness:
+
+- [ ] `git status --short --branch` reviewed.
+- [ ] `./scripts/verify-publish.sh` passes.
+- [ ] If a new Railway deploy was made, `railway deployment list` was used for the current Railway deployment ID.
+- [ ] If a new Railway deploy was made, hosted `/actuator/health`, `/manifest`, and settings asset probes passed and the dated evidence was added below.
+
+`./scripts/verify-publish.sh` runs these local publish-safety checks:
+
+- `mvn -pl clockify-rest-client -Dtest=ExpensesClientTest,FilesClientTest test`
+- `mvn -pl addon-core -Dtest=ClaimsNormalizerTest test`
+- `mvn -pl addon-expenses-rest-api -Dtest=MileageSecurityTest test`
+- Colima-backed `mvn -pl addon-expenses-rest-api -am test`
+- `git diff --check`
+- `node --check addon-expenses-rest-api/src/main/resources/static/assets/mileage/settings.js`
+- `gitleaks detect --source . --no-git --redact --verbose`
+- `docker compose -f addon-expenses-rest-api/docker-compose.yml build`
+
+## Optional Live Clockify Smoke
+
+Live Clockify smoke is optional and requires local secrets. Never commit or echo API keys/tokens. If not run, final output must say it was skipped.
+
+There is no repo-owned live smoke script. Use only environment variables, stdin, or a local secret store when manually testing a sacrificial Clockify workspace. Do not paste real keys into repo files, docs, screenshots, terminal transcripts intended for docs, or final reports. Live Clockify mutation is historical evidence unless it is rerun for the current deploy.
+
+## Last Evidence Snapshot
+
+Historical only: do not treat this section as current truth unless the listed checks were rerun. Dated deployment evidence belongs here after each deploy.
 
 Last local/live stabilization pass: 2026-05-27.
 
+- Public hosted recheck on 2026-05-27: `railway deployment list --limit 1
+  --json` showed the latest listed deployment in `SUCCESS` state, created at
+  `2026-05-26T22:57:34.506Z`; use `railway deployment list` for the current
+  Railway deployment ID.
+- Public hosted recheck on 2026-05-27: `/actuator/health` returned `200` with
+  `{"status":"UP","groups":["liveness","readiness"]}`.
+- Public hosted recheck on 2026-05-27: `/manifest` returned `200`, schema
+  `1.5`, key `mileage-for-clockify`, scopes `EXPENSE_READ`, `EXPENSE_WRITE`,
+  `USER_READ`, `PROJECT_READ`, `WORKSPACE_READ`, and webhooks
+  `EXPENSE_CREATED`, `EXPENSE_UPDATED`, `EXPENSE_DELETED`, `EXPENSE_RESTORED`.
+- Public hosted recheck on 2026-05-27: settings JS returned `200` with
+  `Content-Type: text/javascript`, `/assets/mileage/icon.png` returned `200`
+  with `Content-Type: image/png`, and unauthenticated `/iframe/mileage`
+  returned `401` with `Cache-Control: no-store`, CSP, `nosniff`,
+  `no-referrer`, and permissions-policy headers.
+- Live Clockify mutation smoke on 2026-05-27: using local environment secrets
+  only, a direct API smoke created one marked sacrificial expense with multipart
+  form fields, fetched it, deleted it, and confirmed a post-delete fetch
+  returned non-success (`400`). The smoke used the existing `Mileage` category
+  and an existing active project. No API key or token is stored in this repo.
 - `git diff --check`: passed after the multipart and timezone hardening pass.
 - `node --check addon-expenses-rest-api/src/main/resources/static/assets/mileage/settings.js`: passed.
 - `gitleaks detect --source . --no-git --redact --verbose`: passed with no leaks found.
@@ -42,19 +90,16 @@ Last local/live stabilization pass: 2026-05-27.
   workspace primary-key reads or internal webhook event status updates.
 - Flyway history keeps V5/V10 for existing database validation; V12 drops the
   leftover generic tables.
-- Hosted Railway deployment `789acdd8-38ef-42f9-9a41-45dded009743` reached
-  `SUCCESS`; hosted `/actuator/health`, `/manifest`, and settings asset probes
-  passed.
-- Live Clockify uninstall/install/settings/create/delete smoke passed after the
-  deleted-expense webhook fix. Production audit rows for stale test deletes were
-  marked `DELETED` with `deleted_at`, while the current live expense remained
-  `CONVERTED`.
+- Hosted Railway deployment for this dated pass reached `SUCCESS`; hosted
+  `/actuator/health`, `/manifest`, and settings asset probes passed. Use
+  `railway deployment list` for the current Railway deployment ID.
+- Historical live Clockify uninstall/install/settings/create/delete smoke passed
+  after the deleted-expense webhook fix. Production audit rows for stale test
+  deletes were marked `DELETED` with `deleted_at`, while the then-current live
+  expense remained `CONVERTED`.
 
-## Required Local Gates
+## Required Manual Product Gates
 
-- [ ] `git status --short --branch` reviewed.
-- [ ] `mvn -pl addon-expenses-rest-api -am clean test` passes.
-- [ ] `docker compose -f addon-expenses-rest-api/docker-compose.yml build` passes.
 - [ ] Runtime `/manifest` probe passes.
 - [ ] Runtime `/assets/mileage/icon.png` probe passes.
 - [ ] Static secret scan passes.
