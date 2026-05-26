@@ -6,11 +6,11 @@ This is the standalone repository for Mileage for Clockify. It contains the add-
 
 1. Run `git status --short --branch`.
 2. Read this file, then `CLAUDE.md`, then [README.md](README.md).
-3. For product behavior, use [addon-expenses-rest-api/README.md](addon-expenses-rest-api/README.md), [addon-expenses-rest-api/endpoints.md](addon-expenses-rest-api/endpoints.md), [addon-expenses-rest-api/webhooks.md](addon-expenses-rest-api/webhooks.md), and the implemented tests.
+3. For product behavior, use [addon-expenses-rest-api/README.md](addon-expenses-rest-api/README.md), [addon-expenses-rest-api/endpoints.md](addon-expenses-rest-api/endpoints.md), [addon-expenses-rest-api/webhooks.md](addon-expenses-rest-api/webhooks.md), [clockify-rest-client/docs/endpoint-provenance.md](clockify-rest-client/docs/endpoint-provenance.md), and the implemented tests.
 
 ## Non-Negotiables
 
-1. Do not guess Clockify API shapes. Prefer typed client tests, local live-evidence docs, and live sacrificial-workspace evidence only when explicitly permitted.
+1. Do not guess Clockify API shapes. Prefer typed client tests, endpoint provenance docs, and live sacrificial-workspace evidence only when explicitly permitted.
 2. Never edit or rely on committing `addon-expenses-rest-api/addon-java-sdk/`; it is a read-only ignored local SDK clone.
 3. Keep `addon-core`, `addon-db`, `clockify-rest-client`, and `addon-testkit` changes conservative. Stop and confirm before structural platform changes.
 4. Use Java 21 `record` DTOs when adding new DTOs unless an existing local pattern clearly differs.
@@ -21,13 +21,16 @@ This is the standalone repository for Mileage for Clockify. It contains the add-
 9. User-facing mileage creation must use the verified user ID from Clockify token claims, not a frontend or request-supplied `userId`. Do not add `userId` back to the create request DTO, multipart allowlist, iframe form, or frontend payload.
 10. User-facing mileage creation follows Clockify's regular expense form shape and does not require or fetch tasks. Do not add a task selector, task options endpoint, `taskId` create-field, or `TASK_READ` manifest scope unless the product requirement changes and live scope evidence is captured first.
 11. Main-page rate override is settings-gated. Keep `/api/mileage/create-context`, server-side rate override enforcement, and frontend visibility in sync.
+12. Webhook handlers must acknowledge safely with HTTP 2xx after internal failure recording/logging. Do not let Clockify blindly retry failures that should be retried from the admin/internal path.
+13. Native expense conversion must aggressively prevent loops: skip mileage audit markers, output-category expenses, and already-converted expenses before writing back to Clockify.
+14. The Clockify REST client has no default API hosts. Builders and tests must pass explicit backend URLs, add-ons must route from verified token claims or installation context, and reports URLs may only be omitted for clients that do not use reports APIs.
 
 ## Module Map
 
 - `addon-expenses-rest-api`: Mileage add-on application, UI, manifest, settings, webhooks, conversions, Dockerfile, compose file, and add-on docs.
 - `addon-core`: Shared add-on auth, lifecycle routing, manifest controller, filters, security headers, and webhook dispatch.
 - `addon-db`: JPA/Flyway persistence for installation context, encrypted tokens, settings, and webhook tokens.
-- `clockify-rest-client`: Typed Clockify REST client and live-evidence-backed route behavior.
+- `clockify-rest-client`: Typed Clockify REST client and endpoint-provenance-backed route behavior.
 - `addon-testkit`: Test builders and fixtures shared by add-on/platform tests.
 - `repo`: Vendored Maven artifacts for the Clockify add-on SDK.
 
@@ -50,6 +53,10 @@ This is the standalone repository for Mileage for Clockify. It contains the add-
 - Add-on UI tables and previews display full `calculatedAmount` decimals as the primary amount. Clockify expense writes continue to use the rounded `roundedAmount`.
 - Mileage lists and CSV exports filter by `expenseDate`, defaulting to the current US week, Sunday through Saturday.
 - Native expense `EXPENSE_CREATED` and `EXPENSE_RESTORED` handlers accept either `id` or `expenseId` payload shapes.
+- Webhook dispatch records/dedupes events, marks processing outcomes internally, and still returns HTTP 2xx after handler or audit-status failures.
+- Native conversion eligibility skips disabled/incomplete settings, workspace mismatches, output categories, mileage note markers, existing successful conversions, non-input categories, missing/invalid quantity, and locked/finalized expenses.
+- `ClockifyClientFactory` builds per-workspace clients from installed backend/reports URLs. Missing backend URL is fatal; missing reports URL is allowed until a reports request is attempted.
+- The optional `clockify-rest-client` Spring MVC facade and WebClient transport were removed as dead/bloated surfaces. Do not reintroduce global proxy controllers around the typed client.
 - Historical pre-Mileage migrations V5/V10 are retained for Flyway validation only; V12 drops their leftover generic tables. Do not add new `temp_addon_expenses*`, `clockify-expenses-api`, `Clockify Expenses API`, or `com.cake.clockify.addon.expenses` references.
 
 ## Commands
