@@ -305,7 +305,8 @@ public class MileageConversionController {
             return value;
         }
         char first = value.charAt(0);
-        if (first == '=' || first == '+' || first == '-' || first == '@' || first == '\t') {
+        if (first == '=' || first == '+' || first == '-' || first == '@'
+                || first == '\t' || first == '\r' || first == '\n') {
             return "'" + value;
         }
         return value;
