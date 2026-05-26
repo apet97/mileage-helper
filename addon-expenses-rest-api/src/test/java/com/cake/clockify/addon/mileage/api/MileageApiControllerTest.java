@@ -5,6 +5,7 @@ import com.cake.clockify.addon.core.auth.RequestAttributes;
 import com.cake.clockify.addon.core.auth.filter.ClockifyIframeAuthFilter;
 import com.cake.clockify.addon.mileage.audit.MileageConversion;
 import com.cake.clockify.addon.mileage.audit.MileageConversionRepository;
+import com.cake.clockify.addon.mileage.audit.MileageConversionReservationRepository;
 import com.cake.clockify.addon.mileage.audit.MileageConversionSource;
 import com.cake.clockify.addon.mileage.audit.MileageConversionStatus;
 import com.cake.clockify.addon.mileage.calculation.MileageCalculator;
@@ -34,9 +35,12 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -53,6 +57,7 @@ class MileageApiControllerTest {
     private MileageSettingsService settingsService;
     private ClockifyExpenseGateway gateway;
     private MileageConversionRepository conversionRepository;
+    private MileageConversionReservationRepository reservationRepository;
     private MockMvc mockMvc;
 
     @BeforeEach
@@ -60,15 +65,25 @@ class MileageApiControllerTest {
         settingsService = mock(MileageSettingsService.class);
         gateway = mock(ClockifyExpenseGateway.class);
         conversionRepository = mock(MileageConversionRepository.class);
+        reservationRepository = mock(MileageConversionReservationRepository.class);
         MileageApiController controller = new MileageApiController(
                 settingsService,
                 new MileageCalculator(),
                 gateway,
                 conversionRepository,
+                reservationRepository,
                 new MileageNoteService());
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new MileageExceptionHandler(objectMapper))
                 .build();
+        when(reservationRepository.reserve(anyString(), anyString(), eq(MileageConversionSource.ADDON_FORM), eq("ADDON_FORM")))
+                .thenAnswer(invocation -> UUID.randomUUID());
+        when(conversionRepository.findByIdAndWorkspaceId(any(UUID.class), anyString())).thenAnswer(invocation -> {
+            MileageConversion conversion = new MileageConversion();
+            conversion.setId(invocation.getArgument(0));
+            conversion.setWorkspaceId(invocation.getArgument(1));
+            return Optional.of(conversion);
+        });
         when(conversionRepository.saveAndFlush(any(MileageConversion.class))).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
@@ -95,6 +110,7 @@ class MileageApiControllerTest {
                         new MileageCalculator(),
                         gateway,
                         conversionRepository,
+                        reservationRepository,
                         new MileageNoteService()))
                 .setControllerAdvice(new MileageExceptionHandler(objectMapper))
                 .addFilters(new ClockifyIframeAuthFilter(new ValidUserSignatureParser()))
@@ -261,6 +277,37 @@ class MileageApiControllerTest {
         assertThat(saved.getValue().getExpenseId()).isEqualTo("exp-1");
         assertThat(saved.getValue().getUserId()).isEqualTo("user-claims");
         assertThat(saved.getValue().getExpenseDate()).isEqualTo(LocalDate.parse("2026-05-24"));
+    }
+
+    @Test
+    void createExpenseMergesAuditRowWhenWebhookReservedExpenseFirst() throws Exception {
+        when(settingsService.validateForAddonCreate("ws-api")).thenReturn(settings(false));
+        when(gateway.createFlatExpense(eq("ws-api"), any(CreateFlatExpenseCommand.class))).thenReturn(createdExpense("exp-race"));
+        UUID existingId = UUID.fromString("00000000-0000-0000-0000-000000000123");
+        MileageConversion existing = new MileageConversion();
+        existing.setId(existingId);
+        existing.setWorkspaceId("ws-api");
+        existing.setExpenseId("exp-race");
+        existing.setSource(MileageConversionSource.WEBHOOK_CREATED);
+        existing.setStatus(MileageConversionStatus.SKIPPED);
+        when(reservationRepository.reserve(eq("ws-api"), eq("exp-race"), eq(MileageConversionSource.ADDON_FORM), eq("ADDON_FORM")))
+                .thenReturn(existingId);
+        when(conversionRepository.findByIdAndWorkspaceId(existingId, "ws-api")).thenReturn(Optional.of(existing));
+
+        mockMvc.perform(post("/api/mileage/expenses")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createBody("37.4", null)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.expenseId").value("exp-race"))
+                .andExpect(jsonPath("$.conversionId").value(existingId.toString()));
+
+        ArgumentCaptor<MileageConversion> saved = ArgumentCaptor.forClass(MileageConversion.class);
+        verify(conversionRepository).saveAndFlush(saved.capture());
+        assertThat(saved.getValue().getId()).isEqualTo(existingId);
+        assertThat(saved.getValue().getSource()).isEqualTo(MileageConversionSource.ADDON_FORM);
+        assertThat(saved.getValue().getStatus()).isEqualTo(MileageConversionStatus.CONVERTED);
+        assertThat(saved.getValue().getUserId()).isEqualTo("user-claims");
     }
 
     @Test

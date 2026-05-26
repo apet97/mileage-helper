@@ -9,6 +9,7 @@ import com.cake.clockify.addon.mileage.api.model.MileagePreviewRequest;
 import com.cake.clockify.addon.mileage.api.model.MileagePreviewResponse;
 import com.cake.clockify.addon.mileage.audit.MileageConversion;
 import com.cake.clockify.addon.mileage.audit.MileageConversionRepository;
+import com.cake.clockify.addon.mileage.audit.MileageConversionReservationRepository;
 import com.cake.clockify.addon.mileage.audit.MileageConversionSource;
 import com.cake.clockify.addon.mileage.audit.MileageConversionStatus;
 import com.cake.clockify.addon.mileage.calculation.MileageCalculation;
@@ -56,6 +57,7 @@ public class MileageApiController {
     private final MileageCalculator calculator;
     private final ClockifyExpenseGateway gateway;
     private final MileageConversionRepository conversionRepository;
+    private final MileageConversionReservationRepository reservationRepository;
     private final MileageNoteService noteService;
 
     public MileageApiController(
@@ -63,11 +65,13 @@ public class MileageApiController {
             MileageCalculator calculator,
             ClockifyExpenseGateway gateway,
             MileageConversionRepository conversionRepository,
+            MileageConversionReservationRepository reservationRepository,
             MileageNoteService noteService) {
         this.settingsService = settingsService;
         this.calculator = calculator;
         this.gateway = gateway;
         this.conversionRepository = conversionRepository;
+        this.reservationRepository = reservationRepository;
         this.noteService = noteService;
     }
 
@@ -143,8 +147,15 @@ public class MileageApiController {
         if (expenseId == null || expenseId.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Clockify did not return a created expense id");
         }
-        MileageConversion conversion = conversion(
-                conversionId,
+        UUID persistedId = reservationRepository.reserve(
+                workspaceId,
+                expenseId,
+                MileageConversionSource.ADDON_FORM,
+                "ADDON_FORM");
+        MileageConversion conversion = conversionRepository.findByIdAndWorkspaceId(persistedId, workspaceId)
+                .orElseThrow(() -> new IllegalStateException("Reserved mileage conversion was not found"));
+        applyAddonFormConversion(
+                conversion,
                 workspaceId,
                 expenseId,
                 userId,
@@ -156,7 +167,7 @@ public class MileageApiController {
         conversionRepository.saveAndFlush(conversion);
         return new MileageCreateExpenseResponse(
                 expenseId,
-                conversionId,
+                conversion.getId(),
                 calculation.milesText(),
                 calculation.rateText(),
                 calculation.calculatedAmountText(),
@@ -230,8 +241,8 @@ public class MileageApiController {
                 safe.get("notes"));
     }
 
-    private static MileageConversion conversion(
-            UUID id,
+    private static void applyAddonFormConversion(
+            MileageConversion conversion,
             String workspaceId,
             String expenseId,
             String userId,
@@ -240,11 +251,10 @@ public class MileageApiController {
             MileageSettingsValidation settings,
             MileageCalculation calculation,
             String marker) {
-        MileageConversion conversion = new MileageConversion();
-        conversion.setId(id);
         conversion.setWorkspaceId(workspaceId);
         conversion.setExpenseId(expenseId);
         conversion.setSource(MileageConversionSource.ADDON_FORM);
+        conversion.setSourceEventType("ADDON_FORM");
         conversion.setSourceCategoryId(settings.inputCategoryId());
         conversion.setTargetCategoryId(settings.outputCategoryId());
         conversion.setUserId(userId);
@@ -259,7 +269,6 @@ public class MileageApiController {
         conversion.setStatus(MileageConversionStatus.CONVERTED);
         conversion.setNoteMarker(marker);
         conversion.setConvertedAt(Instant.now());
-        return conversion;
     }
 
     private static void validateReceipt(MultipartFile file) {
