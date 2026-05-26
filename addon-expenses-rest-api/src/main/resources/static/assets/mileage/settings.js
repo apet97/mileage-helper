@@ -7,6 +7,7 @@
     allowUserRateOverride: false,
     complete: false
   };
+  let defaultMileageCategory = null;
   let userIsAdmin = false;
   let tokenClaims = {};
   const rangePresets = {
@@ -133,7 +134,7 @@
     const role = roleFromClaims(tokenClaims);
     const isAdmin = role === "OWNER" || role === "ADMIN";
     document.querySelectorAll("[data-admin-only]").forEach(element => {
-      element.hidden = !isAdmin;
+      element.hidden = !isAdmin || (element.classList.contains("tab-panel") && !element.classList.contains("active"));
     });
     if (!isAdmin && document.querySelector(".nav-button.active")?.dataset.tabTarget !== "mine") {
       switchTab("mine");
@@ -147,7 +148,9 @@
       return;
     }
     document.querySelectorAll(".tab-panel").forEach(panel => {
-      panel.classList.toggle("active", panel === targetPanel);
+      const active = panel === targetPanel;
+      panel.classList.toggle("active", active);
+      panel.hidden = !active;
     });
     document.querySelectorAll(".nav-button").forEach(button => {
       button.classList.toggle("active", button.dataset.tabTarget === tab);
@@ -546,17 +549,61 @@
       if (!categorySelect) {
         return;
       }
+      defaultMileageCategory = null;
       categorySelect.replaceChildren();
       appendOption(categorySelect, "", "Choose Mileage category");
-      data.categories.forEach(category => {
-        const suffix = category.unit ? " (" + category.type + ": " + category.unit + ")" : " (" + category.type + ")";
+      (data.categories || []).forEach(category => {
+        const rate = centsToRate(category.unitPrice);
+        const option = Object.assign({}, category, { rate });
+        if (isDefaultMileageCategory(option)) {
+          defaultMileageCategory = option;
+        }
+        const rateText = rate ? ", " + rate + "/" + category.unit : "";
+        const suffix = category.unit ? " (" + category.type + ": " + category.unit + rateText + ")" : " (" + category.type + ")";
         appendOption(categorySelect, category.id, category.name + suffix);
       });
+      if (data.warning) {
+        appendOption(categorySelect, "", "Category list unavailable");
+        toast(data.warning, "error");
+      }
     });
   }
 
   function appendOption(select, value, label) {
     select.appendChild(new Option(label, value || ""));
+  }
+
+  function ensureCategoryOption(select, value, label) {
+    if (!select || !value) {
+      return;
+    }
+    const exists = Array.from(select.options).some(option => option.value === value);
+    if (!exists) {
+      appendOption(select, value, label || "Configured Mileage category");
+    }
+  }
+
+  function isDefaultMileageCategory(category) {
+    return category
+      && String(category.name || "").toLowerCase() === "mileage"
+      && String(category.type || "").toLowerCase() === "unit"
+      && String(category.unit || "").toLowerCase() === "mile"
+      && Boolean(category.rate);
+  }
+
+  function centsToRate(value) {
+    const raw = String(value || "").trim();
+    if (!raw) {
+      return "";
+    }
+    const cents = raw.split(".")[0];
+    if (!/^\d+$/.test(cents)) {
+      return "";
+    }
+    const padded = cents.padStart(3, "0");
+    const whole = padded.slice(0, -2).replace(/^0+(?=\d)/, "") || "0";
+    const fraction = padded.slice(-2).replace(/0+$/, "");
+    return fraction ? whole + "." + fraction : whole;
   }
 
   function loadProjects() {
@@ -584,11 +631,22 @@
         element("settings-enabled").checked = settings.enabled;
         element("settings-rate").value = settings.rate || "";
         return categoriesPromise.then(() => {
-          element("settings-mileage-category").value = settings.mileageCategoryId || settings.inputCategoryId || settings.outputCategoryId || "";
+          const selectedCategory = settings.mileageCategoryId || settings.inputCategoryId || settings.outputCategoryId || "";
+          const categorySelect = element("settings-mileage-category");
+          ensureCategoryOption(categorySelect, selectedCategory, settings.mileageCategoryName || "Configured Mileage category");
+          categorySelect.value = selectedCategory;
+          if (!selectedCategory && defaultMileageCategory) {
+            categorySelect.value = defaultMileageCategory.id || "";
+          }
+          if (!settings.rate && defaultMileageCategory && defaultMileageCategory.rate) {
+            element("settings-rate").value = defaultMileageCategory.rate;
+          }
           element("settings-convert-create").checked = settings.convertOnCreate;
           element("settings-convert-update").checked = settings.convertOnUpdate;
           element("settings-rate-override").checked = settings.allowUserRateOverride;
-          element("settings-status").textContent = settings.completeForNativeConversion ? "Ready" : "Needs configuration";
+          element("settings-status").textContent = settings.completeForNativeConversion
+            ? "Ready"
+            : defaultMileageCategory ? "Default Mileage found" : "Needs configuration";
         });
       })
       .catch(error => toast(error.message, "error"));
@@ -628,8 +686,10 @@
       .then(settings => {
         toast("Mileage category is ready.");
         return loadCategories().then(() => {
-          if (element("settings-mileage-category")) {
-            element("settings-mileage-category").value = settings.mileageCategoryId || "";
+          const categorySelect = element("settings-mileage-category");
+          if (categorySelect) {
+            ensureCategoryOption(categorySelect, settings.mileageCategoryId || "", settings.mileageCategoryName || "Mileage");
+            categorySelect.value = settings.mileageCategoryId || "";
           }
           loadSettings();
           loadCreateContext();
@@ -640,7 +700,7 @@
       .finally(() => {
         if (button) {
           button.disabled = false;
-          button.textContent = "Create or Repair Mileage Category";
+          button.textContent = "Use or Repair Mileage Category";
         }
       });
   }

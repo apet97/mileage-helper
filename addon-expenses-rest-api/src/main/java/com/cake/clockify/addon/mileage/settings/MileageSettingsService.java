@@ -83,6 +83,24 @@ public class MileageSettingsService {
         return repository.saveAndFlush(settings);
     }
 
+    @Transactional
+    public MileageWorkspaceSettings saveMileageCategoryWithRate(
+            String workspaceId,
+            String categoryId,
+            BigDecimal rate,
+            String updatedByUserId) {
+        MileageWorkspaceSettings settings = repository.findById(workspaceId).orElseGet(() -> defaults(workspaceId));
+        String cleanedCategoryId = blankToNull(categoryId);
+        settings.setInputCategoryId(cleanedCategoryId);
+        settings.setOutputCategoryId(cleanedCategoryId);
+        if (rate != null && rate.compareTo(BigDecimal.ZERO) > 0) {
+            settings.setRate(rate);
+        }
+        normalize(settings);
+        settings.setUpdatedByUserId(updatedByUserId);
+        return repository.saveAndFlush(settings);
+    }
+
     public MileageSettingsValidation validateForAddonCreate(String workspaceId) {
         return validate(normalizedCopy(workspaceId), false);
     }

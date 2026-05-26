@@ -177,6 +177,32 @@ class MileageSettingsServiceTest {
     }
 
     @Test
+    void visibleMileageQueriesExcludeDeletedConversions() {
+        MileageConversion visible = conversion("ws-visible", "exp-visible", MileageConversionStatus.CONVERTED);
+        MileageConversion deleted = conversion("ws-visible", "exp-deleted", MileageConversionStatus.DELETED);
+        deleted.setDeletedAt(Instant.parse("2026-05-24T12:00:00Z"));
+        MileageConversion otherUser = conversion("ws-visible", "exp-other-user", MileageConversionStatus.CONVERTED);
+        otherUser.setUserId("user-two");
+        MileageConversion otherWorkspace = conversion("ws-other-visible", "exp-other-workspace", MileageConversionStatus.CONVERTED);
+        conversionRepository.saveAndFlush(visible);
+        conversionRepository.saveAndFlush(deleted);
+        conversionRepository.saveAndFlush(otherUser);
+        conversionRepository.saveAndFlush(otherWorkspace);
+
+        LocalDate from = LocalDate.parse("2026-05-24");
+        LocalDate to = LocalDate.parse("2026-05-30");
+
+        assertThat(conversionRepository.findAllByWorkspaceIdAndUserIdAndStatusNotAndExpenseDateBetween(
+                        "ws-visible", "user-one", MileageConversionStatus.DELETED, from, to, PageRequest.of(0, 10)))
+                .extracting(MileageConversion::getExpenseId)
+                .containsExactly("exp-visible");
+        assertThat(conversionRepository.findAllByWorkspaceIdAndStatusNotAndExpenseDateBetween(
+                        "ws-visible", MileageConversionStatus.DELETED, from, to, PageRequest.of(0, 10)))
+                .extracting(MileageConversion::getExpenseId)
+                .containsExactlyInAnyOrder("exp-visible", "exp-other-user");
+    }
+
+    @Test
     void markDeletedUpdatesStatusAndDeletedAtWithoutDeletingRow() {
         MileageConversion conversion = conversion("ws-delete", "exp-delete", MileageConversionStatus.CONVERTED);
         conversionRepository.saveAndFlush(conversion);

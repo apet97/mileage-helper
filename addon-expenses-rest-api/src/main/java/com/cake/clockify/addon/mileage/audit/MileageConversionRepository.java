@@ -16,6 +16,8 @@ public interface MileageConversionRepository extends JpaRepository<MileageConver
     Page<MileageConversion> findAllByWorkspaceIdAndStatus(String workspaceId, MileageConversionStatus status, Pageable pageable);
     Page<MileageConversion> findAllByWorkspaceIdAndExpenseDateBetween(String workspaceId, LocalDate from, LocalDate to, Pageable pageable);
     Page<MileageConversion> findAllByWorkspaceIdAndUserIdAndExpenseDateBetween(String workspaceId, String userId, LocalDate from, LocalDate to, Pageable pageable);
+    Page<MileageConversion> findAllByWorkspaceIdAndStatusNotAndExpenseDateBetween(String workspaceId, MileageConversionStatus status, LocalDate from, LocalDate to, Pageable pageable);
+    Page<MileageConversion> findAllByWorkspaceIdAndUserIdAndStatusNotAndExpenseDateBetween(String workspaceId, String userId, MileageConversionStatus status, LocalDate from, LocalDate to, Pageable pageable);
     Page<MileageConversion> findAllByWorkspaceIdAndStatusAndExpenseDateBetween(String workspaceId, MileageConversionStatus status, LocalDate from, LocalDate to, Pageable pageable);
     long countByWorkspaceIdAndExpenseId(String workspaceId, String expenseId);
     void deleteByWorkspaceId(String workspaceId);

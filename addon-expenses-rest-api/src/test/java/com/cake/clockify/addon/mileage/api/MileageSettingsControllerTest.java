@@ -8,6 +8,7 @@ import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseGateway;
 import com.cake.clockify.addon.mileage.security.MileageAuthorizationService;
 import com.cake.clockify.addon.mileage.settings.MileageSettingsService;
 import com.cake.clockify.addon.mileage.settings.MileageSettingsValidation;
+import com.cake.clockify.client.ClockifyApiException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,10 +20,12 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -107,6 +110,24 @@ class MileageSettingsControllerTest {
     }
 
     @Test
+    void adminCanUseExistingDefaultMileageCategoryWhenRateIsNotSavedYet() throws Exception {
+        when(settingsService.getEffectiveSettings("ws-admin"))
+                .thenReturn(incompleteSettingsResponse(), settingsResponse("0.18", "cat-mileage", "Mileage", List.of()));
+        when(gateway.findMileageCategory("ws-admin"))
+                .thenReturn(Optional.of(new ClockifyCategoryOption("cat-mileage", "Mileage", "UNIT", "mile", new BigDecimal("18"))));
+
+        mockMvc.perform(post("/api/mileage/settings/mileage-category")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("OWNER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rate").value("0.18"))
+                .andExpect(jsonPath("$.mileageCategoryId").value("cat-mileage"));
+
+        verify(settingsService).saveMileageCategoryWithRate(
+                "ws-admin", "cat-mileage", new BigDecimal("0.18"), "user-claims");
+        verify(gateway, never()).createOrRepairMileageCategory(eq("ws-admin"), any());
+    }
+
+    @Test
     void memberCannotCreateOrRepairMileageCategory() throws Exception {
         mockMvc.perform(post("/api/mileage/settings/mileage-category")
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("MEMBER")))
@@ -124,6 +145,18 @@ class MileageSettingsControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.categories[0].type").value("UNIT"))
                 .andExpect(jsonPath("$.categories[1].type").value("FLAT"));
+    }
+
+    @Test
+    void categoryOptionsReturnWarningWhenClockifyDeniesLookup() throws Exception {
+        when(gateway.listCategories("ws-admin"))
+                .thenThrow(ClockifyApiException.forStatus(403, java.util.Map.of(), "{\"message\":\"Forbidden\"}"));
+
+        mockMvc.perform(get("/api/mileage/options/categories")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("OWNER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.categories").isEmpty())
+                .andExpect(jsonPath("$.warning").value(org.hamcrest.Matchers.containsString("Clockify did not allow")));
     }
 
     @Test
@@ -154,10 +187,22 @@ class MileageSettingsControllerTest {
     }
 
     private static com.cake.clockify.addon.mileage.api.model.MileageSettingsResponse settingsResponse(List<String> diagnostics) {
+        return settingsResponse("0.655", "cat-mileage", "Mileage", diagnostics);
+    }
+
+    private static com.cake.clockify.addon.mileage.api.model.MileageSettingsResponse incompleteSettingsResponse() {
+        return settingsResponse(null, null, null, List.of("rate is required", "outputCategoryId is required"));
+    }
+
+    private static com.cake.clockify.addon.mileage.api.model.MileageSettingsResponse settingsResponse(
+            String rate,
+            String mileageCategoryId,
+            String mileageCategoryName,
+            List<String> diagnostics) {
         return new com.cake.clockify.addon.mileage.api.model.MileageSettingsResponse(
-                true, "0.655", "mile", "cat-mileage", "cat-mileage", RoundingMode.HALF_UP.name(),
-                true, true, false, false, false, null, true, diagnostics.isEmpty(), diagnostics,
-                "cat-mileage", "Mileage", "mile", RoundingMode.HALF_UP.name());
+                true, rate, "mile", mileageCategoryId, mileageCategoryId, RoundingMode.HALF_UP.name(),
+                true, true, false, false, false, null, rate != null && mileageCategoryId != null, diagnostics.isEmpty(), diagnostics,
+                mileageCategoryId, mileageCategoryName, "mile", RoundingMode.HALF_UP.name());
     }
 
     private static NormalizedClaims claims(String role) {

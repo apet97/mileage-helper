@@ -1,6 +1,7 @@
 package com.cake.clockify.addon.mileage.clockify;
 
 import com.cake.clockify.addon.db.service.ClockifyClientFactory;
+import com.cake.clockify.client.ClockifyApiException;
 import com.cake.clockify.client.ClockifyClient;
 import com.cake.clockify.client.ClockifyPageRequest;
 import com.cake.clockify.client.models.User;
@@ -15,6 +16,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class ClockifyExpenseGateway {
@@ -102,10 +104,14 @@ public class ClockifyExpenseGateway {
                 ? BigDecimal.ZERO
                 : rate.movePointRight(2).setScale(0, RoundingMode.HALF_UP);
         ObjectNode body = mileageCategoryBody(priceInCents);
-        ClockifyCategoryOption existing = listCategories(workspaceId).stream()
-                .filter(category -> MILEAGE_CATEGORY_NAME.equalsIgnoreCase(category.name()))
-                .findFirst()
-                .orElse(null);
+        ClockifyCategoryOption existing = null;
+        try {
+            existing = findMileageCategory(workspaceId).orElse(null);
+        } catch (ClockifyApiException e) {
+            if (!isAuthzFailure(e)) {
+                throw e;
+            }
+        }
         JsonNode response = existing == null
                 ? client(workspaceId).expenses().createCategory(workspaceId, body)
                 : client(workspaceId).expenses().updateCategory(workspaceId, existing.id(), body);
@@ -114,6 +120,13 @@ public class ClockifyExpenseGateway {
             return existing;
         }
         return option;
+    }
+
+    public Optional<ClockifyCategoryOption> findMileageCategory(String workspaceId)
+            throws IOException, InterruptedException {
+        return listCategories(workspaceId).stream()
+                .filter(ClockifyExpenseGateway::isMileageCategory)
+                .findFirst();
     }
 
     public List<ClockifyProjectOption> listProjects(String workspaceId) throws IOException, InterruptedException {
@@ -229,6 +242,14 @@ public class ClockifyExpenseGateway {
 
     private static int sizeOf(ArrayNode array) {
         return array == null ? 0 : array.size();
+    }
+
+    private static boolean isAuthzFailure(ClockifyApiException e) {
+        return e.statusCode() == 401 || e.statusCode() == 403;
+    }
+
+    private static boolean isMileageCategory(ClockifyCategoryOption category) {
+        return category != null && MILEAGE_CATEGORY_NAME.equalsIgnoreCase(category.name());
     }
 
     private static String displayName(User user) {

@@ -24,4 +24,6 @@ Persistent mileage state is split between `MileageWorkspaceSettings` and `Mileag
 
 `MileageSettingsResponse` keeps legacy input/output category fields for compatibility and also exposes the single `mileageCategoryId`, `mileageCategoryName`, `fixedUnit`, and `fixedRoundingMode` fields used by the current admin UI.
 
+`ExpenseRefWebhookPayload` accepts both `id` and `expenseId`; handlers call `effectiveExpenseId()` so updated/deleted webhook variants do not leave stale audit rows visible.
+
 No mileage, rate, or money DTO/entity in the mileage package uses floating point types. Values are parsed as `BigDecimal` in the calculator, settings service, gateway command layer, and audit entity.

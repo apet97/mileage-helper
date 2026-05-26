@@ -16,6 +16,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -65,6 +66,16 @@ class LifecycleControllerTest {
                 .andExpect(status().isOk());
 
         verify(handler).onDeleted(claims);
+    }
+
+    @Test
+    void postDeletedStillAcknowledgesWhenHandlerFails() throws Exception {
+        doThrow(new IllegalStateException("cleanup failed")).when(handler).onDeleted(claims);
+
+        mockMvc.perform(post("/lifecycle/deleted")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims)
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
     }
 
     @Test

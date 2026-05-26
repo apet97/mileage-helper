@@ -11,7 +11,10 @@ import com.cake.clockify.addon.mileage.clockify.ClockifyCategoryOption;
 import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseGateway;
 import com.cake.clockify.addon.mileage.security.MileageAuthorizationService;
 import com.cake.clockify.addon.mileage.settings.MileageSettingsService;
+import com.cake.clockify.client.ClockifyApiException;
 import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -28,6 +31,10 @@ import java.util.List;
 
 @RestController
 public class MileageSettingsController {
+    private static final Logger log = LoggerFactory.getLogger(MileageSettingsController.class);
+    private static final String CATEGORY_LOOKUP_UNAVAILABLE =
+            "Clockify did not allow reading expense categories. Try Use or Repair Mileage Category, or verify expense permissions for this workspace.";
+
     private final MileageSettingsService settingsService;
     private final ClockifyExpenseGateway gateway;
     private final MileageAuthorizationService authorizationService;
@@ -64,13 +71,23 @@ public class MileageSettingsController {
             throws IOException, InterruptedException {
         NormalizedClaims claims = adminClaims(request);
         MileageSettingsResponse settings = settingsService.getEffectiveSettings(claims.workspaceId());
-        if (settings.rate() == null || settings.rate().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Mileage rate is required before creating a category");
+        ClockifyCategoryOption category;
+        if (hasText(settings.rate())) {
+            category = gateway.createOrRepairMileageCategory(
+                    claims.workspaceId(),
+                    new BigDecimal(settings.rate()));
+            settingsService.saveMileageCategory(claims.workspaceId(), category.id(), claims.userId());
+        } else {
+            category = gateway.findMileageCategory(claims.workspaceId())
+                    .filter(MileageSettingsController::isUsableMileageUnitCategory)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "Mileage rate is required before creating a category"));
+            settingsService.saveMileageCategoryWithRate(
+                    claims.workspaceId(),
+                    category.id(),
+                    rateFromPriceInCents(category.unitPrice()),
+                    claims.userId());
         }
-        ClockifyCategoryOption category = gateway.createOrRepairMileageCategory(
-                claims.workspaceId(),
-                new BigDecimal(settings.rate()));
-        settingsService.saveMileageCategory(claims.workspaceId(), category.id(), claims.userId());
         return ResponseEntity.ok(enrichSettings(claims.workspaceId(), settingsService.getEffectiveSettings(claims.workspaceId()))
                 .withMileageCategoryName(category.name()));
     }
@@ -79,7 +96,16 @@ public class MileageSettingsController {
     public ResponseEntity<MileageCategoryOptionsResponse> categories(HttpServletRequest request)
             throws IOException, InterruptedException {
         NormalizedClaims claims = adminClaims(request);
-        return ResponseEntity.ok(MileageCategoryOptionsResponse.from(gateway.listCategories(claims.workspaceId())));
+        try {
+            return ResponseEntity.ok(MileageCategoryOptionsResponse.from(gateway.listCategories(claims.workspaceId())));
+        } catch (ClockifyApiException e) {
+            if (!isAuthzFailure(e)) {
+                throw e;
+            }
+            log.warn("Clockify category lookup denied for workspace {} with status {}",
+                    claims.workspaceId(), e.statusCode());
+            return ResponseEntity.ok(MileageCategoryOptionsResponse.unavailable(CATEGORY_LOOKUP_UNAVAILABLE));
+        }
     }
 
     @GetMapping("/api/mileage/diagnostics")
@@ -121,5 +147,25 @@ public class MileageSettingsController {
         } catch (IOException | RuntimeException e) {
             return settings;
         }
+    }
+
+    private static boolean isAuthzFailure(ClockifyApiException e) {
+        return e.statusCode() == 401 || e.statusCode() == 403;
+    }
+
+    private static boolean isUsableMileageUnitCategory(ClockifyCategoryOption category) {
+        return category.id() != null
+                && "UNIT".equalsIgnoreCase(category.type())
+                && MileageSettingsService.DEFAULT_UNIT.equalsIgnoreCase(category.unit())
+                && category.unitPrice() != null
+                && category.unitPrice().compareTo(BigDecimal.ZERO) > 0;
+    }
+
+    private static BigDecimal rateFromPriceInCents(BigDecimal unitPrice) {
+        return unitPrice.movePointLeft(2).stripTrailingZeros();
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 }

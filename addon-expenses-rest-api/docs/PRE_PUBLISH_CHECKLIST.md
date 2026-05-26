@@ -1,12 +1,14 @@
 # Mileage for Clockify Pre-Publish Checklist
 
-## Current Local Evidence
+## Current Evidence
 
-Last local hardening pass: 2026-05-26.
+Last local/live stabilization pass: 2026-05-26.
 
-- `mvn -pl addon-expenses-rest-api -am clean test`: passed with full reactor `BUILD SUCCESS`:
-  `addon-core` 71 tests, `clockify-rest-client` 101 tests, `addon-db` 37 tests,
-  and `addon-expenses-rest-api` 162 tests.
+- `git diff --check`: passed after the live deletion/setup follow-up.
+- `node --check addon-expenses-rest-api/src/main/resources/static/assets/mileage/settings.js`: passed.
+- `mvn -pl addon-expenses-rest-api -am test`: passed with full reactor `BUILD SUCCESS`:
+  `addon-core` 75 tests, `clockify-rest-client` 102 tests, `addon-db` 37 tests,
+  and `addon-expenses-rest-api` 179 tests.
 - `docker compose -f addon-expenses-rest-api/docker-compose.yml build`: passed.
 - Runtime `/manifest` probe with the compose stack: returned schema `1.5`, key
   `mileage-for-clockify`, scopes `EXPENSE_READ`, `EXPENSE_WRITE`, `USER_READ`,
@@ -29,6 +31,13 @@ Last local hardening pass: 2026-05-26.
 - `gitleaks detect --source . --no-git --redact --verbose`: no leaks found.
 - Flyway history keeps V5/V10 for existing database validation; V12 drops the
   leftover generic tables.
+- Hosted Railway deployment `d2758ee4-2bc2-4dce-8982-0a049a1e54af` reached
+  `Online`; hosted `/actuator/health`, `/manifest`, and settings asset probes
+  passed.
+- Live Clockify uninstall/install/settings/create/delete smoke passed after the
+  deleted-expense webhook fix. Production audit rows for stale test deletes were
+  marked `DELETED` with `deleted_at`, while the current live expense remained
+  `CONVERTED`.
 
 ## Required Local Gates
 
@@ -47,6 +56,7 @@ Last local hardening pass: 2026-05-26.
 - [ ] Uninstall removes stored installation and webhook secrets.
 - [ ] Diagnostics show installation, settings, and native conversion readiness.
 - [ ] UI creates mileage without raw or hidden user ID entry.
+- [ ] Deleting a Clockify expense marks the audit row `DELETED` and removes it from `Mine`/`Team` refreshes.
 - [ ] Active source has no legacy temp-addon schema names, deleted shell probe, or generic expense-boilerplate references outside immutable Flyway history.
 
 ## Required Manual Marketplace Gates

@@ -123,6 +123,33 @@ class MileageSecurityTest {
     }
 
     @Test
+    void mileageIframeHidesInactiveTabPanelsOnInitialRender() {
+        String html = new MileageIframeController().mileage(requestWithRole("OWNER")).getBody();
+
+        assertThat(html).contains("<section class=\"tab-panel active\" id=\"tab-mine\">");
+        assertThat(html).contains("<section class=\"tab-panel\" hidden id=\"tab-team\" data-admin-only=\"true\">");
+        assertThat(html).contains("<section class=\"tab-panel\" hidden id=\"tab-admin-settings\" data-admin-only=\"true\">");
+        assertThat(html).contains("<section class=\"tab-panel\" hidden id=\"tab-conversion-log\" data-admin-only=\"true\">");
+        assertThat(html).contains("<section class=\"tab-panel\" hidden id=\"tab-diagnostics\" data-admin-only=\"true\">");
+    }
+
+    @Test
+    void settingsIframeHidesMineAndShowsSettingsOnInitialRender() {
+        String html = new MileageIframeController().settings(requestWithRole("OWNER")).getBody();
+
+        assertThat(html).contains("<section class=\"tab-panel\" hidden id=\"tab-mine\">");
+        assertThat(html).contains("<section class=\"tab-panel active\" id=\"tab-admin-settings\" data-admin-only=\"true\">");
+    }
+
+    @Test
+    void mileageJavascriptKeepsOnlyActiveTabPanelVisible() throws Exception {
+        String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
+
+        assertThat(javascript).contains("panel.hidden = !active");
+        assertThat(javascript).contains("element.classList.contains(\"tab-panel\") && !element.classList.contains(\"active\")");
+    }
+
+    @Test
     void memberCannotOpenSettingsIframe() throws Exception {
         MockMvc mockMvc = MockMvcBuilders.standaloneSetup(new MileageIframeController()).build();
 
@@ -282,7 +309,7 @@ class MileageSecurityTest {
         assertThat(javascript).contains("if (!validateReceipt(file))");
         assertThat(javascript).contains("Number.isNaN(date.getTime())");
         assertThat(javascript).contains("button.textContent = \"Repairing...\"");
-        assertThat(javascript).contains("button.textContent = \"Create or Repair Mileage Category\"");
+        assertThat(javascript).contains("button.textContent = \"Use or Repair Mileage Category\"");
     }
 
     @Test

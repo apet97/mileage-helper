@@ -1,6 +1,7 @@
 package com.cake.clockify.addon.mileage.clockify;
 
 import com.cake.clockify.addon.db.service.ClockifyClientFactory;
+import com.cake.clockify.client.ClockifyApiException;
 import com.cake.clockify.client.ClockifyClient;
 import com.cake.clockify.client.ClockifyPageRequest;
 import com.cake.clockify.client.domains.ExpensesClient;
@@ -296,6 +297,24 @@ class ClockifyExpenseGatewayTest {
         assertThat(body.getValue().path("unit").asText()).isEqualTo("mile");
         assertThat(body.getValue().path("priceInCents").asInt()).isEqualTo(66);
         assertThat(option).isEqualTo(new ClockifyCategoryOption("cat-mileage", "Mileage", "UNIT", "mile", new BigDecimal("66")));
+    }
+
+    @Test
+    void createOrRepairMileageCategoryAttemptsCreateWhenCategoryLookupIsForbidden() throws Exception {
+        when(expensesClient.getCategories(eq("ws-gateway"), any(ClockifyPageRequest.class)))
+                .thenThrow(ClockifyApiException.forStatus(403, java.util.Map.of(), "{\"message\":\"Forbidden\"}"));
+        when(expensesClient.createCategory(eq("ws-gateway"), any(JsonNode.class)))
+                .thenReturn(objectMapper.createObjectNode()
+                        .put("id", "cat-mileage")
+                        .put("name", "Mileage")
+                        .put("hasUnitPrice", true)
+                        .put("unit", "mile")
+                        .put("priceInCents", 73));
+
+        ClockifyCategoryOption option = gateway.createOrRepairMileageCategory("ws-gateway", new BigDecimal("0.725"));
+
+        verify(expensesClient).createCategory(eq("ws-gateway"), any(JsonNode.class));
+        assertThat(option).isEqualTo(new ClockifyCategoryOption("cat-mileage", "Mileage", "UNIT", "mile", new BigDecimal("73")));
     }
 
     @Test

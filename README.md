@@ -1,6 +1,12 @@
 # Mileage for Clockify
 
-Standalone repository for the Mileage for Clockify add-on. It creates precise mileage reimbursements as real Clockify expenses and converts eligible native/mobile Mileage-category expenses through expense webhooks.
+Mileage for Clockify is a Clockify Marketplace add-on for mileage reimbursements. It creates mileage as real Clockify expenses and converts eligible native/mobile `Mileage` category expenses through signed Clockify webhooks.
+
+Current hosted test add-on:
+
+- App URL: `https://mileage-for-clockify-production.up.railway.app`
+- Manifest: `https://mileage-for-clockify-production.up.railway.app/manifest`
+- Latest verified Railway deployment: `d2758ee4-2bc2-4dce-8982-0a049a1e54af` on 2026-05-26
 
 ## Repository Layout
 
@@ -11,22 +17,26 @@ Standalone repository for the Mileage for Clockify add-on. It creates precise mi
 - `addon-testkit/` - test builders and fixtures.
 - `repo/` - vendored Maven artifacts for the Clockify add-on SDK.
 
-The ignored local clone `addon-expenses-rest-api/addon-java-sdk/` is read-only reference material and must not be committed.
+The ignored local clone `addon-expenses-rest-api/addon-java-sdk/` is read-only reference material. Do not edit or commit it.
 
-## Product Surface
+## What It Does
 
 - Manifest: `GET /manifest`, schema `1.5`, key `mileage-for-clockify`, minimum plan `PRO`.
 - UI: `GET /iframe/mileage`, `GET /iframe/settings`.
-- User APIs: `GET /api/mileage/create-context`, `GET /api/mileage/mine`, `GET /api/mileage/mine.csv`, `POST /api/mileage/preview`, `POST /api/mileage/expenses`.
-- Admin APIs: settings, Mileage category repair, diagnostics, category options, team mileage list/export, conversion list/detail/retry/export under `/api/mileage`.
-- Webhooks: `EXPENSE_CREATED`, `EXPENSE_UPDATED`, `EXPENSE_DELETED`, `EXPENSE_RESTORED`.
 - Manual mileage expenses are billable by default unless the request explicitly sends `billable=false`.
 - The main form hides rate override unless workspace settings allow it; users always see the configured workspace rate context first.
 - Settings use one `Mileage` unit category, fixed unit `mile`, and fixed `HALF_UP` Clockify-style rounding.
-- Generated Clockify notes use the exact calculated amount, for example `Mileage reimbursement: 1 mile x 0.725 = 0.725. Created/converted by Mileage for Clockify.`
+- Setup can use an existing Clockify `Mileage` UNIT/mile category and derive the local rate from Clockify cents pricing.
+- Generated Clockify notes use the exact calculated amount, for example: `Mileage reimbursement: 1 mile x 0.725 = 0.725. Created/converted by Mileage for Clockify.`
 - The add-on displays full calculated mileage decimals in previews, Mine, Team, and Conversions while Clockify receives the rounded expense amount.
-- Mileage lists and CSV exports filter by actual expense date, defaulting to this US week with preset and custom ranges.
-- Native-created/restored expense webhooks accept both full payloads with `id` and reference payloads with `expenseId`.
+- Mine and Team lists/CSVs hide deleted expenses. The admin Conversions view keeps deleted rows as audit history.
+- Expense webhooks accept both full payloads with `id` and reference payloads with `expenseId`.
+
+## API Surface
+
+- User APIs: `GET /api/mileage/create-context`, `GET /api/mileage/mine`, `GET /api/mileage/mine.csv`, `POST /api/mileage/preview`, `POST /api/mileage/expenses`.
+- Admin APIs: settings, Mileage category repair, diagnostics, category options, team mileage list/export, conversion list/detail/retry/export under `/api/mileage`.
+- Webhooks: `EXPENSE_CREATED`, `EXPENSE_UPDATED`, `EXPENSE_DELETED`, `EXPENSE_RESTORED`.
 
 ## Build And Test
 
@@ -35,6 +45,18 @@ Run from the repository root:
 ```bash
 mvn -pl addon-expenses-rest-api -am test
 mvn -pl addon-expenses-rest-api -am clean test
+```
+
+If local Testcontainers cannot discover Docker, use Colima explicitly:
+
+```bash
+DOCKER_HOST=unix:///Users/15x/.colima/default/docker.sock \
+TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock \
+DOCKER_API_VERSION=1.44 \
+mvn -pl addon-expenses-rest-api -am test \
+  -Ddocker.client.strategy=org.testcontainers.dockerclient.EnvironmentAndSystemPropertyClientProviderStrategy \
+  -Ddocker.host=unix:///Users/15x/.colima/default/docker.sock \
+  -Dapi.version=1.44
 ```
 
 ## Docker

@@ -49,15 +49,24 @@ This is the standalone repository for Mileage for Clockify. It contains the add-
 - Manual mileage expenses default to billable when `billable` is omitted. An explicit `false` still stays non-billable.
 - Main-page rate override is hidden and omitted unless workspace settings allow user overrides. Backend calculation still ignores submitted override rates when the setting is off.
 - Mileage settings use one `Mileage` unit category with fixed unit `mile` and fixed `HALF_UP` rounding; existing input/output category settings normalize to that single category.
+- Setup can adopt an existing Clockify `Mileage` UNIT/mile category and derive the rate from Clockify `unitPrice` cents when no local rate is saved yet. Do not force a new category when the default category is already usable.
 - Generated Clockify notes are clean and exact, e.g. `Mileage reimbursement: 1 mile x 0.725 = 0.725. Created/converted by Mileage for Clockify.`
 - Add-on UI tables and previews display full `calculatedAmount` decimals as the primary amount. Clockify expense writes continue to use the rounded `roundedAmount`.
 - Mileage lists and CSV exports filter by `expenseDate`, defaulting to the current US week, Sunday through Saturday.
-- Native expense `EXPENSE_CREATED` and `EXPENSE_RESTORED` handlers accept either `id` or `expenseId` payload shapes.
+- User-facing `Mine` and admin `Team` lists/CSVs exclude `DELETED` audit rows. Admin `Conversions` keeps deleted rows visible as audit history.
+- Expense webhook handlers that need an expense ID accept either `id` or `expenseId` payload shapes. This includes updated/deleted webhooks, which have arrived as full payloads in live Clockify testing.
 - Webhook dispatch records/dedupes events, marks processing outcomes internally, and still returns HTTP 2xx after handler or audit-status failures.
 - Native conversion eligibility skips disabled/incomplete settings, workspace mismatches, output categories, mileage note markers, existing successful conversions, non-input categories, missing/invalid quantity, and locked/finalized expenses.
 - `ClockifyClientFactory` builds per-workspace clients from installed backend/reports URLs. Missing backend URL is fatal; missing reports URL is allowed until a reports request is attempted.
 - The optional `clockify-rest-client` Spring MVC facade and WebClient transport were removed as dead/bloated surfaces. Do not reintroduce global proxy controllers around the typed client.
 - Historical pre-Mileage migrations V5/V10 are retained for Flyway validation only; V12 drops their leftover generic tables. Do not add new `temp_addon_expenses*`, `clockify-expenses-api`, `Clockify Expenses API`, or `com.cake.clockify.addon.expenses` references.
+
+## Hosted Verification Snapshot
+
+- Current hosted add-on URL: `https://mileage-for-clockify-production.up.railway.app`.
+- Latest live Railway deployment verified in this workspace: `d2758ee4-2bc2-4dce-8982-0a049a1e54af` on 2026-05-26.
+- Hosted probes passed for `/actuator/health`, `/manifest`, and the settings asset.
+- Live Clockify uninstall/install/settings/create/delete smoke passed after the deleted-expense webhook fix.
 
 ## Commands
 
@@ -67,6 +76,18 @@ Run from the repository root.
 mvn -pl addon-expenses-rest-api -am test
 mvn -pl addon-expenses-rest-api -am clean test
 docker compose -f addon-expenses-rest-api/docker-compose.yml build
+```
+
+If Testcontainers cannot find Docker on this Mac, force Maven onto Colima:
+
+```bash
+DOCKER_HOST=unix:///Users/15x/.colima/default/docker.sock \
+TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock \
+DOCKER_API_VERSION=1.44 \
+mvn -pl addon-expenses-rest-api -am test \
+  -Ddocker.client.strategy=org.testcontainers.dockerclient.EnvironmentAndSystemPropertyClientProviderStrategy \
+  -Ddocker.host=unix:///Users/15x/.colima/default/docker.sock \
+  -Dapi.version=1.44
 ```
 
 Before Marketplace submission, also complete [addon-expenses-rest-api/docs/PRE_PUBLISH_CHECKLIST.md](addon-expenses-rest-api/docs/PRE_PUBLISH_CHECKLIST.md).

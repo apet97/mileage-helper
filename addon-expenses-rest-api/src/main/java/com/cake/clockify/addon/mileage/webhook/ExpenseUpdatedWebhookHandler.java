@@ -21,9 +21,10 @@ public class ExpenseUpdatedWebhookHandler extends AbstractTypedWebhookHandler<Ex
 
     @Override
     protected void handleTyped(NormalizedClaims claims, String eventType, ExpenseRefWebhookPayload payload) {
-        if (payload == null || payload.expenseId() == null || payload.expenseId().isBlank()) {
+        String expenseId = payload == null ? null : payload.effectiveExpenseId();
+        if (expenseId == null || expenseId.isBlank()) {
             return;
         }
-        conversionService.convertIfEligible(claims, payload.expenseId(), MileageConversionSource.WEBHOOK_UPDATED, eventType);
+        conversionService.convertIfEligible(claims, expenseId, MileageConversionSource.WEBHOOK_UPDATED, eventType);
     }
 }

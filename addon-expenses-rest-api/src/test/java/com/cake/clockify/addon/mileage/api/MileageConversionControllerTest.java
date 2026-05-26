@@ -83,8 +83,8 @@ class MileageConversionControllerTest {
 
     @Test
     void memberCanListOnlyOwnMileageRows() throws Exception {
-        when(conversionRepository.findAllByWorkspaceIdAndUserIdAndExpenseDateBetween(
-                eq("ws-admin"), eq("user-claims"), eq(LocalDate.parse("2026-05-24")), eq(LocalDate.parse("2026-05-30")), any(Pageable.class)))
+        when(conversionRepository.findAllByWorkspaceIdAndUserIdAndStatusNotAndExpenseDateBetween(
+                eq("ws-admin"), eq("user-claims"), eq(MileageConversionStatus.DELETED), eq(LocalDate.parse("2026-05-24")), eq(LocalDate.parse("2026-05-30")), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(conversion("ws-admin"))));
 
         mockMvc.perform(get("/api/mileage/mine")
@@ -95,14 +95,14 @@ class MileageConversionControllerTest {
                 .andExpect(jsonPath("$.conversions[0].calculatedAmount").value("24.497"))
                 .andExpect(jsonPath("$.conversions[0].roundedAmount").value("24.50"));
 
-        verify(conversionRepository).findAllByWorkspaceIdAndUserIdAndExpenseDateBetween(
-                eq("ws-admin"), eq("user-claims"), eq(LocalDate.parse("2026-05-24")), eq(LocalDate.parse("2026-05-30")), any(Pageable.class));
+        verify(conversionRepository).findAllByWorkspaceIdAndUserIdAndStatusNotAndExpenseDateBetween(
+                eq("ws-admin"), eq("user-claims"), eq(MileageConversionStatus.DELETED), eq(LocalDate.parse("2026-05-24")), eq(LocalDate.parse("2026-05-30")), any(Pageable.class));
     }
 
     @Test
     void explicitMineDateRangeFiltersByExpenseDateAndSortsByExpenseDateThenUpdatedAt() throws Exception {
-        when(conversionRepository.findAllByWorkspaceIdAndUserIdAndExpenseDateBetween(
-                eq("ws-admin"), eq("user-claims"), eq(LocalDate.parse("2026-05-01")), eq(LocalDate.parse("2026-05-31")), any(Pageable.class)))
+        when(conversionRepository.findAllByWorkspaceIdAndUserIdAndStatusNotAndExpenseDateBetween(
+                eq("ws-admin"), eq("user-claims"), eq(MileageConversionStatus.DELETED), eq(LocalDate.parse("2026-05-01")), eq(LocalDate.parse("2026-05-31")), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(conversion("ws-admin"))));
 
         mockMvc.perform(get("/api/mileage/mine")
@@ -112,24 +112,24 @@ class MileageConversionControllerTest {
                 .andExpect(status().isOk());
 
         ArgumentCaptor<Pageable> pageable = ArgumentCaptor.forClass(Pageable.class);
-        verify(conversionRepository).findAllByWorkspaceIdAndUserIdAndExpenseDateBetween(
-                eq("ws-admin"), eq("user-claims"), eq(LocalDate.parse("2026-05-01")), eq(LocalDate.parse("2026-05-31")), pageable.capture());
+        verify(conversionRepository).findAllByWorkspaceIdAndUserIdAndStatusNotAndExpenseDateBetween(
+                eq("ws-admin"), eq("user-claims"), eq(MileageConversionStatus.DELETED), eq(LocalDate.parse("2026-05-01")), eq(LocalDate.parse("2026-05-31")), pageable.capture());
         assertThat(pageable.getValue()).isInstanceOf(PageRequest.class);
         assertThat(pageable.getValue().getSort().toString()).isEqualTo("expenseDate: DESC,updatedAt: DESC");
     }
 
     @Test
     void missingRangeDefaultsToCurrentUsWeekInClaimsTimezone() throws Exception {
-        when(conversionRepository.findAllByWorkspaceIdAndUserIdAndExpenseDateBetween(
-                eq("ws-admin"), eq("user-claims"), eq(LocalDate.parse("2026-05-24")), eq(LocalDate.parse("2026-05-30")), any(Pageable.class)))
+        when(conversionRepository.findAllByWorkspaceIdAndUserIdAndStatusNotAndExpenseDateBetween(
+                eq("ws-admin"), eq("user-claims"), eq(MileageConversionStatus.DELETED), eq(LocalDate.parse("2026-05-24")), eq(LocalDate.parse("2026-05-30")), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(conversion("ws-admin"))));
 
         mockMvc.perform(get("/api/mileage/mine")
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("MEMBER", "America/New_York")))
                 .andExpect(status().isOk());
 
-        verify(conversionRepository).findAllByWorkspaceIdAndUserIdAndExpenseDateBetween(
-                eq("ws-admin"), eq("user-claims"), eq(LocalDate.parse("2026-05-24")), eq(LocalDate.parse("2026-05-30")), any(Pageable.class));
+        verify(conversionRepository).findAllByWorkspaceIdAndUserIdAndStatusNotAndExpenseDateBetween(
+                eq("ws-admin"), eq("user-claims"), eq(MileageConversionStatus.DELETED), eq(LocalDate.parse("2026-05-24")), eq(LocalDate.parse("2026-05-30")), any(Pageable.class));
     }
 
     @Test
@@ -160,8 +160,8 @@ class MileageConversionControllerTest {
 
     @Test
     void adminCanListTeamMileageRows() throws Exception {
-        when(conversionRepository.findAllByWorkspaceIdAndExpenseDateBetween(
-                eq("ws-admin"), any(LocalDate.class), any(LocalDate.class), any(Pageable.class)))
+        when(conversionRepository.findAllByWorkspaceIdAndStatusNotAndExpenseDateBetween(
+                eq("ws-admin"), eq(MileageConversionStatus.DELETED), any(LocalDate.class), any(LocalDate.class), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(conversion("ws-admin"))));
         when(gateway.listUsers("ws-admin")).thenReturn(List.of(new ClockifyUserOption("user-claims", "Ada Lovelace", "ada@example.test")));
 
@@ -202,8 +202,8 @@ class MileageConversionControllerTest {
 
     @Test
     void mineCsvExportsOwnRowsAndEscapesCsvCells() throws Exception {
-        when(conversionRepository.findAllByWorkspaceIdAndUserIdAndExpenseDateBetween(
-                eq("ws-admin"), eq("user-claims"), eq(LocalDate.parse("2026-05-01")), eq(LocalDate.parse("2026-05-31")), any(Pageable.class)))
+        when(conversionRepository.findAllByWorkspaceIdAndUserIdAndStatusNotAndExpenseDateBetween(
+                eq("ws-admin"), eq("user-claims"), eq(MileageConversionStatus.DELETED), eq(LocalDate.parse("2026-05-01")), eq(LocalDate.parse("2026-05-31")), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(conversionWithCsvCharacters("ws-admin"))));
 
         mockMvc.perform(get("/api/mileage/mine.csv")
@@ -223,8 +223,8 @@ class MileageConversionControllerTest {
     void teamCsvNeutralizesSpreadsheetFormulas() throws Exception {
         MileageConversion conversion = conversion("ws-admin");
         conversion.setExpenseId("\r=HYPERLINK(\"https://evil.example\",\"x\")");
-        when(conversionRepository.findAllByWorkspaceIdAndExpenseDateBetween(
-                eq("ws-admin"), any(LocalDate.class), any(LocalDate.class), any(Pageable.class)))
+        when(conversionRepository.findAllByWorkspaceIdAndStatusNotAndExpenseDateBetween(
+                eq("ws-admin"), eq(MileageConversionStatus.DELETED), any(LocalDate.class), any(LocalDate.class), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(conversion)));
 
         mockMvc.perform(get("/api/mileage/team.csv")
@@ -245,6 +245,9 @@ class MileageConversionControllerTest {
 
     @Test
     void adminCanExportTeamAndConversionCsv() throws Exception {
+        when(conversionRepository.findAllByWorkspaceIdAndStatusNotAndExpenseDateBetween(
+                eq("ws-admin"), eq(MileageConversionStatus.DELETED), any(LocalDate.class), any(LocalDate.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(conversion("ws-admin"))));
         when(conversionRepository.findAllByWorkspaceIdAndExpenseDateBetween(
                 eq("ws-admin"), any(LocalDate.class), any(LocalDate.class), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(conversion("ws-admin"))));

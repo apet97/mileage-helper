@@ -122,11 +122,33 @@ class ExpenseWebhookPayloadTest {
         ExpenseRefWebhookPayload payload = objectMapper.readValue(json, ExpenseRefWebhookPayload.class);
 
         assertNotNull(payload);
+        assertNull(payload.id());
         assertEquals("6137bb5addd64b2759e031e8", payload.workspaceId());
         assertEquals("61387478050bf21482aad3a8", payload.userId());
         assertEquals("658422d9ac7a9530e4f049ea", payload.projectId());
         assertEquals("658e6c507c6dd067d908c8f5", payload.expenseId());
+        assertEquals("658e6c507c6dd067d908c8f5", payload.effectiveExpenseId());
         assertEquals("65842232ac7a9530e4f049df", payload.categoryId());
+    }
+
+    @Test
+    void deserializeExpenseDeletedFullPayloadUsesIdAsEffectiveExpenseId() throws Exception {
+        String json = """
+                {
+                    "id": "658e6c507c6dd067d908c8f5",
+                    "workspaceId": "6137bb5addd64b2759e031e8",
+                    "userId": "61387478050bf21482aad3a8",
+                    "projectId": "658422d9ac7a9530e4f049ea",
+                    "categoryId": "65842232ac7a9530e4f049df"
+                }
+                """;
+
+        ExpenseRefWebhookPayload payload = objectMapper.readValue(json, ExpenseRefWebhookPayload.class);
+
+        assertNotNull(payload);
+        assertEquals("658e6c507c6dd067d908c8f5", payload.id());
+        assertNull(payload.expenseId());
+        assertEquals("658e6c507c6dd067d908c8f5", payload.effectiveExpenseId());
     }
 
     @Test
@@ -148,6 +170,7 @@ class ExpenseWebhookPayloadTest {
         assertEquals("61387478050bf21482aad3a8", payload.userId());
         assertEquals("658422d9ac7a9530e4f049ea", payload.projectId());
         assertEquals("658e6c507c6dd067d908c8f5", payload.expenseId());
+        assertEquals("658e6c507c6dd067d908c8f5", payload.effectiveExpenseId());
         assertEquals("65842232ac7a9530e4f049df", payload.categoryId());
     }
 

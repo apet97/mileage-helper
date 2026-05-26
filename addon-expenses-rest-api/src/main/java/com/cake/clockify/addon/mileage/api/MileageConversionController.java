@@ -100,9 +100,10 @@ public class MileageConversionController {
             @RequestParam(required = false) String to) {
         NormalizedClaims claims = userClaims(request);
         MileageDateRange range = dateRange(claims, from, to);
-        Page<MileageConversion> conversions = conversionRepository.findAllByWorkspaceIdAndUserIdAndExpenseDateBetween(
+        Page<MileageConversion> conversions = conversionRepository.findAllByWorkspaceIdAndUserIdAndStatusNotAndExpenseDateBetween(
                 claims.workspaceId(),
                 claims.userId(),
+                MileageConversionStatus.DELETED,
                 range.from(),
                 range.to(),
                 pageRequest(page, pageSize));
@@ -118,8 +119,9 @@ public class MileageConversionController {
             @RequestParam(required = false) String to) {
         NormalizedClaims claims = adminClaims(request);
         MileageDateRange range = dateRange(claims, from, to);
-        Page<MileageConversion> conversions = conversionRepository.findAllByWorkspaceIdAndExpenseDateBetween(
+        Page<MileageConversion> conversions = conversionRepository.findAllByWorkspaceIdAndStatusNotAndExpenseDateBetween(
                 claims.workspaceId(),
+                MileageConversionStatus.DELETED,
                 range.from(),
                 range.to(),
                 pageRequest(page, pageSize));
@@ -135,9 +137,10 @@ public class MileageConversionController {
             @RequestParam(required = false) String to) {
         NormalizedClaims claims = userClaims(request);
         MileageDateRange range = dateRange(claims, from, to);
-        Page<MileageConversion> conversions = conversionRepository.findAllByWorkspaceIdAndUserIdAndExpenseDateBetween(
+        Page<MileageConversion> conversions = conversionRepository.findAllByWorkspaceIdAndUserIdAndStatusNotAndExpenseDateBetween(
                 claims.workspaceId(),
                 claims.userId(),
+                MileageConversionStatus.DELETED,
                 range.from(),
                 range.to(),
                 PageRequest.of(0, CSV_PAGE_SIZE, VISIBLE_LIST_SORT));
@@ -151,8 +154,9 @@ public class MileageConversionController {
             @RequestParam(required = false) String to) {
         NormalizedClaims claims = adminClaims(request);
         MileageDateRange range = dateRange(claims, from, to);
-        Page<MileageConversion> conversions = conversionRepository.findAllByWorkspaceIdAndExpenseDateBetween(
+        Page<MileageConversion> conversions = conversionRepository.findAllByWorkspaceIdAndStatusNotAndExpenseDateBetween(
                 claims.workspaceId(),
+                MileageConversionStatus.DELETED,
                 range.from(),
                 range.to(),
                 PageRequest.of(0, CSV_PAGE_SIZE, VISIBLE_LIST_SORT));

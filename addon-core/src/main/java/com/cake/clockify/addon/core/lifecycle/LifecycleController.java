@@ -6,6 +6,8 @@ import com.cake.clockify.addon.core.auth.RequestAttributes;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -25,6 +27,8 @@ import java.util.Map;
 @RestController
 @RequestMapping("/lifecycle")
 public class LifecycleController {
+
+    private static final Logger log = LoggerFactory.getLogger(LifecycleController.class);
 
     private final List<AddonLifecycleHandler> handlers;
     private final ObjectMapper objectMapper;
@@ -46,7 +50,14 @@ public class LifecycleController {
     public ResponseEntity<Void> deleted(HttpServletRequest request,
                                         @RequestBody(required = false) Map<String, Object> payload) {
         NormalizedClaims claims = RequestAttributes.requireClaims(request);
-        handlers.forEach(h -> h.onDeleted(claims));
+        for (AddonLifecycleHandler handler : handlers) {
+            try {
+                handler.onDeleted(claims);
+            } catch (Exception e) {
+                log.warn("Lifecycle DELETED handler {} failed for workspace {}",
+                        handler.getClass().getName(), claims.workspaceId(), e);
+            }
+        }
         return ResponseEntity.ok().build();
     }
 

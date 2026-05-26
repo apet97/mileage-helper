@@ -51,16 +51,25 @@ Main product packages:
 - Manual mileage expenses default to billable when `billable` is omitted; explicit `false` remains non-billable.
 - Main-page rate override is hidden and omitted unless workspace settings allow overrides. The backend calculation also ignores submitted override rates when the setting is off.
 - Mileage settings use one `Mileage` unit category with fixed unit `mile` and fixed `HALF_UP` rounding; existing input/output category settings normalize to that single category.
+- Setup can adopt an existing Clockify `Mileage` UNIT/mile category and derive the local rate from Clockify `unitPrice` cents when no local rate is saved yet.
 - Generated Clockify notes are clean and exact, e.g. `Mileage reimbursement: 1 mile x 0.725 = 0.725. Created/converted by Mileage for Clockify.`
-- `EXPENSE_CREATED` and `EXPENSE_RESTORED` handlers accept either full payloads with `id` or reference payloads with `expenseId`.
+- Expense webhook handlers that need an expense ID accept either full payloads with `id` or reference payloads with `expenseId`; update/delete webhooks have used both shapes in live testing.
 - Webhook dispatch records/dedupes events, marks processing outcomes internally, and still returns HTTP 2xx after handler or audit-status failures.
 - Native conversion eligibility skips disabled/incomplete settings, workspace mismatches, output categories, mileage note markers, existing successful conversions, non-input categories, missing/invalid quantity, and locked/finalized expenses.
 - Admin APIs: settings, Mileage category repair, diagnostics, category options, team mileage list/export, conversion list/detail/retry/export under `/api/mileage`.
 - Add-on previews and mileage tables show full `calculatedAmount` decimals first; Clockify Expenses still receives the rounded `roundedAmount`.
 - Mileage lists and CSV exports filter by actual `expenseDate`, defaulting to the current US week, Sunday through Saturday.
+- User-facing `Mine` and admin `Team` lists/CSVs exclude rows marked `DELETED`; admin `Conversions` keeps deleted rows as audit history.
 - Tables: `mileage_workspace_settings`, `mileage_conversion`.
 - `ClockifyClientFactory` builds per-workspace clients from installed backend/reports URLs. Missing backend URL is fatal; missing reports URL is allowed until a reports request is attempted.
 - Historical pre-Mileage migrations V5/V10 are retained for Flyway validation only; V12 drops their leftover generic tables. New code/docs should not add `temp_addon_expenses*`, `clockify-expenses-api`, `Clockify Expenses API`, or `com.cake.clockify.addon.expenses` references.
+
+## Hosted State
+
+- Production test URL: `https://mileage-for-clockify-production.up.railway.app`.
+- Latest verified Railway deployment: `d2758ee4-2bc2-4dce-8982-0a049a1e54af` on 2026-05-26.
+- Verified hosted probes: `/actuator/health`, `/manifest`, settings JS asset, Clockify uninstall/install/settings/create/delete smoke.
+- Railway Postgres currently logs a Flyway compatibility warning because the managed database is PostgreSQL 18.4 and the bundled Flyway version officially supports older versions. Boot and migrations still completed.
 
 ## Commands
 
@@ -78,6 +87,18 @@ docker compose -f addon-expenses-rest-api/docker-compose.yml build
 docker compose -f addon-expenses-rest-api/docker-compose.yml -f <(printf 'services:\n  db:\n    ports: !reset []\n') up -d
 curl -fsS http://localhost:8080/manifest
 docker compose -f addon-expenses-rest-api/docker-compose.yml -f <(printf 'services:\n  db:\n    ports: !reset []\n') down
+```
+
+If Testcontainers/Docker discovery hangs locally, use the Colima wiring that passed on this Mac:
+
+```bash
+DOCKER_HOST=unix:///Users/15x/.colima/default/docker.sock \
+TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock \
+DOCKER_API_VERSION=1.44 \
+mvn -pl addon-expenses-rest-api -am test \
+  -Ddocker.client.strategy=org.testcontainers.dockerclient.EnvironmentAndSystemPropertyClientProviderStrategy \
+  -Ddocker.host=unix:///Users/15x/.colima/default/docker.sock \
+  -Dapi.version=1.44
 ```
 
 ## Environment
@@ -123,11 +144,10 @@ Default CORS allows Clockify origins and the origin from `ADDON_BASE_URL`, which
 
 Before claiming pre-publish readiness, complete `addon-expenses-rest-api/docs/PRE_PUBLISH_CHECKLIST.md` and paste the exact command outputs into the session summary.
 
-## Final Hardening Workflow
+## Final Hardening History
 
-- For the final hardening plan, implement `docs/superpowers/plans/2026-05-26-mileage-final-hardening.md` task-by-task.
-- After implementation, run an adversarial review over DB defaults, webhook 2xx resilience, audit idempotency, CSV export safety, pagination bounds, and iframe UI failure states.
-- Do not push until the adversarial review is complete and the full verification commands pass.
+- `docs/superpowers/plans/2026-05-26-mileage-final-hardening.md` is historical. The final hardening work landed on `main` at `4830230`; do not treat that plan as an active work queue.
+- Keep future work in maintenance mode: small diffs, focused regression tests, full add-on reactor verification for behavior changes, and hosted manifest/health probes after deployment changes.
 
 For documentation-only changes:
 

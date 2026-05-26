@@ -10,6 +10,7 @@ This module is the implemented product module inside the standalone repository. 
 
 - Settings store only mileage configuration per workspace.
 - Settings use one `Mileage` unit category, fixed unit `mile`, fixed `HALF_UP` rounding, and rate override disabled by default.
+- Setup can adopt an existing Clockify `Mileage` UNIT/mile category and derive the local rate from Clockify `unitPrice` cents when no rate is saved yet.
 - Audit rows provide idempotency, delete/restore state, dry-run records, and conversion failures.
 - Clockify remains the source of truth for expenses, receipts, approvals, reports, budgets, and invoices.
 - Mileage, rate, and money values are handled with `BigDecimal`.
@@ -19,7 +20,15 @@ This module is the implemented product module inside the standalone repository. 
 - Mileage lists and CSV exports default to this US week, Sunday through Saturday, with presets for custom ranges, this/last month, this/last week, and this/last year.
 - Generated Clockify notes are deterministic and exact, for example `Mileage reimbursement: 1 mile x 0.725 = 0.725. Created/converted by Mileage for Clockify.`
 - Add-on previews and mileage tables show full `calculatedAmount` decimals first, with the rounded Clockify expense amount shown as secondary context.
-- Native/mobile created and restored expense webhooks tolerate both full expense payloads and reference payloads containing `expenseId`.
+- Mine and Team lists/CSVs exclude audit rows marked `DELETED`; the admin Conversions view/export keeps them as audit history.
+- Expense webhooks tolerate both full expense payloads with `id` and reference payloads containing `expenseId`.
+
+## Hosted Test Deployment
+
+- URL: `https://mileage-for-clockify-production.up.railway.app`
+- Manifest: `https://mileage-for-clockify-production.up.railway.app/manifest`
+- Latest verified deployment: `d2758ee4-2bc2-4dce-8982-0a049a1e54af`
+- Verified on 2026-05-26 with health, manifest, settings asset, Clockify reinstall, settings load, mileage create/use, and delete-list behavior.
 
 ## Non-goals
 

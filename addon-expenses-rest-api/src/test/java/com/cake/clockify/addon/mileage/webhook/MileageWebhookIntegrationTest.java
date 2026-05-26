@@ -78,12 +78,31 @@ class MileageWebhookIntegrationTest {
     }
 
     @Test
+    void expenseUpdatedFullPayloadFetchesAndConverts() {
+        NormalizedClaims claims = claims();
+        new ExpenseUpdatedWebhookHandler(objectMapper, conversionService)
+                .handle(claims, "EXPENSE_UPDATED", createdPayload("exp-updated-full"));
+
+        verify(conversionService).convertIfEligible(
+                claims, "exp-updated-full", MileageConversionSource.WEBHOOK_UPDATED, "EXPENSE_UPDATED");
+    }
+
+    @Test
     void expenseDeletedMarksAuditDeleted() {
         NormalizedClaims claims = claims();
         new ExpenseDeletedWebhookHandler(objectMapper, conversionService)
                 .handle(claims, "EXPENSE_DELETED", refPayload("exp-1"));
 
         verify(conversionService).markDeleted(claims, "exp-1");
+    }
+
+    @Test
+    void expenseDeletedFullPayloadMarksAuditDeleted() {
+        NormalizedClaims claims = claims();
+        new ExpenseDeletedWebhookHandler(objectMapper, conversionService)
+                .handle(claims, "EXPENSE_DELETED", createdPayload("exp-full"));
+
+        verify(conversionService).markDeleted(claims, "exp-full");
     }
 
     @Test

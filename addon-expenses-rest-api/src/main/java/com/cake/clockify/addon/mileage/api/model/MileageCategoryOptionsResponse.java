@@ -5,7 +5,8 @@ import com.cake.clockify.addon.mileage.clockify.ClockifyCategoryOption;
 import java.util.List;
 
 public record MileageCategoryOptionsResponse(
-        List<CategoryOption> categories
+        List<CategoryOption> categories,
+        String warning
 ) {
     public static MileageCategoryOptionsResponse from(List<ClockifyCategoryOption> categories) {
         return new MileageCategoryOptionsResponse(categories.stream()
@@ -15,7 +16,11 @@ public record MileageCategoryOptionsResponse(
                         category.type(),
                         category.unit(),
                         category.unitPrice() == null ? null : category.unitPrice().toPlainString()))
-                .toList());
+                .toList(), null);
+    }
+
+    public static MileageCategoryOptionsResponse unavailable(String warning) {
+        return new MileageCategoryOptionsResponse(List.of(), warning);
     }
 
     public record CategoryOption(

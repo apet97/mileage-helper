@@ -92,9 +92,13 @@ public class MileageIframeController {
                 .formatted(tab.equals(activeTab) ? " active" : "", tab, adminOnly ? " data-admin-only=\"true\"" : "", label);
     }
 
+    private static String tabPanelAttributes(boolean active) {
+        return "class=\"tab-panel%s\"%s".formatted(active ? " active" : "", active ? "" : " hidden");
+    }
+
     private static String minePanel(boolean active) {
-        return """
-                      <section class="tab-panel%s" id="tab-mine">
+        return "      <section %s id=\"tab-mine\">%n".formatted(tabPanelAttributes(active))
+                + """
                         <header class="panel-heading">
                           <div>
                             <h1>Mine</h1>
@@ -136,7 +140,7 @@ public class MileageIframeController {
                           <div class="table-wrap"><table><thead><tr><th>Date</th><th>Expense</th><th>Source</th><th>Status</th><th>Miles</th><th>Rate</th><th>Amount</th><th>Updated</th></tr></thead><tbody id="mine-rows"></tbody></table></div>
                         </section>
                       </section>
-                """.formatted(active ? " active" : "");
+                """;
     }
 
     private static String adminPanels(String activeTab) {
@@ -147,8 +151,8 @@ public class MileageIframeController {
     }
 
     private static String teamPanel(boolean active) {
-        return """
-                      <section class="tab-panel%s" id="tab-team" data-admin-only="true">
+        return "      <section %s id=\"tab-team\" data-admin-only=\"true\">%n".formatted(tabPanelAttributes(active))
+                + """
                         <header class="panel-heading">
                           <div>
                             <h1>Team</h1>
@@ -166,12 +170,12 @@ public class MileageIframeController {
                         </header>
                         <div class="table-wrap"><table><thead><tr><th>Date</th><th>Expense</th><th>User</th><th>Source</th><th>Status</th><th>Miles</th><th>Rate</th><th>Amount</th><th>Updated</th></tr></thead><tbody id="team-rows"></tbody></table></div>
                       </section>
-                """.formatted(active ? " active" : "");
+                """;
     }
 
     private static String settingsPanel(boolean active) {
         return """
-                      <section class="tab-panel%s" id="tab-admin-settings" data-admin-only="true">
+                      <section %s id="tab-admin-settings" data-admin-only="true">
                         <header class="panel-heading"><h1>Workspace Settings</h1><span id="settings-status" class="status-text"></span></header>
                         <form id="settings-form" class="form-grid">
                           <fieldset class="wide settings-group">
@@ -179,7 +183,7 @@ public class MileageIframeController {
                             <div class="form-grid compact">
                               <label><span>Rate</span><input id="settings-rate" name="rate" inputmode="decimal"></label>
                               <label><span>Mileage category</span><select id="settings-mileage-category" name="mileageCategoryId"></select></label>
-                              <div class="actions align-end"><button type="button" id="btn-setup-mileage-category">Create or Repair Mileage Category</button></div>
+                              <div class="actions align-end"><button type="button" id="btn-setup-mileage-category">Use or Repair Mileage Category</button></div>
                               <label class="check-row"><input id="settings-enabled" name="enabled" type="checkbox"><span>Enabled</span></label>
                               <label class="check-row"><input id="settings-convert-create" name="convertOnCreate" type="checkbox"><span>Convert created native expenses</span></label>
                               <label class="check-row"><input id="settings-convert-update" name="convertOnUpdate" type="checkbox"><span>Convert updated native expenses</span></label>
@@ -189,12 +193,12 @@ public class MileageIframeController {
                           <div class="actions wide"><button type="submit">Save Settings</button></div>
                         </form>
                       </section>
-                """.formatted(active ? " active" : "");
+                """.formatted(tabPanelAttributes(active));
     }
 
     private static String conversionsPanel(boolean active) {
-        return """
-                      <section class="tab-panel%s" id="tab-conversion-log" data-admin-only="true">
+        return "      <section %s id=\"tab-conversion-log\" data-admin-only=\"true\">%n".formatted(tabPanelAttributes(active))
+                + """
                         <header class="panel-heading">
                           <div>
                             <h1>Conversions</h1>
@@ -212,7 +216,7 @@ public class MileageIframeController {
                         </header>
                         <div class="table-wrap"><table><thead><tr><th>Date</th><th>Expense</th><th>Source</th><th>User</th><th>Status</th><th>Miles</th><th>Rate</th><th>Amount</th><th>Updated</th></tr></thead><tbody id="conversion-rows"></tbody></table></div>
                       </section>
-                """.formatted(active ? " active" : "");
+                """;
     }
 
     private static String dateRangeControls(String prefix) {
@@ -237,11 +241,11 @@ public class MileageIframeController {
 
     private static String diagnosticsPanel(boolean active) {
         return """
-                      <section class="tab-panel%s" id="tab-diagnostics" data-admin-only="true">
+                      <section %s id="tab-diagnostics" data-admin-only="true">
                         <header class="panel-heading"><h1>Diagnostics</h1><button type="button" id="btn-refresh-diagnostics">Refresh</button></header>
                         <dl class="diagnostics" id="diagnostics-list"></dl>
                         <ul class="warnings" id="diagnostics-warnings"></ul>
                       </section>
-                """.formatted(active ? " active" : "");
+                """.formatted(tabPanelAttributes(active));
     }
 }

@@ -4,6 +4,8 @@ import com.cake.clockify.addon.mileage.api.model.MileageErrorResponse;
 import com.cake.clockify.client.ClockifyApiException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
@@ -15,6 +17,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -23,6 +26,8 @@ import java.util.stream.Collectors;
 @RestControllerAdvice
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class MileageExceptionHandler {
+    private static final Logger log = LoggerFactory.getLogger(MileageExceptionHandler.class);
+
     private final ObjectMapper objectMapper;
 
     public MileageExceptionHandler(ObjectMapper objectMapper) {
@@ -97,8 +102,19 @@ public class MileageExceptionHandler {
                 null));
     }
 
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<MileageErrorResponse> handleNoResource(NoResourceFoundException e) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new MileageErrorResponse(
+                "not_found",
+                "Resource not found",
+                null,
+                null,
+                null));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<MileageErrorResponse> handleUnexpected(Exception e) {
+        log.error("Unexpected mileage request failure", e);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new MileageErrorResponse(
                 "internal_error",
                 "An unexpected error occurred while processing the mileage request",

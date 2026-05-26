@@ -1,5 +1,7 @@
 # Mileage Final Hardening Implementation Plan
 
+> **Status:** Historical/completed. The planned hardening work landed on `main` at `4830230`; later live follow-up work for Railway setup/deleted-expense behavior was deployed as `d2758ee4-2bc2-4dce-8982-0a049a1e54af`. Do not treat the unchecked boxes below as the current work queue without first re-auditing the repo.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Fix every actionable item from the final DB, stability, webhook, and UI/UX review, then run an adversarial review and push only after the review is clean.
@@ -1038,14 +1040,13 @@ git commit -m "fix: harden mileage iframe ui states"
 
 - [ ] **Step 1: Add only durable guidance**
 
-Add a short section near `## Verification Expectations`:
+Historical result: this guidance now lives in `CLAUDE.md` as completed-history context, not as an active work queue:
 
 ```markdown
-## Final Hardening Workflow
+## Final Hardening History
 
-- For the final hardening plan, implement `docs/superpowers/plans/2026-05-26-mileage-final-hardening.md` task-by-task.
-- After implementation, run an adversarial review over DB defaults, webhook 2xx resilience, audit idempotency, CSV export safety, pagination bounds, and iframe UI failure states.
-- Do not push until the adversarial review is complete and the full verification commands pass.
+- `docs/superpowers/plans/2026-05-26-mileage-final-hardening.md` is historical. The final hardening work landed on `main` at `4830230`; do not treat that plan as an active work queue.
+- Keep future work in maintenance mode: small diffs, focused regression tests, full add-on reactor verification for behavior changes, and hosted manifest/health probes after deployment changes.
 ```
 
 - [ ] **Step 2: Run doc scan**
@@ -1225,4 +1226,3 @@ Expected:
 - Working tree is clean before push.
 - Push succeeds.
 - Final response states exact commands run, what passed, and any residual risk.
-
