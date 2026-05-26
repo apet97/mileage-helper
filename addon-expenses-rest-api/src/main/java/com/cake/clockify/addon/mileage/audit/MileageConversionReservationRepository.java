@@ -18,7 +18,16 @@ public class MileageConversionReservationRepository {
             String expenseId,
             MileageConversionSource source,
             String sourceEventType) {
-        UUID id = UUID.randomUUID();
+        return reserve(UUID.randomUUID(), workspaceId, expenseId, source, sourceEventType);
+    }
+
+    @Transactional
+    public UUID reserve(
+            UUID id,
+            String workspaceId,
+            String expenseId,
+            MileageConversionSource source,
+            String sourceEventType) {
         Object result = entityManager.createNativeQuery("""
                 INSERT INTO {h-schema}mileage_conversion AS mc (
                     id, workspace_id, expense_id, source, source_event_type, status, created_at, updated_at

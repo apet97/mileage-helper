@@ -78,6 +78,9 @@ class MileageApiControllerTest {
                 .build();
         when(reservationRepository.reserve(anyString(), anyString(), eq(MileageConversionSource.ADDON_FORM), eq("ADDON_FORM")))
                 .thenAnswer(invocation -> UUID.randomUUID());
+        when(reservationRepository.reserve(any(UUID.class), anyString(), anyString(),
+                eq(MileageConversionSource.ADDON_FORM), eq("ADDON_FORM")))
+                .thenAnswer(invocation -> invocation.getArgument(0));
         when(conversionRepository.findByIdAndWorkspaceId(any(UUID.class), anyString())).thenAnswer(invocation -> {
             MileageConversion conversion = new MileageConversion();
             conversion.setId(invocation.getArgument(0));
@@ -263,20 +266,26 @@ class MileageApiControllerTest {
         when(settingsService.validateForAddonCreate("ws-api")).thenReturn(settings(false));
         when(gateway.createFlatExpense(eq("ws-api"), any(CreateFlatExpenseCommand.class))).thenReturn(createdExpense("exp-1"));
 
-        mockMvc.perform(post("/api/mileage/expenses")
+        String response = mockMvc.perform(post("/api/mileage/expenses")
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(createBody("37.4", null)))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        String conversionId = objectMapper.readTree(response).path("conversionId").asText();
 
         ArgumentCaptor<MileageConversion> saved = ArgumentCaptor.forClass(MileageConversion.class);
         verify(conversionRepository).saveAndFlush(saved.capture());
+        assertThat(saved.getValue().getId()).hasToString(conversionId);
         assertThat(saved.getValue().getWorkspaceId()).isEqualTo("ws-api");
         assertThat(saved.getValue().getSource()).isEqualTo(MileageConversionSource.ADDON_FORM);
         assertThat(saved.getValue().getStatus()).isEqualTo(MileageConversionStatus.CONVERTED);
         assertThat(saved.getValue().getExpenseId()).isEqualTo("exp-1");
         assertThat(saved.getValue().getUserId()).isEqualTo("user-claims");
         assertThat(saved.getValue().getExpenseDate()).isEqualTo(LocalDate.parse("2026-05-24"));
+        assertThat(saved.getValue().getNoteMarker()).contains(conversionId);
     }
 
     @Test
@@ -290,7 +299,8 @@ class MileageApiControllerTest {
         existing.setExpenseId("exp-race");
         existing.setSource(MileageConversionSource.WEBHOOK_CREATED);
         existing.setStatus(MileageConversionStatus.SKIPPED);
-        when(reservationRepository.reserve(eq("ws-api"), eq("exp-race"), eq(MileageConversionSource.ADDON_FORM), eq("ADDON_FORM")))
+        when(reservationRepository.reserve(any(UUID.class), eq("ws-api"), eq("exp-race"),
+                eq(MileageConversionSource.ADDON_FORM), eq("ADDON_FORM")))
                 .thenReturn(existingId);
         when(conversionRepository.findByIdAndWorkspaceId(existingId, "ws-api")).thenReturn(Optional.of(existing));
 

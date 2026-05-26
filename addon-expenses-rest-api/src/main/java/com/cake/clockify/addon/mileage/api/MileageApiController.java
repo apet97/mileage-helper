@@ -148,6 +148,7 @@ public class MileageApiController {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Clockify did not return a created expense id");
         }
         UUID persistedId = reservationRepository.reserve(
+                conversionId,
                 workspaceId,
                 expenseId,
                 MileageConversionSource.ADDON_FORM,

@@ -108,6 +108,22 @@ class MileageSettingsServiceTest {
     }
 
     @Test
+    void conversionReservationUsesPreferredIdForNewRows() {
+        UUID preferred = UUID.fromString("00000000-0000-0000-0000-000000000777");
+
+        UUID reserved = reservationRepository.reserve(
+                preferred,
+                "ws-reserve-preferred",
+                "exp-reserve-preferred",
+                MileageConversionSource.ADDON_FORM,
+                "ADDON_FORM");
+
+        assertThat(reserved).isEqualTo(preferred);
+        assertThat(conversionRepository.findByIdAndWorkspaceId(preferred, "ws-reserve-preferred"))
+                .isPresent();
+    }
+
+    @Test
     void conversionQueriesAreWorkspaceIsolated() {
         conversionRepository.saveAndFlush(conversion("ws-one", "exp-a", MileageConversionStatus.CONVERTED));
         MileageConversion otherUser = conversion("ws-one", "exp-c", MileageConversionStatus.CONVERTED);
