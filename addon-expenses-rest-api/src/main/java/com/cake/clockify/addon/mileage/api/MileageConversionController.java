@@ -295,9 +295,20 @@ public class MileageConversionController {
             if (i > 0) {
                 builder.append(',');
             }
-            builder.append(escapeCsv(text(values[i])));
+            builder.append(escapeCsv(spreadsheetSafe(text(values[i]))));
         }
         builder.append('\n');
+    }
+
+    private static String spreadsheetSafe(String value) {
+        if (value.isEmpty()) {
+            return value;
+        }
+        char first = value.charAt(0);
+        if (first == '=' || first == '+' || first == '-' || first == '@' || first == '\t') {
+            return "'" + value;
+        }
+        return value;
     }
 
     private static String text(Object value) {

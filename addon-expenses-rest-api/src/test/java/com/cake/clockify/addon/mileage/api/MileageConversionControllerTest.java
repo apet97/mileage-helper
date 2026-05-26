@@ -220,6 +220,20 @@ class MileageConversionControllerTest {
     }
 
     @Test
+    void teamCsvNeutralizesSpreadsheetFormulas() throws Exception {
+        MileageConversion conversion = conversion("ws-admin");
+        conversion.setExpenseId("=HYPERLINK(\"https://evil.example\",\"x\")");
+        when(conversionRepository.findAllByWorkspaceIdAndExpenseDateBetween(
+                eq("ws-admin"), any(LocalDate.class), any(LocalDate.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(conversion)));
+
+        mockMvc.perform(get("/api/mileage/team.csv")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("OWNER")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("'=HYPERLINK")));
+    }
+
+    @Test
     void teamAndConversionsCsvRequireAdminRole() throws Exception {
         mockMvc.perform(get("/api/mileage/team.csv")
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("MEMBER")))
