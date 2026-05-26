@@ -12,6 +12,7 @@ import com.cake.clockify.addon.mileage.security.MileageAuthorizationService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -22,6 +23,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -54,6 +56,7 @@ class MileageSettingsServiceTest {
     @Autowired MileageSettingsRepository settingsRepository;
     @Autowired MileageConversionRepository conversionRepository;
     @Autowired MileageConversionReservationRepository reservationRepository;
+    @Autowired JdbcTemplate jdbcTemplate;
     @Autowired MileageSettingsService settingsService;
     @Autowired MileageAuthorizationService authorizationService;
 
@@ -189,6 +192,21 @@ class MileageSettingsServiceTest {
         assertThat(response.completeForAddonCreate()).isFalse();
         assertThat(response.completeForNativeConversion()).isFalse();
         assertThat(response.diagnostics()).contains("rate is required", "outputCategoryId is required");
+    }
+
+    @Test
+    void databaseDefaultsMatchSingleMileageCategoryDefaults() {
+        jdbcTemplate.update("INSERT INTO mileage_test.mileage_workspace_settings (workspace_id) VALUES (?)", "ws-db-defaults");
+
+        Map<String, Object> row = jdbcTemplate.queryForMap("""
+                SELECT unit, rounding_mode, preserve_original_notes
+                FROM mileage_test.mileage_workspace_settings
+                WHERE workspace_id = ?
+                """, "ws-db-defaults");
+
+        assertThat(row.get("unit")).isEqualTo("mile");
+        assertThat(row.get("rounding_mode")).isEqualTo("HALF_UP");
+        assertThat(row.get("preserve_original_notes")).isEqualTo(false);
     }
 
     @Test
