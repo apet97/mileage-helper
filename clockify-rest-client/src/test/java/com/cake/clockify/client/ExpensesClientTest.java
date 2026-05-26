@@ -107,6 +107,25 @@ class ExpensesClientTest {
     }
 
     @Test
+    void createExpenseWithFileSanitizesMultipartHeaders() throws Exception {
+        RecordingTransport transport = new RecordingTransport(List.of("{}"));
+        ClockifyClient client = TestClockifyClient.client(transport);
+
+        client.expenses().createExpense(
+                "w1",
+                body(),
+                "../evil\r\nContent-Disposition: form-data; name=\"pwned\".pdf",
+                "application/pdf\r\nX-Injected: yes",
+                new byte[]{1, 2, 3});
+
+        String bodyStr = new String(transport.requests.get(0).bytesBody(), java.nio.charset.StandardCharsets.UTF_8);
+        assertTrue(bodyStr.contains("filename=\"evil__Content-Disposition_ form-data_ name=_pwned_.pdf\""));
+        assertTrue(bodyStr.contains("Content-Type: application/octet-stream"));
+        assertFalse(bodyStr.contains("name=\"pwned\""));
+        assertFalse(bodyStr.contains("X-Injected: yes"));
+    }
+
+    @Test
     void updateExpenseWithFileAppendsFileToChangeFields() throws Exception {
         RecordingTransport transport = new RecordingTransport(List.of("{}"));
         ClockifyClient client = TestClockifyClient.client(transport);

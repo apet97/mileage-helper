@@ -29,6 +29,7 @@ This module is the implemented product module inside the standalone repository. 
 - Manifest: `https://mileage-for-clockify-production.up.railway.app/manifest`
 - Latest verified deployment: `d2758ee4-2bc2-4dce-8982-0a049a1e54af`
 - Verified on 2026-05-26 with health, manifest, settings asset, Clockify reinstall, settings load, mileage create/use, and delete-list behavior.
+- Dev workspace receipt smoke on 2026-05-27 created, fetched, and deleted a sacrificial Mileage PDF receipt expense through the local `clockify-rest-client`; post-delete GET returned non-success.
 
 ## Non-goals
 

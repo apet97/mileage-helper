@@ -69,6 +69,7 @@ Main product packages:
 - Production test URL: `https://mileage-for-clockify-production.up.railway.app`.
 - Latest verified Railway deployment: `d2758ee4-2bc2-4dce-8982-0a049a1e54af` on 2026-05-26.
 - Verified hosted probes: `/actuator/health`, `/manifest`, settings JS asset, Clockify uninstall/install/settings/create/delete smoke.
+- Dev workspace receipt smoke on 2026-05-27 used the local `clockify-rest-client` to create, fetch, and delete a sacrificial Mileage PDF receipt expense; post-delete GET returned non-success.
 - Railway Postgres currently logs a Flyway compatibility warning because the managed database is PostgreSQL 18.4 and the bundled Flyway version officially supports older versions. Boot and migrations still completed.
 
 ## Commands
@@ -118,6 +119,7 @@ Runtime configuration uses these names:
 - `PORT`
 
 Live sacrificial Clockify checks may use shell environment variables such as `CLOCKIFY_API_BASE_URL`, `CLOCKIFY_API_KEY`, `CLOCKIFY_WORKSPACE_ID`, `CLOCKIFY_TEST_USER_ID`, and `CLOCKIFY_TEST_PROJECT_ID`. Never print secret values.
+Pass live secrets through environment variables, stdin, or a local secret store; never write real keys into repo files, command transcripts intended for docs, or final reports.
 
 Default CORS allows Clockify origins and the origin from `ADDON_BASE_URL`, which keeps local ngrok iframe/API testing working without adding a broad wildcard.
 

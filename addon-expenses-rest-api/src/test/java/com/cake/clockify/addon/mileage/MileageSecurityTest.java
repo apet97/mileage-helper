@@ -266,6 +266,13 @@ class MileageSecurityTest {
     }
 
     @Test
+    void mileageJavascriptHonorsClockifyUserTimeZoneClaimAlias() throws Exception {
+        String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
+
+        assertThat(javascript).contains("tokenClaims.userTimeZone");
+    }
+
+    @Test
     void mileageJavascriptWiresDateRangePresetsToListsAndCsvExports() throws Exception {
         String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
 

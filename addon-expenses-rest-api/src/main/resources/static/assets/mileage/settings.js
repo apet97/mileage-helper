@@ -112,7 +112,7 @@
   }
 
   function timezoneFromClaims() {
-    return tokenClaims.timeZone || tokenClaims.timezone || tokenClaims.tz || "";
+    return tokenClaims.userTimeZone || tokenClaims.timeZone || tokenClaims.userTimezone || tokenClaims.timezone || tokenClaims.tz || "";
   }
 
   function themeFromClaims(claims) {

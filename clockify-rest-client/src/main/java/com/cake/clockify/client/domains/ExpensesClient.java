@@ -278,16 +278,39 @@ public final class ExpensesClient {
             out.write("\r\n".getBytes(StandardCharsets.UTF_8));
         }
         if (fileBytes != null && fileBytes.length > 0) {
-            String actualFileName = (fileName == null || fileName.isBlank()) ? "file" : fileName;
-            String actualContentType = (contentType == null || contentType.isBlank()) ? "application/octet-stream" : contentType;
+            String actualFileName = safeMultipartFileName(fileName);
+            String actualContentType = safeMultipartContentType(contentType);
             out.write(("--" + boundary + "\r\n").getBytes(StandardCharsets.UTF_8));
-            out.write(("Content-Disposition: form-data; name=\"file\"; filename=\"" + actualFileName.replace("\"", "") + "\"\r\n").getBytes(StandardCharsets.UTF_8));
+            out.write(("Content-Disposition: form-data; name=\"file\"; filename=\"" + actualFileName + "\"\r\n").getBytes(StandardCharsets.UTF_8));
             out.write(("Content-Type: " + actualContentType + "\r\n\r\n").getBytes(StandardCharsets.UTF_8));
             out.write(fileBytes);
             out.write("\r\n".getBytes(StandardCharsets.UTF_8));
         }
         out.write(("--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
         return out.toByteArray();
+    }
+
+    private static String safeMultipartFileName(String fileName) {
+        String cleaned = fileName == null ? "" : fileName.trim().replace('\\', '/');
+        int lastSlash = cleaned.lastIndexOf('/');
+        if (lastSlash >= 0) {
+            cleaned = cleaned.substring(lastSlash + 1);
+        }
+        cleaned = cleaned.replaceAll("[\\p{Cntrl}\";:]", "_")
+                .replaceAll("\\s+", " ")
+                .trim();
+        if (cleaned.isBlank()) {
+            return "file";
+        }
+        return cleaned.length() <= 120 ? cleaned : cleaned.substring(0, 120);
+    }
+
+    private static String safeMultipartContentType(String contentType) {
+        String cleaned = contentType == null ? "" : contentType.trim().toLowerCase(Locale.ROOT);
+        if (cleaned.isBlank() || !cleaned.matches("[a-z0-9!#$&^_.+-]+/[a-z0-9!#$&^_.+-]+")) {
+            return "application/octet-stream";
+        }
+        return cleaned;
     }
 
     private static String mapToChangeField(String key) {

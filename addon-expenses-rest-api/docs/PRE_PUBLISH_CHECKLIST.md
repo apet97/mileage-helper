@@ -2,14 +2,16 @@
 
 ## Current Evidence
 
-Last local/live stabilization pass: 2026-05-26.
+Last local/live stabilization pass: 2026-05-27.
 
 - `git diff --check`: passed after the live deletion/setup follow-up.
 - `node --check addon-expenses-rest-api/src/main/resources/static/assets/mileage/settings.js`: passed.
+- `gitleaks detect --source . --no-git --redact --verbose`: passed with no leaks found.
 - `mvn -pl addon-expenses-rest-api -am test`: passed with full reactor `BUILD SUCCESS`:
-  `addon-core` 75 tests, `clockify-rest-client` 102 tests, `addon-db` 37 tests,
-  and `addon-expenses-rest-api` 179 tests.
+  `addon-core` 75 tests, `clockify-rest-client` 103 tests, `addon-db` 37 tests,
+  and `addon-expenses-rest-api` 180 tests.
 - `docker compose -f addon-expenses-rest-api/docker-compose.yml build`: passed.
+- Dev workspace live receipt smoke via the local `clockify-rest-client`: created, fetched, and deleted a sacrificial Mileage PDF receipt expense; post-delete GET returned non-success. No API key or token is stored in this repo.
 - Runtime `/manifest` probe with the compose stack: returned schema `1.5`, key
   `mileage-for-clockify`, scopes `EXPENSE_READ`, `EXPENSE_WRITE`, `USER_READ`,
   `PROJECT_READ`, `WORKSPACE_READ`, and the four expense webhooks

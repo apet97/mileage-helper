@@ -79,7 +79,7 @@ docker compose -f addon-expenses-rest-api/docker-compose.yml -f <(printf 'servic
 - [AGENTS.md](AGENTS.md) - binding Codex/agent rules.
 - [CLAUDE.md](CLAUDE.md) - Claude Code project guide.
 - [addon-expenses-rest-api/README.md](addon-expenses-rest-api/README.md) - product module guide.
-- [addon-expenses-rest-api/docs/PRE_PUBLISH_CHECKLIST.md](addon-expenses-rest-api/docs/PRE_PUBLISH_CHECKLIST.md) - local and manual gates before Marketplace submission.
+- [addon-expenses-rest-api/docs/PRE_PUBLISH_CHECKLIST.md](addon-expenses-rest-api/docs/PRE_PUBLISH_CHECKLIST.md) - current local, live-dev, and manual gates before Marketplace submission.
 - [addon-expenses-rest-api/endpoints.md](addon-expenses-rest-api/endpoints.md), [models.md](addon-expenses-rest-api/models.md), [webhooks.md](addon-expenses-rest-api/webhooks.md), [edge-cases.md](addon-expenses-rest-api/edge-cases.md), [reports.md](addon-expenses-rest-api/reports.md) - active product docs.
 - `addon-expenses-rest-api/MARKETPLACE_OCS/` - copied Marketplace documentation reference.
 
