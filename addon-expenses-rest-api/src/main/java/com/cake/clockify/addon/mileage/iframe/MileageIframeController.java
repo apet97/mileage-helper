@@ -47,6 +47,7 @@ public class MileageIframeController {
                   <meta name="viewport" content="width=device-width, initial-scale=1.0">
                   <title>Mileage for Clockify</title>
                   <link rel="stylesheet" href="/assets/mileage/settings.css">
+                  <script src="/assets/mileage/settings-date.js" defer></script>
                   <script src="/assets/mileage/settings.js" defer></script>
                 </head>
                 <body>

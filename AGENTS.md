@@ -60,6 +60,8 @@ This is the standalone repository for Mileage for Clockify. It contains the add-
 - Native conversion eligibility skips disabled/incomplete settings, workspace mismatches, output categories, mileage note markers, existing successful conversions, non-input categories, missing/invalid quantity, and locked/finalized expenses.
 - `ClockifyClientFactory` builds per-workspace clients from installed backend/reports URLs. Missing backend URL is fatal; missing reports URL is allowed until a reports request is attempted.
 - Clockify token timezone normalization accepts `userTimeZone`, `userTimezone`, `timeZone`, `timezone`, and `tz`; keep frontend timezone alias handling aligned with `ClaimsNormalizer`.
+- The settings UI loads `/assets/mileage/settings-date.js` before `/assets/mileage/settings.js`. Keep date presets/default create dates in that helper so Clockify claim timezones stay aligned with backend default ranges.
+- After any deploy that touches mileage static assets, probe both `/assets/mileage/settings-date.js` and `/assets/mileage/settings.js`; a single settings asset probe is not enough.
 - Receipt uploads in `clockify-rest-client` centralize multipart body construction so Expenses and Files clients share field-name validation, filename sanitization, and content-type fallback behavior.
 - The optional `clockify-rest-client` Spring MVC facade and WebClient transport were removed as dead/bloated surfaces. Do not reintroduce global proxy controllers around the typed client.
 - Historical pre-Mileage migrations V5/V10 are retained for Flyway validation only; V12 drops their leftover generic tables. Do not add new `temp_addon_expenses*`, `clockify-expenses-api`, `Clockify Expenses API`, or `com.cake.clockify.addon.expenses` references.
@@ -70,10 +72,10 @@ This is the standalone repository for Mileage for Clockify. It contains the add-
 - Current hosted manifest URL: `https://mileage-for-clockify-production.up.railway.app/manifest`.
 - Use `railway deployment list` for the current Railway deployment ID. Do not treat old deployment IDs in notes, chats, or previous evidence as current truth.
 - Dated deployment evidence belongs in the pre-publish checklist after each deploy.
-- Last evidence snapshot, dated 2026-05-27: hosted probes passed for `/actuator/health`, `/manifest`, and the settings asset.
+- Last evidence snapshot, dated 2026-05-27: hosted probes passed for `/actuator/health`, `/manifest`, and the then-current settings asset. For new deploys, probe both settings JS assets.
 - Historical live Clockify smoke, dated 2026-05-27: uninstall/install/settings/create/delete passed after the deleted-expense webhook fix. Treat this as historical unless rerun.
 - Dev workspace receipt smoke on 2026-05-27 used the local `clockify-rest-client` to create, fetch, and delete a sacrificial Mileage PDF receipt expense; post-delete GET returned non-success. Never persist dev API keys in docs, logs, or commits.
-- Local hardening review on 2026-05-27 covered multipart receipt/header sanitization, shared file-upload behavior, server/frontend timezone alias parity, and secret-scan proof.
+- Local hardening review on 2026-05-27 covered multipart receipt/header sanitization, shared file-upload behavior, server/frontend timezone alias parity, date-helper static asset verification, and secret-scan proof.
 - Live Clockify smoke is optional and requires local secrets. Never commit or echo API keys/tokens. If not run, final output must say it was skipped.
 
 ## Commands

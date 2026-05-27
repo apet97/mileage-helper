@@ -34,7 +34,9 @@ class MileageSecurityTest {
         String html = new MileageIframeController().mileage(requestWithRole("ADMIN")).getBody();
 
         assertThat(html).contains("href=\"/assets/mileage/settings.css\"");
+        assertThat(html).contains("src=\"/assets/mileage/settings-date.js\" defer");
         assertThat(html).contains("src=\"/assets/mileage/settings.js\" defer");
+        assertThat(html.indexOf("settings-date.js")).isLessThan(html.indexOf("settings.js"));
     }
 
     @Test
@@ -268,8 +270,11 @@ class MileageSecurityTest {
     @Test
     void mileageJavascriptHonorsClockifyUserTimeZoneClaimAlias() throws Exception {
         String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
+        String dateJavascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings-date.js"));
 
         assertThat(javascript).contains("tokenClaims.userTimeZone");
+        assertThat(javascript).contains("dateRangeForPreset(preset, timezoneFromClaims())");
+        assertThat(dateJavascript).contains("Intl.DateTimeFormat(\"en-CA\"");
     }
 
     @Test
@@ -292,10 +297,11 @@ class MileageSecurityTest {
     }
 
     @Test
-    void mileageJavascriptDefaultsCreateDateFromLocalDateHelper() throws Exception {
+    void mileageJavascriptDefaultsCreateDateFromClaimsTimezoneHelper() throws Exception {
         String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
 
-        assertThat(javascript).contains("date.value = isoDate(todayLocalDate())");
+        assertThat(javascript).contains("date.value = window.MileageDateHelpers.isoDate(");
+        assertThat(javascript).contains("window.MileageDateHelpers.todayForTimeZone(timezoneFromClaims())");
         assertThat(javascript).doesNotContain("date.value = new Date().toISOString().slice(0, 10)");
     }
 

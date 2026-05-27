@@ -82,16 +82,12 @@ public final class DefaultClockifyTransport implements ClockifyTransport {
                 response.body().close();
                 currentUri = nextUri;
 
-                String nextMethod = currentRequest.method();
                 if (status == 303 || status == 301 || status == 302) {
-                    nextMethod = "GET";
+                    currentRequest = ClockifyRequest.builder("GET", currentUri.getPath())
+                            .baseUrlFamily(currentRequest.baseUrlFamily())
+                            .binaryResponse(currentRequest.binaryResponse())
+                            .build();
                 }
-
-                final String finalMethod = nextMethod;
-                currentRequest = ClockifyRequest.builder(finalMethod, currentUri.getPath())
-                        .baseUrlFamily(currentRequest.baseUrlFamily())
-                        .binaryResponse(currentRequest.binaryResponse())
-                        .build();
 
                 continue;
             }
