@@ -17,7 +17,7 @@ section "Addon core claims normalizer tests"
 mvn -pl addon-core -Dtest=ClaimsNormalizerTest test
 
 section "Mileage security tests"
-mvn -pl addon-expenses-rest-api -Dtest=MileageSecurityTest test
+mvn -pl addon-expenses-rest-api -am -Dtest=MileageSecurityTest -Dsurefire.failIfNoSpecifiedTests=false test
 
 section "Full add-on reactor tests with Colima Testcontainers"
 DOCKER_HOST=unix:///Users/15x/.colima/default/docker.sock \
@@ -32,7 +32,11 @@ section "Git whitespace check"
 git diff --check
 
 section "Settings JavaScript syntax check"
+node --check addon-expenses-rest-api/src/main/resources/static/assets/mileage/settings-date.js
 node --check addon-expenses-rest-api/src/main/resources/static/assets/mileage/settings.js
+
+section "Mileage date helper behavior"
+node scripts/test-mileage-date-helpers.mjs
 
 section "Secret scan"
 gitleaks detect --source . --no-git --redact --verbose

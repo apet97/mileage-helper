@@ -19,6 +19,7 @@ This module is the implemented product module inside the standalone repository. 
 - Rate override on the main page is available only when workspace settings allow it; otherwise the configured workspace rate is used and shown as read-only context.
 - Regular users see only `Mine`; admins also see `Team`, `Settings`, `Conversions`, and `Diagnostics`.
 - Mileage lists and CSV exports default to this US week, Sunday through Saturday, with presets for custom ranges, this/last month, this/last week, and this/last year.
+- The UI date presets and default create date use the Clockify claim timezone through `/assets/mileage/settings-date.js`, falling back to the browser-local date only when the claim timezone is absent or invalid.
 - Generated Clockify notes are deterministic and exact, for example `Mileage reimbursement: 1 mile x 0.725 = 0.725. Created/converted by Mileage for Clockify.`
 - Add-on previews and mileage tables show full `calculatedAmount` decimals first, with the rounded Clockify expense amount shown as secondary context.
 - Mine and Team lists/CSVs exclude audit rows marked `DELETED`; the admin Conversions view/export keeps them as audit history.
@@ -30,9 +31,9 @@ This module is the implemented product module inside the standalone repository. 
 - Manifest: `https://mileage-for-clockify-production.up.railway.app/manifest`
 - Railway deployment ID: use `railway deployment list` for the current Railway deployment ID.
 - Dated deployment evidence belongs in the pre-publish checklist after each deploy; old deployment IDs are historical evidence, not current truth.
-- Last evidence snapshot, dated 2026-05-27: health, manifest, and settings asset probes passed. Clockify reinstall, settings load, mileage create/use, and delete-list behavior were last user-tested on 2026-05-26.
+- Last evidence snapshot, dated 2026-05-27: health, manifest, and the then-current settings asset probes passed. New deploys that include the split date helper must probe both `/assets/mileage/settings-date.js` and `/assets/mileage/settings.js`. Clockify reinstall, settings load, mileage create/use, and delete-list behavior were last user-tested on 2026-05-26.
 - Dev workspace receipt smoke on 2026-05-27 created, fetched, and deleted a sacrificial Mileage PDF receipt expense through the local `clockify-rest-client`; post-delete GET returned non-success.
-- Local hardening review on 2026-05-27 covered multipart receipt/header sanitization, timezone claim alias parity, focused client/security tests, and `gitleaks` proof.
+- Local hardening review on 2026-05-27 covered multipart receipt/header sanitization, timezone claim alias parity, focused client/security tests, date-helper static asset checks, and `gitleaks` proof.
 - Live Clockify smoke is optional and requires local secrets. Never commit or echo API keys/tokens. If not run, final output must say it was skipped.
 
 ## Non-goals

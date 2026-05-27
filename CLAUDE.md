@@ -63,6 +63,8 @@ Main product packages:
 - Tables: `mileage_workspace_settings`, `mileage_conversion`.
 - `ClockifyClientFactory` builds per-workspace clients from installed backend/reports URLs. Missing backend URL is fatal; missing reports URL is allowed until a reports request is attempted.
 - Clockify token timezone normalization accepts `userTimeZone`, `userTimezone`, `timeZone`, `timezone`, and `tz`; keep this aligned with the settings UI timezone alias handling.
+- The settings UI depends on `/assets/mileage/settings-date.js` loading before `/assets/mileage/settings.js`. The helper owns date presets/default dates so frontend ranges use the Clockify claim timezone, with browser-local fallback for invalid timezone claims.
+- After static asset deploys, probe both settings JS assets. Do not treat the old single `settings.js` probe as full proof for the current UI.
 - Receipt uploads in `clockify-rest-client` use the shared multipart helper. Expenses and Files clients must not hand-roll multipart headers because field names, filenames, and content types need the same defensive handling.
 - Historical pre-Mileage migrations V5/V10 are retained for Flyway validation only; V12 drops their leftover generic tables. New code/docs should not add `temp_addon_expenses*`, `clockify-expenses-api`, `Clockify Expenses API`, or `com.cake.clockify.addon.expenses` references.
 
@@ -72,10 +74,10 @@ Main product packages:
 - Production manifest URL: `https://mileage-for-clockify-production.up.railway.app/manifest`.
 - Use `railway deployment list` for the current Railway deployment ID. Do not treat old deployment IDs in notes, chats, or previous evidence as current truth.
 - Dated deployment evidence belongs in the pre-publish checklist after each deploy.
-- Last evidence snapshot, dated 2026-05-27: hosted probes passed for `/actuator/health`, `/manifest`, and the settings JS asset.
+- Last evidence snapshot, dated 2026-05-27: hosted probes passed for `/actuator/health`, `/manifest`, and the then-current settings JS asset. New deploys must also prove `/assets/mileage/settings-date.js`.
 - Historical live Clockify smoke, dated 2026-05-27: uninstall/install/settings/create/delete passed after the deleted-expense webhook fix. Treat this as historical unless rerun.
 - Dev workspace receipt smoke on 2026-05-27 used the local `clockify-rest-client` to create, fetch, and delete a sacrificial Mileage PDF receipt expense; post-delete GET returned non-success.
-- Local hardening review on 2026-05-27 added shared multipart upload tests, Clockify timezone alias normalization tests, Mileage security tests, `node --check`, `git diff --check`, and `gitleaks` proof.
+- Local hardening review on 2026-05-27 added shared multipart upload tests, Clockify timezone alias normalization tests, Mileage security tests, date-helper static asset checks, `node --check`, `git diff --check`, and `gitleaks` proof.
 - Railway Postgres currently logs a Flyway compatibility warning because the managed database is PostgreSQL 18.4 and the bundled Flyway version officially supports older versions. Boot and migrations still completed.
 
 ## Commands
@@ -156,6 +158,8 @@ Default CORS allows Clockify origins and the origin from `ADDON_BASE_URL`, which
 ## Verification Expectations
 
 Before claiming pre-publish readiness, run `./scripts/verify-publish.sh`, complete `addon-expenses-rest-api/docs/PRE_PUBLISH_CHECKLIST.md`, and paste the exact command outputs into the session summary.
+
+`./scripts/verify-publish.sh` checks both mileage settings JS assets plus `scripts/test-mileage-date-helpers.mjs`. If a deploy follows, include hosted probes for `/assets/mileage/settings-date.js` and `/assets/mileage/settings.js`.
 
 ## Final Hardening History
 

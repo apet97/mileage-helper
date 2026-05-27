@@ -188,7 +188,9 @@
   function defaultDate() {
     const date = element("field-date");
     if (date && !date.value) {
-      date.value = isoDate(todayLocalDate());
+      date.value = window.MileageDateHelpers.isoDate(
+        window.MileageDateHelpers.todayForTimeZone(timezoneFromClaims())
+      );
     }
   }
 
@@ -306,50 +308,7 @@
     if (!Object.prototype.hasOwnProperty.call(rangePresets, preset)) {
       preset = "this_week";
     }
-    const today = todayLocalDate();
-    const weekStart = startOfWeek(today);
-    if (preset === "this_month") {
-      return rangeForDates(new Date(today.getFullYear(), today.getMonth(), 1),
-        new Date(today.getFullYear(), today.getMonth() + 1, 0));
-    }
-    if (preset === "last_week") {
-      return rangeForDates(addDays(weekStart, -7), addDays(weekStart, -1));
-    }
-    if (preset === "last_month") {
-      return rangeForDates(new Date(today.getFullYear(), today.getMonth() - 1, 1),
-        new Date(today.getFullYear(), today.getMonth(), 0));
-    }
-    if (preset === "this_year") {
-      return rangeForDates(new Date(today.getFullYear(), 0, 1), new Date(today.getFullYear(), 11, 31));
-    }
-    if (preset === "last_year") {
-      return rangeForDates(new Date(today.getFullYear() - 1, 0, 1), new Date(today.getFullYear() - 1, 11, 31));
-    }
-    return rangeForDates(weekStart, addDays(weekStart, 6));
-  }
-
-  function todayLocalDate() {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  }
-
-  function startOfWeek(date) {
-    return addDays(date, -date.getDay());
-  }
-
-  function addDays(date, days) {
-    return new Date(date.getFullYear(), date.getMonth(), date.getDate() + days);
-  }
-
-  function rangeForDates(from, to) {
-    return { from: isoDate(from), to: isoDate(to) };
-  }
-
-  function isoDate(date) {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    return year + "-" + month + "-" + day;
+    return window.MileageDateHelpers.dateRangeForPreset(preset, timezoneFromClaims());
   }
 
   function mileagePayload() {

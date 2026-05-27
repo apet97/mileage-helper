@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -191,6 +192,55 @@ class TransportRetryAndConfigTest {
             transport.send(ClockifyRequest.builder("GET", "/v1/user").build());
         });
         assertTrue(ex.getMessage().contains("Too many redirects"));
+    }
+
+    @Test
+    void transportPreservesPostBodyAndContentTypeAcrossTemporaryRedirect() throws Exception {
+        assertRedirectPreservesPostBodyAndContentType(307);
+    }
+
+    @Test
+    void transportPreservesPostBodyAndContentTypeAcrossPermanentRedirect() throws Exception {
+        assertRedirectPreservesPostBodyAndContentType(308);
+    }
+
+    private void assertRedirectPreservesPostBodyAndContentType(int redirectStatus) throws Exception {
+        AtomicInteger count = new AtomicInteger();
+        String json = "{\"name\":\"Acme\"}";
+        try (LocalServer server = new LocalServer(exchange -> {
+            int call = count.incrementAndGet();
+            if (call == 1) {
+                assertEquals("POST", exchange.getRequestMethod());
+                assertEquals("/v1/workspaces/w/clients", exchange.getRequestURI().getPath());
+                exchange.getRequestBody().readAllBytes();
+                exchange.getResponseHeaders().add("Location", "/redirected");
+                exchange.sendResponseHeaders(redirectStatus, -1);
+                exchange.close();
+                return;
+            }
+
+            assertEquals("POST", exchange.getRequestMethod());
+            assertEquals("/redirected", exchange.getRequestURI().getPath());
+            assertEquals("application/json", exchange.getRequestHeaders().getFirst("Content-Type"));
+            assertEquals(json, new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            byte[] body = "{\"ok\":true}".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        })) {
+            ClockifyClientConfig config = ClockifyClient.builder()
+                    .apiKey("secret")
+                    .backendBaseUrl(server.uri())
+                    .followRedirects(true)
+                    .buildConfig();
+
+            ClockifyResponse<String> response = new DefaultClockifyTransport(config)
+                    .send(ClockifyRequest.builder("POST", "/v1/workspaces/w/clients").jsonBody(json).build());
+
+            assertEquals(200, response.statusCode());
+            assertEquals("{\"ok\":true}", response.body());
+            assertEquals(2, count.get());
+        }
     }
 
     interface Handler { void handle(com.sun.net.httpserver.HttpExchange exchange) throws IOException; }

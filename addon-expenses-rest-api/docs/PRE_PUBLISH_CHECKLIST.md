@@ -7,16 +7,18 @@ Run from the repository root before claiming publish readiness:
 - [ ] `git status --short --branch` reviewed.
 - [ ] `./scripts/verify-publish.sh` passes.
 - [ ] If a new Railway deploy was made, `railway deployment list` was used for the current Railway deployment ID.
-- [ ] If a new Railway deploy was made, hosted `/actuator/health`, `/manifest`, and settings asset probes passed and the dated evidence was added below.
+- [ ] If a new Railway deploy was made, hosted `/actuator/health`, `/manifest`, `/assets/mileage/settings-date.js`, `/assets/mileage/settings.js`, and icon probes passed and the dated evidence was added below.
 
 `./scripts/verify-publish.sh` runs these local publish-safety checks:
 
 - `mvn -pl clockify-rest-client -Dtest=ExpensesClientTest,FilesClientTest test`
 - `mvn -pl addon-core -Dtest=ClaimsNormalizerTest test`
-- `mvn -pl addon-expenses-rest-api -Dtest=MileageSecurityTest test`
+- `mvn -pl addon-expenses-rest-api -am -Dtest=MileageSecurityTest -Dsurefire.failIfNoSpecifiedTests=false test`
 - Colima-backed `mvn -pl addon-expenses-rest-api -am test`
 - `git diff --check`
+- `node --check addon-expenses-rest-api/src/main/resources/static/assets/mileage/settings-date.js`
 - `node --check addon-expenses-rest-api/src/main/resources/static/assets/mileage/settings.js`
+- `node scripts/test-mileage-date-helpers.mjs`
 - `gitleaks detect --source . --no-git --redact --verbose`
 - `docker compose -f addon-expenses-rest-api/docker-compose.yml build`
 
@@ -32,6 +34,17 @@ Historical only: do not treat this section as current truth unless the listed ch
 
 Last local/live stabilization pass: 2026-05-27.
 
+- Local small-hardening pass on 2026-05-27: `./scripts/verify-publish.sh`
+  passed after the settings date helper split and 307/308 redirect hardening.
+  This pass did not deploy and did not run live Clockify mutation smoke.
+  Final reports for this pass must say live Clockify smoke was skipped.
+- Local small-hardening pass on 2026-05-27: `node --check` passed for
+  `/assets/mileage/settings-date.js` and `/assets/mileage/settings.js`;
+  `node scripts/test-mileage-date-helpers.mjs` passed claim-timezone and invalid
+  timezone fallback checks.
+- Local small-hardening pass on 2026-05-27: `mvn -pl clockify-rest-client
+  -Dtest=TransportRetryAndConfigTest test` passed with focused 307/308
+  redirected POST body/content-type regression coverage.
 - Public hosted recheck on 2026-05-27: `railway deployment list --limit 1
   --json` showed the latest listed deployment in `SUCCESS` state, created at
   `2026-05-26T22:57:34.506Z`; use `railway deployment list` for the current
@@ -53,7 +66,9 @@ Last local/live stabilization pass: 2026-05-27.
   returned non-success (`400`). The smoke used the existing `Mileage` category
   and an existing active project. No API key or token is stored in this repo.
 - `git diff --check`: passed after the multipart and timezone hardening pass.
+- `node --check addon-expenses-rest-api/src/main/resources/static/assets/mileage/settings-date.js`: passed for the local small-hardening pass.
 - `node --check addon-expenses-rest-api/src/main/resources/static/assets/mileage/settings.js`: passed.
+- `node scripts/test-mileage-date-helpers.mjs`: passed for the local small-hardening pass.
 - `gitleaks detect --source . --no-git --redact --verbose`: passed with no leaks found.
 - `mvn -pl clockify-rest-client -Dtest=ExpensesClientTest,FilesClientTest test`: passed with 15 tests covering receipt expense uploads and shared file upload multipart sanitization.
 - `mvn -pl addon-core -Dtest=ClaimsNormalizerTest test`: passed with 11 tests covering Clockify timezone claim aliases.
@@ -101,6 +116,8 @@ Last local/live stabilization pass: 2026-05-27.
 ## Required Manual Product Gates
 
 - [ ] Runtime `/manifest` probe passes.
+- [ ] Runtime `/assets/mileage/settings-date.js` probe passes after deploys containing the split date helper.
+- [ ] Runtime `/assets/mileage/settings.js` probe passes.
 - [ ] Runtime `/assets/mileage/icon.png` probe passes.
 - [ ] Static secret scan passes.
 - [ ] Manifest uses the production `ADDON_BASE_URL`.

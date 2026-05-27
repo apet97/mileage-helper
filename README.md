@@ -8,7 +8,7 @@ Current hosted test add-on:
 - Manifest: `https://mileage-for-clockify-production.up.railway.app/manifest`
 - Railway deployment ID: use `railway deployment list` for the current Railway deployment ID.
 - Dated deployment evidence belongs in the pre-publish checklist after each deploy; old deployment IDs are historical evidence, not current truth.
-- Dated local hardening review snapshot: 2026-05-27, covering shared multipart receipt/file upload handling, Clockify timezone claim aliases, and secret-scan proof.
+- Dated local hardening review snapshot: 2026-05-27, covering shared multipart receipt/file upload handling, Clockify timezone claim aliases, mileage date-helper asset checks, and secret-scan proof.
 - Live Clockify smoke is optional and requires local secrets. Never commit or echo API keys/tokens. If not run, final output must say it was skipped.
 
 ## Repository Layout
@@ -35,7 +35,7 @@ The ignored local clone `addon-expenses-rest-api/addon-java-sdk/` is read-only r
 - Mine and Team lists/CSVs hide deleted expenses. The admin Conversions view keeps deleted rows as audit history.
 - Expense webhooks accept both full payloads with `id` and reference payloads with `expenseId`.
 - Receipt uploads are sent through shared Clockify client multipart construction that rejects unsafe field names and sanitizes filename/content-type headers.
-- Clockify timezone claim aliases are normalized server-side and kept aligned with the settings UI fallback logic.
+- Clockify timezone claim aliases are normalized server-side and kept aligned with the settings UI date fallback logic. The UI loads `/assets/mileage/settings-date.js` before `/assets/mileage/settings.js` so date presets/defaults use the Clockify claim timezone when valid.
 
 ## API Surface
 
@@ -52,6 +52,8 @@ Run from the repository root:
 mvn -pl addon-expenses-rest-api -am test
 mvn -pl addon-expenses-rest-api -am clean test
 ```
+
+The publish verifier checks both mileage settings JavaScript assets and the repo-local date-helper behavior script. After deploying static asset changes, probe both `/assets/mileage/settings-date.js` and `/assets/mileage/settings.js`.
 
 If local Testcontainers cannot discover Docker, use Colima explicitly:
 
