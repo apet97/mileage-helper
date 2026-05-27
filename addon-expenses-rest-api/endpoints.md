@@ -29,6 +29,8 @@ CSV exports use `text/csv;charset=UTF-8` and include:
 
 `expense_id,source,source_label,status,user_id,user_name,project_id,miles,rate,calculated_amount,expense_amount,rounding_mode,expense_date,updated_at,converted_at,note_marker`
 
+CSV exports paginate server-side up to 100000 rows. Responses include `X-Mileage-Export-Truncated` so callers can detect capped exports.
+
 ## Iframe Routes
 
 - `GET /iframe/mileage`

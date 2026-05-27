@@ -2,6 +2,7 @@ package com.cake.clockify.addon.mileage.audit;
 
 public enum MileageSkipReason {
     ADDON_DISABLED,
+    EVENT_DISABLED,
     SETTINGS_INCOMPLETE,
     NOT_INPUT_CATEGORY,
     ALREADY_OUTPUT_CATEGORY,

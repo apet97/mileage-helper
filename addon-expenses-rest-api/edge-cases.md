@@ -1,6 +1,7 @@
 # Mileage Edge Cases
 
 - If mileage settings are incomplete, add-on-created expenses return `configuration_missing` and native conversions record `SKIPPED`.
+- If created/restored or updated native conversion is disabled in workspace settings, matching webhooks record `SKIPPED` with `EVENT_DISABLED` before fetching the Clockify expense.
 - The create page loads `/api/mileage/create-context` before enabling Preview/Create. If the context cannot load, the buttons stay disabled.
 - Manual add-on-created expenses default to billable when `billable` is omitted. An explicit `billable=false` remains non-billable.
 - Rate override input is hidden and omitted unless workspace settings allow user overrides. Backend calculation still ignores submitted override rates when override is disabled.

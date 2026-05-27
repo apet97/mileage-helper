@@ -35,16 +35,21 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @RestController
 public class MileageConversionController {
     private static final int MAX_PAGE_SIZE = 100;
-    private static final int CSV_PAGE_SIZE = 5_000;
+    private static final int CSV_PAGE_SIZE = 1_000;
+    private static final int CSV_MAX_ROWS = 100_000;
+    private static final String HEADER_EXPORT_TRUNCATED = "X-Mileage-Export-Truncated";
     private static final Sort VISIBLE_LIST_SORT = Sort.by(
             Sort.Order.desc("expenseDate"),
             Sort.Order.desc("updatedAt"));
@@ -137,13 +142,13 @@ public class MileageConversionController {
             @RequestParam(required = false) String to) {
         NormalizedClaims claims = userClaims(request);
         MileageDateRange range = dateRange(claims, from, to);
-        Page<MileageConversion> conversions = conversionRepository.findAllByWorkspaceIdAndUserIdAndStatusNotAndExpenseDateBetween(
+        CsvRows conversions = csvRows(pageRequest -> conversionRepository.findAllByWorkspaceIdAndUserIdAndStatusNotAndExpenseDateBetween(
                 claims.workspaceId(),
                 claims.userId(),
                 MileageConversionStatus.DELETED,
                 range.from(),
                 range.to(),
-                PageRequest.of(0, CSV_PAGE_SIZE, VISIBLE_LIST_SORT));
+                pageRequest));
         return csvResponse("mileage-mine.csv", conversions, Map.of());
     }
 
@@ -154,13 +159,13 @@ public class MileageConversionController {
             @RequestParam(required = false) String to) {
         NormalizedClaims claims = adminClaims(request);
         MileageDateRange range = dateRange(claims, from, to);
-        Page<MileageConversion> conversions = conversionRepository.findAllByWorkspaceIdAndStatusNotAndExpenseDateBetween(
+        CsvRows conversions = csvRows(pageRequest -> conversionRepository.findAllByWorkspaceIdAndStatusNotAndExpenseDateBetween(
                 claims.workspaceId(),
                 MileageConversionStatus.DELETED,
                 range.from(),
                 range.to(),
-                PageRequest.of(0, CSV_PAGE_SIZE, VISIBLE_LIST_SORT));
-        return csvResponse("mileage-team.csv", conversions, userNamesById(claims.workspaceId(), conversions.getContent()));
+                pageRequest));
+        return csvResponse("mileage-team.csv", conversions, userNamesById(claims.workspaceId(), conversions.rows()));
     }
 
     @GetMapping(value = "/api/mileage/conversions.csv", produces = "text/csv;charset=UTF-8")
@@ -170,12 +175,12 @@ public class MileageConversionController {
             @RequestParam(required = false) String to) {
         NormalizedClaims claims = adminClaims(request);
         MileageDateRange range = dateRange(claims, from, to);
-        Page<MileageConversion> conversions = conversionRepository.findAllByWorkspaceIdAndExpenseDateBetween(
+        CsvRows conversions = csvRows(pageRequest -> conversionRepository.findAllByWorkspaceIdAndExpenseDateBetween(
                 claims.workspaceId(),
                 range.from(),
                 range.to(),
-                PageRequest.of(0, CSV_PAGE_SIZE, VISIBLE_LIST_SORT));
-        return csvResponse("mileage-conversions.csv", conversions, userNamesById(claims.workspaceId(), conversions.getContent()));
+                pageRequest));
+        return csvResponse("mileage-conversions.csv", conversions, userNamesById(claims.workspaceId(), conversions.rows()));
     }
 
     @GetMapping("/api/mileage/conversions/{id}")
@@ -187,7 +192,7 @@ public class MileageConversionController {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Mileage conversion was not found"));
         return ResponseEntity.ok(MileageConversionDetailResponse.from(
                 conversion,
-                userNamesById(claims.workspaceId(), java.util.List.of(conversion)).get(conversion.getUserId())));
+                userNameOrNull(conversion.getUserId(), userNamesById(claims.workspaceId(), java.util.List.of(conversion)))));
     }
 
     @PostMapping("/api/mileage/conversions/{id}/retry")
@@ -262,17 +267,18 @@ public class MileageConversionController {
 
     private static ResponseEntity<String> csvResponse(
             String filename,
-            Page<MileageConversion> conversions,
+            CsvRows conversions,
             Map<String, String> userNamesById) {
         return ResponseEntity.ok()
                 .contentType(CSV_MEDIA_TYPE)
                 .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment().filename(filename).build().toString())
-                .body(csv(conversions, userNamesById));
+                .header(HEADER_EXPORT_TRUNCATED, Boolean.toString(conversions.truncated()))
+                .body(csv(conversions.rows(), userNamesById));
     }
 
-    private static String csv(Page<MileageConversion> conversions, Map<String, String> userNamesById) {
+    private static String csv(Collection<MileageConversion> conversions, Map<String, String> userNamesById) {
         StringBuilder builder = new StringBuilder(CSV_HEADER).append('\n');
-        for (MileageConversion conversion : conversions.getContent()) {
+        for (MileageConversion conversion : conversions) {
             appendCsvRow(builder,
                     conversion.getExpenseId(),
                     conversion.getSource(),
@@ -292,6 +298,26 @@ public class MileageConversionController {
                     conversion.getNoteMarker());
         }
         return builder.toString();
+    }
+
+    private static CsvRows csvRows(Function<PageRequest, Page<MileageConversion>> fetchPage) {
+        List<MileageConversion> rows = new ArrayList<>();
+        int page = 0;
+        while (rows.size() < CSV_MAX_ROWS) {
+            Page<MileageConversion> batch = fetchPage.apply(PageRequest.of(page, CSV_PAGE_SIZE, VISIBLE_LIST_SORT));
+            List<MileageConversion> content = batch.getContent();
+            int remaining = CSV_MAX_ROWS - rows.size();
+            if (content.size() > remaining) {
+                rows.addAll(content.subList(0, remaining));
+                return new CsvRows(rows, true);
+            }
+            rows.addAll(content);
+            if (!batch.hasNext()) {
+                return new CsvRows(rows, false);
+            }
+            page++;
+        }
+        return new CsvRows(rows, true);
     }
 
     private static void appendCsvRow(StringBuilder builder, Object... values) {
@@ -350,8 +376,18 @@ public class MileageConversionController {
     }
 
     private static String userName(String userId, Map<String, String> userNamesById) {
+        if (userId == null || userId.isBlank()) {
+            return "";
+        }
         String name = userNamesById.get(userId);
         return name == null || name.isBlank() ? userId : name;
+    }
+
+    private static String userNameOrNull(String userId, Map<String, String> userNamesById) {
+        if (userId == null || userId.isBlank()) {
+            return null;
+        }
+        return userNamesById.get(userId);
     }
 
     private static String decimalText(java.math.BigDecimal value) {
@@ -370,5 +406,8 @@ public class MileageConversionController {
     }
 
     private record MileageDateRange(LocalDate from, LocalDate to) {
+    }
+
+    private record CsvRows(List<MileageConversion> rows, boolean truncated) {
     }
 }

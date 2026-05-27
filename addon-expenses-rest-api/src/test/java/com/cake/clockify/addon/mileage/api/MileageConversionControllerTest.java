@@ -35,6 +35,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.hamcrest.Matchers.containsString;
@@ -79,6 +80,21 @@ class MileageConversionControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.conversions[0].expenseId").value("exp-1"))
                 .andExpect(jsonPath("$.totalElements").value(1));
+    }
+
+    @Test
+    void adminCanListConversionWithoutUserId() throws Exception {
+        when(conversionRepository.findAllByWorkspaceIdAndExpenseDateBetween(
+                eq("ws-admin"), any(LocalDate.class), any(LocalDate.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(conversionWithoutUser("ws-admin"))));
+
+        mockMvc.perform(get("/api/mileage/conversions")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("OWNER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.conversions[0].userId").doesNotExist())
+                .andExpect(jsonPath("$.conversions[0].userName").doesNotExist());
+
+        verify(gateway, never()).listUsers(any());
     }
 
     @Test
@@ -190,6 +206,21 @@ class MileageConversionControllerTest {
     }
 
     @Test
+    void adminCanReadConversionDetailWithoutUserId() throws Exception {
+        when(conversionRepository.findByIdAndWorkspaceId(CONVERSION_ID, "ws-admin"))
+                .thenReturn(Optional.of(conversionWithoutUser("ws-admin")));
+
+        mockMvc.perform(get("/api/mileage/conversions/{id}", CONVERSION_ID)
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(CONVERSION_ID.toString()))
+                .andExpect(jsonPath("$.userId").doesNotExist())
+                .andExpect(jsonPath("$.userName").doesNotExist());
+
+        verify(gateway, never()).listUsers(any());
+    }
+
+    @Test
     void adminCanRetryFailedConversion() throws Exception {
         when(conversionService.retry(any(), eq(CONVERSION_ID))).thenReturn(new ConversionResult(
                 CONVERSION_ID, "exp-1", MileageConversionStatus.CONVERTED, null, "Converted mileage expense"));
@@ -231,6 +262,45 @@ class MileageConversionControllerTest {
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("OWNER")))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("\"'\r=HYPERLINK")));
+    }
+
+    @Test
+    void teamCsvExportsRowsWithoutUserId() throws Exception {
+        when(conversionRepository.findAllByWorkspaceIdAndStatusNotAndExpenseDateBetween(
+                eq("ws-admin"), eq(MileageConversionStatus.DELETED), any(LocalDate.class), any(LocalDate.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(conversionWithoutUser("ws-admin"))));
+
+        mockMvc.perform(get("/api/mileage/team.csv")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("OWNER")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("CONVERTED,,,")));
+
+        verify(gateway, never()).listUsers(any());
+    }
+
+    @Test
+    void teamCsvPaginatesBeyondFirstCsvPage() throws Exception {
+        MileageConversion first = conversion("ws-admin");
+        first.setExpenseId("exp-page-1");
+        MileageConversion second = conversion("ws-admin");
+        second.setExpenseId("exp-page-2");
+
+        when(conversionRepository.findAllByWorkspaceIdAndStatusNotAndExpenseDateBetween(
+                eq("ws-admin"), eq(MileageConversionStatus.DELETED), any(LocalDate.class), any(LocalDate.class), any(Pageable.class)))
+                .thenAnswer(invocation -> {
+                    Pageable pageable = invocation.getArgument(4);
+                    if (pageable.getPageNumber() == 0) {
+                        return new PageImpl<>(List.of(first), pageable, 1001);
+                    }
+                    return new PageImpl<>(List.of(second), pageable, 1001);
+                });
+
+        mockMvc.perform(get("/api/mileage/team.csv")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("OWNER")))
+                .andExpect(status().isOk())
+                .andExpect(header().string("X-Mileage-Export-Truncated", "false"))
+                .andExpect(content().string(containsString("exp-page-1")))
+                .andExpect(content().string(containsString("exp-page-2")));
     }
 
     @Test
@@ -331,6 +401,12 @@ class MileageConversionControllerTest {
         MileageConversion conversion = conversion(workspaceId);
         conversion.setProjectId("project, \"north\"\nline");
         conversion.setNoteMarker("[MileageAddon:converted:v1 id=quoted \"marker\"]");
+        return conversion;
+    }
+
+    private static MileageConversion conversionWithoutUser(String workspaceId) {
+        MileageConversion conversion = conversion(workspaceId);
+        conversion.setUserId(null);
         return conversion;
     }
 

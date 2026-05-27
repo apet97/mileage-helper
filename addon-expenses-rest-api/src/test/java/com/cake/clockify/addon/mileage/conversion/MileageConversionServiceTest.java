@@ -188,6 +188,48 @@ class MileageConversionServiceTest {
     }
 
     @Test
+    void disabledCreateToggleSkipsCreatedWebhookBeforeFetchingExpense() throws Exception {
+        reservedConversion("exp-1", MileageConversionSource.WEBHOOK_CREATED, "EXPENSE_CREATED");
+        when(settingsService.validateForNativeConversion("ws-native")).thenReturn(settings(false, false, true));
+
+        ConversionResult result = service.convertIfEligible(
+                claims(), "exp-1", MileageConversionSource.WEBHOOK_CREATED, "EXPENSE_CREATED");
+
+        assertThat(result.status()).isEqualTo(MileageConversionStatus.SKIPPED);
+        assertThat(result.skipReason()).isEqualTo(MileageSkipReason.EVENT_DISABLED);
+        verify(gateway, never()).getExpense(any(), any());
+        verify(gateway, never()).updateFlatExpense(any(), any(), any());
+    }
+
+    @Test
+    void disabledUpdateToggleSkipsUpdatedWebhookBeforeFetchingExpense() throws Exception {
+        reservedConversion("exp-1", MileageConversionSource.WEBHOOK_UPDATED, "EXPENSE_UPDATED");
+        when(settingsService.validateForNativeConversion("ws-native")).thenReturn(settings(false, true, false));
+
+        ConversionResult result = service.convertIfEligible(
+                claims(), "exp-1", MileageConversionSource.WEBHOOK_UPDATED, "EXPENSE_UPDATED");
+
+        assertThat(result.status()).isEqualTo(MileageConversionStatus.SKIPPED);
+        assertThat(result.skipReason()).isEqualTo(MileageSkipReason.EVENT_DISABLED);
+        verify(gateway, never()).getExpense(any(), any());
+        verify(gateway, never()).updateFlatExpense(any(), any(), any());
+    }
+
+    @Test
+    void disabledCreateToggleSkipsRestoredWebhookBeforeFetchingExpense() throws Exception {
+        reservedConversion("exp-1", MileageConversionSource.WEBHOOK_RESTORED, "EXPENSE_RESTORED");
+        when(settingsService.validateForNativeConversion("ws-native")).thenReturn(settings(false, false, true));
+
+        ConversionResult result = service.convertIfEligible(
+                claims(), "exp-1", MileageConversionSource.WEBHOOK_RESTORED, "EXPENSE_RESTORED");
+
+        assertThat(result.status()).isEqualTo(MileageConversionStatus.SKIPPED);
+        assertThat(result.skipReason()).isEqualTo(MileageSkipReason.EVENT_DISABLED);
+        verify(gateway, never()).getExpense(any(), any());
+        verify(gateway, never()).updateFlatExpense(any(), any(), any());
+    }
+
+    @Test
     void existingConvertedAuditPreventsSecondUpdate() throws Exception {
         reservedExisting("exp-1", MileageConversionStatus.CONVERTED, MileageConversionSource.WEBHOOK_CREATED, "EXPENSE_CREATED");
         when(settingsService.validateForNativeConversion("ws-native")).thenReturn(settings(false));
@@ -243,6 +285,20 @@ class MileageConversionServiceTest {
         assertThat(failed.getErrorCode()).isEqualTo("clockify_api_error");
         assertThat(failed.getErrorMessage()).contains("status 409");
         assertThat(failed.getErrorMessage()).doesNotContain("super-secret");
+    }
+
+    @Test
+    void skippedRetryClearsPreviousFailureFields() throws Exception {
+        MileageConversion conversion = reservedFailedExisting("exp-1", MileageConversionSource.WEBHOOK_UPDATED, "EXPENSE_UPDATED");
+        when(settingsService.validateForNativeConversion("ws-native")).thenReturn(distinctCategorySettings(false));
+        when(gateway.getExpense("ws-native", "exp-1")).thenReturn(outputExpense("exp-1"));
+
+        ConversionResult result = service.convertIfEligible(
+                claims(), "exp-1", MileageConversionSource.WEBHOOK_UPDATED, "EXPENSE_UPDATED");
+
+        assertThat(result.status()).isEqualTo(MileageConversionStatus.SKIPPED);
+        assertThat(conversion.getErrorCode()).isNull();
+        assertThat(conversion.getErrorMessage()).isNull();
     }
 
     @Test
@@ -355,14 +411,29 @@ class MileageConversionServiceTest {
         return conversion;
     }
 
+    private MileageConversion reservedFailedExisting(
+            String expenseId,
+            MileageConversionSource source,
+            String eventType) {
+        MileageConversion conversion = reservedExisting(expenseId, MileageConversionStatus.FAILED, source, eventType);
+        conversion.setErrorCode("clockify_api_error");
+        conversion.setErrorMessage("old failure");
+        return conversion;
+    }
+
     private static NormalizedClaims claims() {
         return new NormalizedClaims("ws-native", "mileage-for-clockify", "https://backend.example.test",
                 "https://reports.example.test", null, null, "user-claims", "OWNER", "en", "DEFAULT", "UTC", Instant.now());
     }
 
     private static MileageSettingsValidation settings(boolean dryRun) {
+        return settings(dryRun, true, true);
+    }
+
+    private static MileageSettingsValidation settings(boolean dryRun, boolean convertOnCreate, boolean convertOnUpdate) {
         return new MileageSettingsValidation("ws-native", true, true, new BigDecimal("0.655"), "mile",
-                "cat-mileage", "cat-mileage", RoundingMode.HALF_UP, true, true, false, dryRun, false, null, List.of());
+                "cat-mileage", "cat-mileage", RoundingMode.HALF_UP,
+                convertOnCreate, convertOnUpdate, false, dryRun, false, null, List.of());
     }
 
     private static MileageSettingsValidation distinctCategorySettings(boolean dryRun) {

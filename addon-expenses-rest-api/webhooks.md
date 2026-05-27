@@ -11,6 +11,8 @@ Webhook payloads may identify the expense as either `id` on a full expense paylo
 
 Created, restored, and updated events that have an effective expense ID fetch the current expense through `ClockifyExpenseGateway`, check workspace isolation, eligibility, marker state, and audit state, then update the same Clockify expense with the rounded amount and clean exact note when eligible.
 
+Workspace settings `convertOnCreate` and `convertOnUpdate` are enforced before fetching the Clockify expense; disabled event types are recorded as skipped with `EVENT_DISABLED`.
+
 Deleted events mark the audit row `DELETED` and set `deletedAt`; the row is retained for admin audit history. `Mine` and `Team` views/CSVs exclude deleted rows.
 
 Loop prevention is layered:

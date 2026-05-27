@@ -11,6 +11,7 @@ import com.cake.clockify.addon.mileage.audit.MileageConversionStatus;
 import com.cake.clockify.addon.mileage.calculation.MileageCalculator;
 import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseGateway;
 import com.cake.clockify.addon.mileage.clockify.CreateFlatExpenseCommand;
+import com.cake.clockify.addon.mileage.clockify.UpdateFlatExpenseCommand;
 import com.cake.clockify.addon.mileage.note.MileageNoteService;
 import com.cake.clockify.addon.mileage.settings.MileageSettingsService;
 import com.cake.clockify.addon.mileage.settings.MileageSettingsValidation;
@@ -290,8 +291,14 @@ class MileageApiControllerTest {
 
     @Test
     void createExpenseMergesAuditRowWhenWebhookReservedExpenseFirst() throws Exception {
-        when(settingsService.validateForAddonCreate("ws-api")).thenReturn(settings(false));
+        when(settingsService.validateForAddonCreate("ws-api")).thenReturn(new MileageSettingsValidation(
+                "ws-api", true, true, new BigDecimal("0.655"), "mi",
+                "cat-input", "cat-output", RoundingMode.HALF_UP,
+                true, true, true, false, false,
+                "Mileage {{marker}} {{miles}}", List.of()));
         when(gateway.createFlatExpense(eq("ws-api"), any(CreateFlatExpenseCommand.class))).thenReturn(createdExpense("exp-race"));
+        when(gateway.updateFlatExpense(eq("ws-api"), eq("exp-race"), any(UpdateFlatExpenseCommand.class)))
+                .thenReturn(createdExpense("exp-race"));
         UUID existingId = UUID.fromString("00000000-0000-0000-0000-000000000123");
         MileageConversion existing = new MileageConversion();
         existing.setId(existingId);
@@ -318,6 +325,11 @@ class MileageApiControllerTest {
         assertThat(saved.getValue().getSource()).isEqualTo(MileageConversionSource.ADDON_FORM);
         assertThat(saved.getValue().getStatus()).isEqualTo(MileageConversionStatus.CONVERTED);
         assertThat(saved.getValue().getUserId()).isEqualTo("user-claims");
+        assertThat(saved.getValue().getNoteMarker()).contains(existingId.toString());
+
+        ArgumentCaptor<UpdateFlatExpenseCommand> repair = ArgumentCaptor.forClass(UpdateFlatExpenseCommand.class);
+        verify(gateway).updateFlatExpense(eq("ws-api"), eq("exp-race"), repair.capture());
+        assertThat(repair.getValue().notes()).contains(existingId.toString());
     }
 
     @Test
@@ -366,6 +378,24 @@ class MileageApiControllerTest {
                 .andExpect(jsonPath("$.message").value("date must use YYYY-MM-DD"));
 
         verify(gateway, never()).createFlatExpenseWithReceipt(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void createMileageExpenseMultipartRejectsInvalidBillableValue() throws Exception {
+        when(settingsService.validateForAddonCreate("ws-api")).thenReturn(settings(false));
+        MockMultipartFile file = new MockMultipartFile("file", "receipt.png", "image/png", new byte[] {1});
+
+        mockMvc.perform(multipart("/api/mileage/expenses")
+                        .file(file)
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims())
+                        .param("date", "2026-05-24")
+                        .param("miles", "37.4")
+                        .param("billable", "maybe"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("billable must be true or false"));
+
+        verify(gateway, never()).createFlatExpenseWithReceipt(any(), any(), any(), any(), any());
+        verify(gateway, never()).createFlatExpense(any(), any());
     }
 
     @Test

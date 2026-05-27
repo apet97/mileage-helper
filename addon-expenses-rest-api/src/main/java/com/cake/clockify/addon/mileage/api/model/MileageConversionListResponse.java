@@ -21,11 +21,20 @@ public record MileageConversionListResponse(
             Map<String, String> userNamesById) {
         return new MileageConversionListResponse(
                 page.getContent().stream()
-                        .map(conversion -> MileageConversionDetailResponse.from(conversion, userNamesById.get(conversion.getUserId())))
+                        .map(conversion -> MileageConversionDetailResponse.from(
+                                conversion,
+                                userNameFor(conversion, userNamesById)))
                         .toList(),
                 page.getNumber(),
                 page.getSize(),
                 page.getTotalElements(),
                 page.getTotalPages());
+    }
+
+    private static String userNameFor(
+            com.cake.clockify.addon.mileage.audit.MileageConversion conversion,
+            Map<String, String> userNamesById) {
+        String userId = conversion.getUserId();
+        return userId == null || userId.isBlank() ? null : userNamesById.get(userId);
     }
 }

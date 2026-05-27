@@ -34,7 +34,8 @@ public abstract class AbstractTypedWebhookHandler<T> implements AddonWebhookHand
             try {
                 payload = objectMapper.readValue(rawBody, payloadType);
             } catch (Exception e) {
-                log.error("Failed to parse {} webhook payload into {}: {}", eventType, payloadType.getSimpleName(), e.getMessage());
+                log.error("Failed to parse {} webhook payload into {}: {}",
+                        eventType, payloadType.getSimpleName(), e.getClass().getSimpleName());
                 throw new IllegalArgumentException("Invalid webhook payload format", e);
             }
         }

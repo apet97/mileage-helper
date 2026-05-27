@@ -16,6 +16,7 @@ import com.cake.clockify.addon.mileage.calculation.MileageCalculation;
 import com.cake.clockify.addon.mileage.calculation.MileageCalculator;
 import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseGateway;
 import com.cake.clockify.addon.mileage.clockify.CreateFlatExpenseCommand;
+import com.cake.clockify.addon.mileage.clockify.UpdateFlatExpenseCommand;
 import com.cake.clockify.addon.mileage.note.MileageNoteService;
 import com.cake.clockify.addon.mileage.settings.MileageSettingsService;
 import com.cake.clockify.addon.mileage.settings.MileageSettingsValidation;
@@ -155,6 +156,16 @@ public class MileageApiController {
                 "ADDON_FORM");
         MileageConversion conversion = conversionRepository.findByIdAndWorkspaceId(persistedId, workspaceId)
                 .orElseThrow(() -> new IllegalStateException("Reserved mileage conversion was not found"));
+        String persistedMarker = noteService.marker(persistedId);
+        String persistedNote = note;
+        if (!persistedId.equals(conversionId)) {
+            persistedNote = noteService.buildConvertedNote(
+                    request.notes(),
+                    calculation,
+                    settings.unit(),
+                    persistedId,
+                    settings.noteTemplate());
+        }
         applyAddonFormConversion(
                 conversion,
                 workspaceId,
@@ -164,8 +175,21 @@ public class MileageApiController {
                 expenseDate,
                 settings,
                 calculation,
-                noteService.marker(conversionId));
+                persistedMarker);
         conversionRepository.saveAndFlush(conversion);
+        if (!Objects.equals(persistedNote, note)) {
+            gateway.updateFlatExpense(workspaceId, expenseId, new UpdateFlatExpenseCommand(
+                    settings.outputCategoryId(),
+                    userId,
+                    expenseDate.toString(),
+                    blankToNull(request.projectId()),
+                    null,
+                    billableOrDefault(request.billable()),
+                    clockifyExpenseAmount(settings, calculation),
+                    persistedNote,
+                    settings.roundingMode(),
+                    singleMileageCategory(settings)));
+        }
         return new MileageCreateExpenseResponse(
                 expenseId,
                 conversion.getId(),
@@ -291,10 +315,17 @@ public class MileageApiController {
     }
 
     private static Boolean parseBoolean(String value) {
-        if (value == null || value.isBlank()) {
+        String cleaned = blankToNull(value);
+        if (cleaned == null) {
             return null;
         }
-        return Boolean.parseBoolean(value);
+        if ("true".equalsIgnoreCase(cleaned)) {
+            return Boolean.TRUE;
+        }
+        if ("false".equalsIgnoreCase(cleaned)) {
+            return Boolean.FALSE;
+        }
+        throw new IllegalArgumentException("billable must be true or false");
     }
 
     private static Boolean billableOrDefault(Boolean billable) {

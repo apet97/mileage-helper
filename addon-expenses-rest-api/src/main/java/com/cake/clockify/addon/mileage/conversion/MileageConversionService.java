@@ -78,15 +78,26 @@ public class MileageConversionService {
         boolean wasSuccessfullyConverted = isSuccessfullyConverted(Optional.of(conversion));
         try {
             MileageSettingsValidation settings = settingsService.validateForNativeConversion(claims.workspaceId());
-            ClockifyExpenseSnapshot expense = gateway.getExpense(claims.workspaceId(), cleanedExpenseId);
-            applySnapshot(conversion, expense);
             conversion.setSource(source);
             conversion.setSourceEventType(sourceEventType);
+            if (!nativeConversionEnabled(settings, source)) {
+                if (conversion.getExpenseDate() == null) {
+                    conversion.setExpenseDate(LocalDate.now(clock));
+                }
+                conversion.setStatus(MileageConversionStatus.SKIPPED);
+                conversion.setSkipReason(MileageSkipReason.EVENT_DISABLED);
+                clearFailure(conversion);
+                conversionRepository.saveAndFlush(conversion);
+                return result(conversion, "Native mileage conversion is disabled for " + source);
+            }
+            ClockifyExpenseSnapshot expense = gateway.getExpense(claims.workspaceId(), cleanedExpenseId);
+            applySnapshot(conversion, expense);
 
             if (source == MileageConversionSource.WEBHOOK_RESTORED
                     && (wasSuccessfullyConverted || noteService.hasMileageMarker(expense.notes()))) {
                 conversion.setStatus(MileageConversionStatus.RESTORED_IGNORED);
                 conversion.setSkipReason(MileageSkipReason.ALREADY_CONVERTED);
+                clearFailure(conversion);
                 conversionRepository.saveAndFlush(conversion);
                 return result(conversion, "Restored expense already appears converted");
             }
@@ -98,12 +109,14 @@ public class MileageConversionService {
                 applyCalculation(conversion, settings, calculation, null);
                 conversion.setStatus(MileageConversionStatus.DRY_RUN);
                 conversion.setSkipReason(MileageSkipReason.DRY_RUN);
+                clearFailure(conversion);
                 conversionRepository.saveAndFlush(conversion);
                 return result(conversion, decision.message());
             }
             if (!decision.eligible()) {
                 conversion.setStatus(MileageConversionStatus.SKIPPED);
                 conversion.setSkipReason(decision.skipReason());
+                clearFailure(conversion);
                 conversionRepository.saveAndFlush(conversion);
                 return result(conversion, decision.message());
             }
@@ -136,8 +149,7 @@ public class MileageConversionService {
             conversion.setStatus(MileageConversionStatus.CONVERTED);
             conversion.setConvertedAt(Instant.now());
             conversion.setSkipReason(null);
-            conversion.setErrorCode(null);
-            conversion.setErrorMessage(null);
+            clearFailure(conversion);
             conversionRepository.saveAndFlush(conversion);
             return result(conversion, "Converted mileage expense");
         } catch (ClockifyApiException e) {
@@ -163,6 +175,7 @@ public class MileageConversionService {
                     conversion.setStatus(MileageConversionStatus.DELETED);
                     conversion.setDeletedAt(Instant.now());
                     conversion.setSkipReason(null);
+                    clearFailure(conversion);
                     conversionRepository.saveAndFlush(conversion);
                     return result(conversion, "Mileage conversion marked deleted");
                 })
@@ -254,6 +267,19 @@ public class MileageConversionService {
                 .map(MileageConversion::getStatus)
                 .filter(status -> status == MileageConversionStatus.CONVERTED || status == MileageConversionStatus.CONVERTING)
                 .isPresent();
+    }
+
+    private static boolean nativeConversionEnabled(MileageSettingsValidation settings, MileageConversionSource source) {
+        return switch (source) {
+            case ADDON_FORM -> true;
+            case WEBHOOK_CREATED, WEBHOOK_RESTORED -> settings.convertOnCreate();
+            case WEBHOOK_UPDATED -> settings.convertOnUpdate();
+        };
+    }
+
+    private static void clearFailure(MileageConversion conversion) {
+        conversion.setErrorCode(null);
+        conversion.setErrorMessage(null);
     }
 
     private static BigDecimal clockifyExpenseAmount(
