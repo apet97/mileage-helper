@@ -55,6 +55,7 @@ This is the standalone repository for Mileage for Clockify. It contains the add-
 - Add-on UI tables and previews display full `calculatedAmount` decimals as the primary amount. Clockify expense writes continue to use the rounded `roundedAmount`.
 - Mileage lists and CSV exports filter by `expenseDate`, defaulting to the current US week, Sunday through Saturday.
 - User-facing `Mine` and admin `Team` lists/CSVs exclude `DELETED` audit rows. Admin `Conversions` keeps deleted rows visible as audit history.
+- Mileage CSV exports emit `user_name` next to `user_id` and `project_name` next to `project_id`. Names are resolved live per export through `ClockifyExpenseGateway.listUsers` / `listProjects`; both helpers short-circuit when the row set contains no IDs of that kind and return an empty map on `IOException`/`RuntimeException`, leaving the name cells blank without failing the export.
 - Expense webhook handlers that need an expense ID accept either `id` or `expenseId` payload shapes. This includes updated/deleted webhooks, which have arrived as full payloads in live Clockify testing.
 - Webhook dispatch records/dedupes events, marks processing outcomes internally, and still returns HTTP 2xx after handler or audit-status failures.
 - Native conversion eligibility skips disabled/incomplete settings, workspace mismatches, output categories, mileage note markers, existing successful conversions, non-input categories, missing/invalid quantity, and locked/finalized expenses.
@@ -63,6 +64,7 @@ This is the standalone repository for Mileage for Clockify. It contains the add-
 - The settings UI loads `/assets/mileage/settings-date.js` before `/assets/mileage/settings.js`. Keep date presets/default create dates in that helper so Clockify claim timezones stay aligned with backend default ranges.
 - After any deploy that touches mileage static assets, probe both `/assets/mileage/settings-date.js` and `/assets/mileage/settings.js`; a single settings asset probe is not enough.
 - Receipt uploads in `clockify-rest-client` centralize multipart body construction so Expenses and Files clients share field-name validation, filename sanitization, and content-type fallback behavior.
+- Spring multipart limits are pinned in `application.yaml` at 10 MB per file and 12 MB per request, matching the 10 MB cap enforced by `MileageApiController`. `MileageExceptionHandler.handleMaxUploadSize` maps the servlet-level `MaxUploadSizeExceededException` to a 400 `Receipt file exceeds 10 MB` body so the failure mode is identical at both layers.
 - The optional `clockify-rest-client` Spring MVC facade and WebClient transport were removed as dead/bloated surfaces. Do not reintroduce global proxy controllers around the typed client.
 - Historical pre-Mileage migrations V5/V10 are retained for Flyway validation only; V12 drops their leftover generic tables. Do not add new `temp_addon_expenses*`, `clockify-expenses-api`, `Clockify Expenses API`, or `com.cake.clockify.addon.expenses` references.
 

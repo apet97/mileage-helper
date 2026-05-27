@@ -7,6 +7,7 @@ import com.cake.clockify.addon.mileage.audit.MileageConversionRepository;
 import com.cake.clockify.addon.mileage.audit.MileageConversionSource;
 import com.cake.clockify.addon.mileage.audit.MileageConversionStatus;
 import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseGateway;
+import com.cake.clockify.addon.mileage.clockify.ClockifyProjectOption;
 import com.cake.clockify.addon.mileage.clockify.ClockifyUserOption;
 import com.cake.clockify.addon.mileage.conversion.ConversionResult;
 import com.cake.clockify.addon.mileage.conversion.MileageConversionService;
@@ -244,7 +245,7 @@ class MileageConversionControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(content().contentType("text/csv;charset=UTF-8"))
                 .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION, containsString("mileage-mine.csv")))
-                .andExpect(content().string(containsString("expense_id,source,source_label,status,user_id,user_name,project_id,miles,rate,calculated_amount,expense_amount,rounding_mode,expense_date,updated_at,converted_at,note_marker")))
+                .andExpect(content().string(containsString("expense_id,source,source_label,status,user_id,user_name,project_id,project_name,miles,rate,calculated_amount,expense_amount,rounding_mode,expense_date,updated_at,converted_at,note_marker")))
                 .andExpect(content().string(containsString("2026-05-24")))
                 .andExpect(content().string(containsString("\"project, \"\"north\"\"")))
                 .andExpect(content().string(containsString("\"[MileageAddon:converted:v1 id=quoted \"\"marker\"\"]\"")));
@@ -322,19 +323,36 @@ class MileageConversionControllerTest {
                 eq("ws-admin"), any(LocalDate.class), any(LocalDate.class), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(conversion("ws-admin"))));
         when(gateway.listUsers("ws-admin")).thenReturn(List.of(new ClockifyUserOption("user-claims", "Ada Lovelace", "ada@example.test")));
+        when(gateway.listProjects("ws-admin")).thenReturn(List.of(new ClockifyProjectOption("project-1", "Northern Route")));
 
         mockMvc.perform(get("/api/mileage/team.csv")
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("OWNER")))
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION, containsString("mileage-team.csv")))
-                .andExpect(content().string(containsString("WEBHOOK_CREATED,Created through Expenses,CONVERTED,user-claims,Ada Lovelace")))
+                .andExpect(content().string(containsString("WEBHOOK_CREATED,Created through Expenses,CONVERTED,user-claims,Ada Lovelace,project-1,Northern Route,")))
                 .andExpect(content().string(containsString("24.497,24.50")));
 
         mockMvc.perform(get("/api/mileage/conversions.csv")
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("OWNER")))
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION, containsString("mileage-conversions.csv")))
+                .andExpect(content().string(containsString("project-1,Northern Route,")))
                 .andExpect(content().string(containsString("24.497,24.50")));
+    }
+
+    @Test
+    void mineCsvIncludesProjectNameFromClockifyLookup() throws Exception {
+        when(conversionRepository.findAllByWorkspaceIdAndUserIdAndStatusNotAndExpenseDateBetween(
+                eq("ws-admin"), eq("user-claims"), eq(MileageConversionStatus.DELETED), any(LocalDate.class), any(LocalDate.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(conversion("ws-admin"))));
+        when(gateway.listProjects("ws-admin")).thenReturn(List.of(new ClockifyProjectOption("project-1", "Northern Route")));
+
+        mockMvc.perform(get("/api/mileage/mine.csv")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("MEMBER")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString(",project-1,Northern Route,")));
+
+        verify(gateway, never()).listUsers(any());
     }
 
     @Test

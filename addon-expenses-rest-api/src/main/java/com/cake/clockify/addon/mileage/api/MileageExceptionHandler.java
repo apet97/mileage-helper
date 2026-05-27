@@ -16,6 +16,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
@@ -107,6 +108,16 @@ public class MileageExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(new MileageErrorResponse(
                 "not_found",
                 "Resource not found",
+                null,
+                null,
+                null));
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<MileageErrorResponse> handleMaxUploadSize(MaxUploadSizeExceededException e) {
+        return ResponseEntity.badRequest().body(new MileageErrorResponse(
+                "receipt_too_large",
+                "Receipt file exceeds 10 MB",
                 null,
                 null,
                 null));

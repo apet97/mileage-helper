@@ -9,6 +9,7 @@ import com.cake.clockify.addon.mileage.audit.MileageConversion;
 import com.cake.clockify.addon.mileage.audit.MileageConversionRepository;
 import com.cake.clockify.addon.mileage.audit.MileageConversionStatus;
 import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseGateway;
+import com.cake.clockify.addon.mileage.clockify.ClockifyProjectOption;
 import com.cake.clockify.addon.mileage.clockify.ClockifyUserOption;
 import com.cake.clockify.addon.mileage.conversion.MileageConversionService;
 import com.cake.clockify.addon.mileage.security.MileageAuthorizationService;
@@ -54,7 +55,7 @@ public class MileageConversionController {
             Sort.Order.desc("expenseDate"),
             Sort.Order.desc("updatedAt"));
     private static final MediaType CSV_MEDIA_TYPE = new MediaType("text", "csv", StandardCharsets.UTF_8);
-    private static final String CSV_HEADER = "expense_id,source,source_label,status,user_id,user_name,project_id,miles,rate,calculated_amount,expense_amount,rounding_mode,expense_date,updated_at,converted_at,note_marker";
+    private static final String CSV_HEADER = "expense_id,source,source_label,status,user_id,user_name,project_id,project_name,miles,rate,calculated_amount,expense_amount,rounding_mode,expense_date,updated_at,converted_at,note_marker";
 
     private final MileageConversionRepository conversionRepository;
     private final MileageConversionService conversionService;
@@ -149,7 +150,7 @@ public class MileageConversionController {
                 range.from(),
                 range.to(),
                 pageRequest));
-        return csvResponse("mileage-mine.csv", conversions, Map.of());
+        return csvResponse("mileage-mine.csv", conversions, Map.of(), projectNamesById(claims.workspaceId(), conversions.rows()));
     }
 
     @GetMapping(value = "/api/mileage/team.csv", produces = "text/csv;charset=UTF-8")
@@ -165,7 +166,12 @@ public class MileageConversionController {
                 range.from(),
                 range.to(),
                 pageRequest));
-        return csvResponse("mileage-team.csv", conversions, userNamesById(claims.workspaceId(), conversions.rows()));
+        List<MileageConversion> teamRows = conversions.rows();
+        return csvResponse(
+                "mileage-team.csv",
+                conversions,
+                userNamesById(claims.workspaceId(), teamRows),
+                projectNamesById(claims.workspaceId(), teamRows));
     }
 
     @GetMapping(value = "/api/mileage/conversions.csv", produces = "text/csv;charset=UTF-8")
@@ -180,7 +186,12 @@ public class MileageConversionController {
                 range.from(),
                 range.to(),
                 pageRequest));
-        return csvResponse("mileage-conversions.csv", conversions, userNamesById(claims.workspaceId(), conversions.rows()));
+        List<MileageConversion> conversionRows = conversions.rows();
+        return csvResponse(
+                "mileage-conversions.csv",
+                conversions,
+                userNamesById(claims.workspaceId(), conversionRows),
+                projectNamesById(claims.workspaceId(), conversionRows));
     }
 
     @GetMapping("/api/mileage/conversions/{id}")
@@ -268,15 +279,19 @@ public class MileageConversionController {
     private static ResponseEntity<String> csvResponse(
             String filename,
             CsvRows conversions,
-            Map<String, String> userNamesById) {
+            Map<String, String> userNamesById,
+            Map<String, String> projectNamesById) {
         return ResponseEntity.ok()
                 .contentType(CSV_MEDIA_TYPE)
                 .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment().filename(filename).build().toString())
                 .header(HEADER_EXPORT_TRUNCATED, Boolean.toString(conversions.truncated()))
-                .body(csv(conversions.rows(), userNamesById));
+                .body(csv(conversions.rows(), userNamesById, projectNamesById));
     }
 
-    private static String csv(Collection<MileageConversion> conversions, Map<String, String> userNamesById) {
+    private static String csv(
+            Collection<MileageConversion> conversions,
+            Map<String, String> userNamesById,
+            Map<String, String> projectNamesById) {
         StringBuilder builder = new StringBuilder(CSV_HEADER).append('\n');
         for (MileageConversion conversion : conversions) {
             appendCsvRow(builder,
@@ -287,6 +302,7 @@ public class MileageConversionController {
                     conversion.getUserId(),
                     userName(conversion.getUserId(), userNamesById),
                     conversion.getProjectId(),
+                    projectName(conversion.getProjectId(), projectNamesById),
                     decimalText(conversion.getMiles()),
                     decimalText(conversion.getRate()),
                     decimalText(conversion.getCalculatedAmount()),
@@ -388,6 +404,33 @@ public class MileageConversionController {
             return null;
         }
         return userNamesById.get(userId);
+    }
+
+    private Map<String, String> projectNamesById(String workspaceId, Collection<MileageConversion> conversions) {
+        if (conversions.stream().map(MileageConversion::getProjectId).filter(Objects::nonNull).findAny().isEmpty()) {
+            return Map.of();
+        }
+        try {
+            return gateway.listProjects(workspaceId).stream()
+                    .filter(project -> project.id() != null && !project.id().isBlank())
+                    .collect(Collectors.toMap(
+                            ClockifyProjectOption::id,
+                            ClockifyProjectOption::name,
+                            (left, right) -> left));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return Map.of();
+        } catch (IOException | RuntimeException e) {
+            return Map.of();
+        }
+    }
+
+    private static String projectName(String projectId, Map<String, String> projectNamesById) {
+        if (projectId == null || projectId.isBlank()) {
+            return "";
+        }
+        String name = projectNamesById.get(projectId);
+        return name == null || name.isBlank() ? "" : name;
     }
 
     private static String decimalText(java.math.BigDecimal value) {

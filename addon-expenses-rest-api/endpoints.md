@@ -27,7 +27,9 @@ All API routes are scoped by the verified Clockify add-on JWT claims. There are 
 
 CSV exports use `text/csv;charset=UTF-8` and include:
 
-`expense_id,source,source_label,status,user_id,user_name,project_id,miles,rate,calculated_amount,expense_amount,rounding_mode,expense_date,updated_at,converted_at,note_marker`
+`expense_id,source,source_label,status,user_id,user_name,project_id,project_name,miles,rate,calculated_amount,expense_amount,rounding_mode,expense_date,updated_at,converted_at,note_marker`
+
+`user_name` is resolved live via `gateway.listUsers` (admin team/conversions exports only; empty in `mine.csv`). `project_name` is resolved live via `gateway.listProjects` for all three exports. Both helpers return an empty map on network/`IOException`/`RuntimeException` so the export still ships with IDs intact and the name cells blank.
 
 CSV exports paginate server-side up to 100000 rows. Responses include `X-Mileage-Export-Truncated` so callers can detect capped exports.
 
