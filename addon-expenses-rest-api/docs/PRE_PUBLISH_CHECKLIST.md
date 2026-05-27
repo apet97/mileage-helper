@@ -45,10 +45,14 @@ Last local/live stabilization pass: 2026-05-27.
   page, and active `Mileage` expense category. The same pass created a marked
   sacrificial Mileage receipt expense, fetched it, verified the marker, updated
   it with the full app-style update payload, deleted it, and confirmed a
-  post-delete fetch returned non-success (`400`). A receipt `fileId` was
-  observed, but direct receipt download returned `200` with zero bytes, so
-  binary receipt content download is not proven by this pass. No API key or
-  token is stored in this repo.
+  post-delete fetch returned non-success (`400`). Follow-up receipt probes
+  created marked sacrificial PNG and valid generated PDF receipts, observed
+  `fileId`, downloaded nonzero binary content through
+  `GET /v1/workspaces/{workspaceId}/expenses/{expenseId}/files/{fileId}`, then
+  deleted both expenses and confirmed post-delete fetches returned non-success
+  (`400`). A malformed hand-written PDF fixture returned `200` with zero bytes;
+  do not use that fixture as product evidence. No API key or token is stored in
+  this repo.
 - Pre-deploy hosted split-asset recheck on 2026-05-27: `/actuator/health` and
   `/manifest` returned `200`, but `/assets/mileage/settings-date.js` returned
   `404`, proving production was still serving an older deployment. Do not claim
