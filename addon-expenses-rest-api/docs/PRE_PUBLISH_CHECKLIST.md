@@ -54,9 +54,9 @@ Last local/live stabilization pass: 2026-05-27.
   `404`, proving production was still serving an older deployment. Do not claim
   the split date-helper hardening is live until a post-deploy probe passes for
   both settings JS assets.
-- Post-deploy hosted split-asset recheck on 2026-05-27: Railway deployment
-  `26b9ed8b-2cfc-4ce9-a89f-bd3bffadfc07` reached `SUCCESS`; dated ID only,
-  use `railway deployment list` for the current deployment ID. Public probes
+- Post-deploy hosted split-asset recheck on 2026-05-27: a Railway deployment
+  reached `SUCCESS`; use `railway deployment list` for the current deployment
+  ID instead of treating this dated evidence as current truth. Public probes
   passed for `/actuator/health`, `/manifest`, `/assets/mileage/settings-date.js`,
   `/assets/mileage/settings.js`, `/assets/mileage/icon.png`, and
   unauthenticated `/iframe/mileage` (`401` with no-store behavior).
