@@ -31,8 +31,8 @@ This module is the implemented product module inside the standalone repository. 
 - Manifest: `https://mileage-for-clockify-production.up.railway.app/manifest`
 - Railway deployment ID: use `railway deployment list` for the current Railway deployment ID.
 - Dated deployment evidence belongs in the pre-publish checklist after each deploy; old deployment IDs are historical evidence, not current truth.
-- Last evidence snapshot, dated 2026-05-27: health, manifest, and the then-current settings asset probes passed. New deploys that include the split date helper must probe both `/assets/mileage/settings-date.js` and `/assets/mileage/settings.js`. Clockify reinstall, settings load, mileage create/use, and delete-list behavior were last user-tested on 2026-05-26.
-- Dev workspace receipt smoke on 2026-05-27 created, fetched, and deleted a sacrificial Mileage PDF receipt expense through the local `clockify-rest-client`; post-delete GET returned non-success.
+- Pre-deploy hosted recheck, dated 2026-05-27: health and manifest probes passed, but `/assets/mileage/settings-date.js` returned `404`, proving production was still serving an older deployment. New deploys that include the split date helper must probe both `/assets/mileage/settings-date.js` and `/assets/mileage/settings.js`. Clockify reinstall, settings load, mileage create/use, and delete-list behavior were last user-tested on 2026-05-26.
+- Expanded live Clockify API smoke on 2026-05-27 used local secrets only and proved workspace/user/category reads plus sacrificial Mileage receipt expense create, fetch, full update, delete, and post-delete non-success (`400`). A receipt `fileId` was observed, but direct receipt download returned `200` with zero bytes, so binary receipt content download is not proven by this pass.
 - Local hardening review on 2026-05-27 covered multipart receipt/header sanitization, timezone claim alias parity, focused client/security tests, date-helper static asset checks, and `gitleaks` proof.
 - Live Clockify smoke is optional and requires local secrets. Never commit or echo API keys/tokens. If not run, final output must say it was skipped.
 

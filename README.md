@@ -9,6 +9,8 @@ Current hosted test add-on:
 - Railway deployment ID: use `railway deployment list` for the current Railway deployment ID.
 - Dated deployment evidence belongs in the pre-publish checklist after each deploy; old deployment IDs are historical evidence, not current truth.
 - Dated local hardening review snapshot: 2026-05-27, covering shared multipart receipt/file upload handling, Clockify timezone claim aliases, mileage date-helper asset checks, and secret-scan proof.
+- Dated live Clockify API smoke snapshot: 2026-05-27, using local secrets only, proved sacrificial Mileage receipt expense create, fetch, full update, delete, and post-delete non-success. Receipt `fileId` was observed, but binary receipt content download returned zero bytes, so that path remains unproven live.
+- Dated pre-deploy hosted check: 2026-05-27, health and manifest passed while `/assets/mileage/settings-date.js` returned `404`; deploy latest `main` and probe both settings assets before claiming the split date helper is live.
 - Live Clockify smoke is optional and requires local secrets. Never commit or echo API keys/tokens. If not run, final output must say it was skipped.
 
 ## Repository Layout

@@ -37,7 +37,23 @@ Last local/live stabilization pass: 2026-05-27.
 - Local small-hardening pass on 2026-05-27: `./scripts/verify-publish.sh`
   passed after the settings date helper split and 307/308 redirect hardening.
   This pass did not deploy and did not run live Clockify mutation smoke.
-  Final reports for this pass must say live Clockify smoke was skipped.
+  Final reports for that local-only pass must say live Clockify smoke was
+  skipped.
+- Follow-up expanded live Clockify API smoke on 2026-05-27: using local
+  environment secrets only, direct API probes confirmed the current user,
+  workspace list, target workspace, first workspace users page, first projects
+  page, and active `Mileage` expense category. The same pass created a marked
+  sacrificial Mileage receipt expense, fetched it, verified the marker, updated
+  it with the full app-style update payload, deleted it, and confirmed a
+  post-delete fetch returned non-success (`400`). A receipt `fileId` was
+  observed, but direct receipt download returned `200` with zero bytes, so
+  binary receipt content download is not proven by this pass. No API key or
+  token is stored in this repo.
+- Pre-deploy hosted split-asset recheck on 2026-05-27: `/actuator/health` and
+  `/manifest` returned `200`, but `/assets/mileage/settings-date.js` returned
+  `404`, proving production was still serving an older deployment. Do not claim
+  the split date-helper hardening is live until a post-deploy probe passes for
+  both settings JS assets.
 - Local small-hardening pass on 2026-05-27: `node --check` passed for
   `/assets/mileage/settings-date.js` and `/assets/mileage/settings.js`;
   `node scripts/test-mileage-date-helpers.mjs` passed claim-timezone and invalid
@@ -60,11 +76,12 @@ Last local/live stabilization pass: 2026-05-27.
   with `Content-Type: image/png`, and unauthenticated `/iframe/mileage`
   returned `401` with `Cache-Control: no-store`, CSP, `nosniff`,
   `no-referrer`, and permissions-policy headers.
-- Live Clockify mutation smoke on 2026-05-27: using local environment secrets
-  only, a direct API smoke created one marked sacrificial expense with multipart
-  form fields, fetched it, deleted it, and confirmed a post-delete fetch
-  returned non-success (`400`). The smoke used the existing `Mileage` category
-  and an existing active project. No API key or token is stored in this repo.
+- Earlier live Clockify mutation smoke on 2026-05-27: using local environment
+  secrets only, a direct API smoke created one marked sacrificial expense with
+  multipart form fields, fetched it, deleted it, and confirmed a post-delete
+  fetch returned non-success (`400`). The smoke used the existing `Mileage`
+  category and an existing active project. No API key or token is stored in
+  this repo.
 - `git diff --check`: passed after the multipart and timezone hardening pass.
 - `node --check addon-expenses-rest-api/src/main/resources/static/assets/mileage/settings-date.js`: passed for the local small-hardening pass.
 - `node --check addon-expenses-rest-api/src/main/resources/static/assets/mileage/settings.js`: passed.
