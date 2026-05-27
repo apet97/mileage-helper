@@ -74,7 +74,8 @@ Main product packages:
 - Production manifest URL: `https://mileage-for-clockify-production.up.railway.app/manifest`.
 - Use `railway deployment list` for the current Railway deployment ID. Do not treat old deployment IDs in notes, chats, or previous evidence as current truth.
 - Dated deployment evidence belongs in the pre-publish checklist after each deploy.
-- Pre-deploy hosted recheck, dated 2026-05-27: `/actuator/health` and `/manifest` passed, but `/assets/mileage/settings-date.js` returned `404`, proving production was still serving an older deployment. New deploys must prove both `/assets/mileage/settings-date.js` and `/assets/mileage/settings.js`.
+- Pre-deploy hosted recheck, dated 2026-05-27: `/actuator/health` and `/manifest` passed, but `/assets/mileage/settings-date.js` returned `404`, proving production was still serving an older deployment.
+- Post-deploy hosted recheck, dated 2026-05-27: `/actuator/health`, `/manifest`, `/assets/mileage/settings-date.js`, `/assets/mileage/settings.js`, `/assets/mileage/icon.png`, and unauthenticated `/iframe/mileage` probes passed. New deploys must prove both settings JS assets again.
 - Historical live Clockify smoke, dated 2026-05-27: uninstall/install/settings/create/delete passed after the deleted-expense webhook fix. Treat this as historical unless rerun.
 - Expanded live Clockify API smoke on 2026-05-27 used local environment secrets only and proved workspace/user/category read probes plus sacrificial Mileage receipt expense create, fetch, full update, delete, and post-delete non-success (`400`). A receipt `fileId` was observed, but direct receipt download returned `200` with zero bytes, so binary receipt content download is not proven by this pass.
 - Local hardening review on 2026-05-27 added shared multipart upload tests, Clockify timezone alias normalization tests, Mileage security tests, date-helper static asset checks, `node --check`, `git diff --check`, and `gitleaks` proof.
