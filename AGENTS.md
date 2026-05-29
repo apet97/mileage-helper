@@ -34,7 +34,7 @@ This is the standalone repository for Mileage for Clockify. It contains the add-
 
 - `addon-expenses-rest-api`: Mileage add-on application, UI, manifest, settings, webhooks, conversions, async webhook worker (`worker/` package), Prometheus metrics (`metrics/` package), Dockerfile, compose file (two services — `addon` web pod and `addon-worker`), and add-on docs.
 - `addon-core`: Shared add-on auth, lifecycle routing, manifest controller, filters, security headers, async webhook dispatch (`WebhookController` + `WebhookJobQueue` interface).
-- `addon-db`: JPA/Flyway persistence for installation context, encrypted tokens, settings, webhook tokens, webhook events, and the async webhook job queue (`AddonWebhookJob` entity + `AddonWebhookJobClaimService` + `JpaWebhookJobQueue` impl, backing migration `V7__addon_webhook_jobs.sql`).
+- `addon-db`: JPA/Flyway persistence for installation context, encrypted tokens, settings, webhook tokens, webhook events, and the async webhook job queue (`AddonWebhookJob` entity + `AddonWebhookJobClaimService` + `JpaWebhookJobQueue` impl, backing migration `V17__addon_webhook_jobs.sql` — numbered V17 to land after the existing applied V10–V16 mileage migrations).
 - `clockify-rest-client`: Typed Clockify REST client and endpoint-provenance-backed route behavior.
 - `addon-testkit`: Test builders and fixtures shared by add-on/platform tests.
 - `repo`: Vendored Maven artifacts for the Clockify add-on SDK.
@@ -48,7 +48,7 @@ This is the standalone repository for Mileage for Clockify. It contains the add-
 - Main user APIs: `GET /api/mileage/create-context`, `GET /api/mileage/mine`, `GET /api/mileage/mine.csv`, `POST /api/mileage/preview`, `POST /api/mileage/expenses`.
 - Main admin APIs: settings, Mileage category repair, diagnostics, categories, team mileage list/export, conversion list/detail/retry/export under `/api/mileage`.
 - Webhooks: `EXPENSE_CREATED`, `EXPENSE_UPDATED`, `EXPENSE_DELETED`, `EXPENSE_RESTORED`.
-- DB tables: `mileage_workspace_settings`, `mileage_conversion`. Platform tables (in `addon-db`): `addon_installations`, `addon_webhook_tokens`, `addon_workspace_settings`, `addon_webhook_events`, and `addon_webhook_jobs` (G1 async queue, Flyway V7).
+- DB tables: `mileage_workspace_settings`, `mileage_conversion`. Platform tables (in `addon-db`): `addon_installations`, `addon_webhook_tokens`, `addon_workspace_settings`, `addon_webhook_events`, and `addon_webhook_jobs` (G1 async queue, Flyway V17). Platform `addon-db` migrations now start with V1–V6 and skip to V17 because production already had V10–V16 applied from the mileage module — new platform tables must be numbered after the highest applied mileage migration to avoid Flyway out-of-order validation failures.
 - Mileage create requests intentionally omit `userId`; the backend injects the verified claims user into Clockify create commands and audit rows.
 - Mileage create requests intentionally omit `taskId`; the UI lists projects and categories but does not call task APIs. Native expense conversion may still preserve an existing Clockify `taskId` from webhook snapshots.
 - Manual mileage expenses default to billable when `billable` is omitted. An explicit `false` still stays non-billable.
