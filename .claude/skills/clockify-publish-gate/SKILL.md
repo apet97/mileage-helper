@@ -1,0 +1,33 @@
+---
+name: clockify-publish-gate
+description: Run the full Mileage-for-Clockify pre-publish verification and produce a dated evidence block for the Marketplace submission. Use before any Marketplace version submission, before a Railway deploy, or when the user asks "is this ready to publish / ship / submit".
+---
+
+# Clockify Publish Gate
+
+Drive `Mileage for Clockify` to a provably-shippable state and emit copy-paste
+evidence for `addon-expenses-rest-api/docs/PRE_PUBLISH_CHECKLIST.md`.
+
+## Steps
+
+1. `git status --short --branch` — confirm clean tree on the working branch.
+2. Run `./scripts/verify-publish.sh`. If Testcontainers can't find Docker,
+   fall back to the Colima wiring in CLAUDE.md. Capture exact output.
+3. Static guardrail scans (must all be empty):
+   - forbidden floats: `rg -n "\b(double|Double|float|Float)\b" addon-expenses-rest-api/src/main/java`
+   - hardcoded Clockify hosts: `rg -n "api\.clockify\.me|global\.api\.clockify" addon-expenses-rest-api/src/main clockify-rest-client/src/main`
+   - stale boilerplate scan from CLAUDE.md.
+4. Manifest probe: build/run the compose stack and `curl -fsS .../manifest`;
+   confirm schema `1.5`, key `mileage-for-clockify`, the 5 scopes, the 4 webhooks.
+5. If a deploy happened: probe `/actuator/health`, `/manifest`,
+   BOTH `/assets/mileage/settings-date.js` and `/assets/mileage/settings.js`,
+   `/assets/mileage/icon.png`, and unauthenticated `/iframe/mileage` (expect 401 + no-store/CSP/HSTS).
+   Use `railway deployment list` for the CURRENT deployment id — never reuse an old id.
+6. Write a dated evidence block (today's date, git sha, deployment id) and
+   show it for pasting into PRE_PUBLISH_CHECKLIST.md. State explicitly if live
+   Clockify smoke was SKIPPED.
+
+## Hard rules
+- Never weaken a test to make the gate pass.
+- Never print secrets / tokens / receipt bytes.
+- Do not claim a deploy is live without a post-deploy probe of BOTH settings JS assets.

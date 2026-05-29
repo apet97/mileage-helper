@@ -5,3 +5,6 @@ target/
 
 # Local official SDK clone kept for reference only; do not commit it.
 addon-expenses-rest-api/addon-java-sdk/
+
+# Personal Claude Code session settings (machine-specific permissions).
+.claude/settings.local.json

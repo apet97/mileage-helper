@@ -15,6 +15,7 @@ import com.cake.clockify.addon.core.manifest.ManifestController;
 import com.cake.clockify.addon.core.webhook.AddonWebhookHandler;
 import com.cake.clockify.addon.core.webhook.WebhookController;
 import com.cake.clockify.addon.core.webhook.WebhookEventService;
+import com.cake.clockify.addon.core.webhook.WebhookJobQueue;
 import com.cake.clockify.addon.core.webhook.WebhookTokenLookup;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -193,8 +194,9 @@ public class AddonCoreAutoConfiguration {
             List<AddonWebhookHandler> handlers,
             ClockifyAddonProperties properties,
             ObjectMapper objectMapper,
-            @Autowired(required = false) WebhookEventService eventService) {
-        return new WebhookController(handlers, properties, objectMapper, eventService);
+            @Autowired(required = false) WebhookEventService eventService,
+            @Autowired(required = false) WebhookJobQueue jobQueue) {
+        return new WebhookController(handlers, properties, objectMapper, eventService, jobQueue);
     }
 
     @Bean

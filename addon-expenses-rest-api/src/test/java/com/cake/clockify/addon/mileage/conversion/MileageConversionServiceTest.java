@@ -11,10 +11,12 @@ import com.cake.clockify.addon.mileage.calculation.MileageCalculator;
 import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseGateway;
 import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseSnapshot;
 import com.cake.clockify.addon.mileage.clockify.UpdateFlatExpenseCommand;
+import com.cake.clockify.addon.mileage.metrics.MileageConversionMetrics;
 import com.cake.clockify.addon.mileage.note.MileageNoteService;
 import com.cake.clockify.addon.mileage.settings.MileageSettingsService;
 import com.cake.clockify.addon.mileage.settings.MileageSettingsValidation;
 import com.cake.clockify.client.ClockifyApiException;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -62,6 +64,7 @@ class MileageConversionServiceTest {
                 new MileageEligibilityService(),
                 new MileageCalculator(),
                 new MileageNoteService(),
+                new MileageConversionMetrics(new SimpleMeterRegistry()),
                 clock);
         when(conversionRepository.saveAndFlush(any(MileageConversion.class))).thenAnswer(invocation -> invocation.getArgument(0));
     }

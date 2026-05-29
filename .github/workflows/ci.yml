@@ -1,0 +1,88 @@
+name: ci
+on:
+  push:
+    branches: [ "main", "claude/**", "feat/**", "fix/**" ]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Reactor tests
+        run: mvn -pl addon-expenses-rest-api -am clean test
+      - name: JS syntax check
+        run: |
+          node --check addon-expenses-rest-api/src/main/resources/static/assets/mileage/settings-date.js
+          node --check addon-expenses-rest-api/src/main/resources/static/assets/mileage/settings.js
+      - name: Date helper tests
+        run: node scripts/test-mileage-date-helpers.mjs
+      - name: Whitespace check
+        run: git diff --check HEAD^ HEAD || true
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image
+        run: docker compose -f addon-expenses-rest-api/docker-compose.yml build
+
+  static-guardrails:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: No float/double in money domain
+        run: |
+          if rg -n "\b(double|Double|float|Float)\b" addon-expenses-rest-api/src/main/java; then
+            echo "FAIL: float/double found in production source"
+            exit 1
+          fi
+      - name: No hardcoded Clockify API hosts
+        run: |
+          if rg -n "api\.clockify\.me|global\.api\.clockify" addon-expenses-rest-api/src/main clockify-rest-client/src/main; then
+            echo "FAIL: hardcoded Clockify host found"
+            exit 1
+          fi
+
+  dep-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Cache OWASP dependency-check data
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository/org/owasp/dependency-check-data
+          key: dep-check-data-${{ runner.os }}-v10
+          restore-keys: |
+            dep-check-data-${{ runner.os }}-
+      - name: OWASP dependency-check
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        run: mvn -pl addon-expenses-rest-api -am -DskipTests dependency-check:check
+      - name: Upload dep-check report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-check-report
+          path: addon-expenses-rest-api/target/dependency-check-report.*
+          if-no-files-found: ignore

@@ -34,6 +34,29 @@ services:
       # Secret key for encrypting data at rest (AES-GCM-256 requires 32 bytes hex = 64 characters)
       ADDON_CRYPTO_KEY_K1: 00000000000000000000000000000000000000000000000000000000000000aa
       ADDON_CRYPTO_ACTIVE_KEY_ID: k1
+      # Web pod does not run the worker — async webhook jobs are processed by addon-worker below.
+      MILEAGE_WORKER_ENABLED: "false"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  addon-worker:
+    build:
+      context: ..
+      dockerfile: addon-expenses-rest-api/Dockerfile
+    container_name: mileage-for-clockify-worker
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/mileage_for_clockify
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: password
+      ADDON_KEY: mileage-for-clockify
+      ADDON_NAME: Mileage for Clockify
+      ADDON_DESCRIPTION: Create and convert precise mileage reimbursements in Clockify.
+      ADDON_BASE_URL: http://localhost:8080
+      ADDON_CRYPTO_KEY_K1: 00000000000000000000000000000000000000000000000000000000000000aa
+      ADDON_CRYPTO_ACTIVE_KEY_ID: k1
+      # Worker pod runs the queue poll loop. Scale horizontally with `docker compose up --scale addon-worker=N`.
+      MILEAGE_WORKER_ENABLED: "true"
     depends_on:
       db:
         condition: service_healthy

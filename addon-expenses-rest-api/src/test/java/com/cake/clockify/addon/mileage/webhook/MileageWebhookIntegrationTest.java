@@ -154,6 +154,7 @@ class MileageWebhookIntegrationTest {
                 List.of(new ExpenseCreatedWebhookHandler(objectMapper, conversionService)),
                 props,
                 objectMapper,
+                null,
                 null);
         MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .addFilters(filter)

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    OWASP dependency-check suppressions for Mileage for Clockify.
+
+    Add a <suppress> entry ONLY when:
+      1. The CVE is documented as a false positive (link the upstream tracker), or
+      2. The vulnerable code path is not reachable from this add-on (justify why).
+
+    Never suppress a CVE just to get the build green. The dep-check job fails on
+    CVSS >= 7.0 — that gate is the whole point.
+-->
+<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.xsd">
+</suppressions>

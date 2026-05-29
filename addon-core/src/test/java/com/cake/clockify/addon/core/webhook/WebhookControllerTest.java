@@ -36,7 +36,8 @@ class WebhookControllerTest {
                 List.of(new ThrowingExpenseWebhookHandler()),
                 properties(),
                 new ObjectMapper(),
-                eventService);
+                eventService,
+                null);
 
         ResponseEntity<Void> response = controller.handleWebhook(request("EXPENSE_CREATED"), body);
 
@@ -57,7 +58,8 @@ class WebhookControllerTest {
                 List.of(new ThrowingExpenseWebhookHandler()),
                 properties(),
                 new ObjectMapper(),
-                eventService);
+                eventService,
+                null);
 
         ResponseEntity<Void> response = controller.handleWebhook(request("EXPENSE_CREATED"), body);
 
@@ -79,7 +81,8 @@ class WebhookControllerTest {
                 List.of(new ThrowingExpenseWebhookHandler()),
                 properties(),
                 new ObjectMapper(),
-                eventService);
+                eventService,
+                null);
 
         ResponseEntity<Void> response = controller.handleWebhook(request("EXPENSE_CREATED"), body);
 
@@ -101,7 +104,8 @@ class WebhookControllerTest {
                 List.of(new AcknowledgingExpenseWebhookHandler()),
                 properties(),
                 new ObjectMapper(),
-                eventService);
+                eventService,
+                null);
 
         ResponseEntity<Void> response = controller.handleWebhook(request("EXPENSE_CREATED"), body);
 
@@ -119,7 +123,7 @@ class WebhookControllerTest {
                 org.mockito.ArgumentMatchers.anyString()))
                 .thenThrow(new IllegalStateException("db down"));
         AcknowledgingExpenseWebhookHandler handler = new AcknowledgingExpenseWebhookHandler();
-        WebhookController controller = new WebhookController(List.of(handler), properties(), new ObjectMapper(), eventService);
+        WebhookController controller = new WebhookController(List.of(handler), properties(), new ObjectMapper(), eventService, null);
 
         ResponseEntity<Void> response = controller.handleWebhook(request("EXPENSE_CREATED"), body);
 
@@ -139,7 +143,7 @@ class WebhookControllerTest {
                 org.mockito.ArgumentMatchers.anyString()))
                 .thenThrow(new IllegalStateException("db down"));
         AcknowledgingExpenseWebhookHandler handler = new AcknowledgingExpenseWebhookHandler();
-        WebhookController controller = new WebhookController(List.of(handler), properties(), new ObjectMapper(), eventService);
+        WebhookController controller = new WebhookController(List.of(handler), properties(), new ObjectMapper(), eventService, null);
 
         ResponseEntity<Void> response = controller.handleWebhook(request("EXPENSE_CREATED"), body);
 
@@ -156,7 +160,7 @@ class WebhookControllerTest {
                 WebhookDedupeKey.payloadHash(body))).thenReturn(EVENT_ID);
         when(eventService.tryStartProcessing(EVENT_ID)).thenThrow(new IllegalStateException("db down"));
         AcknowledgingExpenseWebhookHandler handler = new AcknowledgingExpenseWebhookHandler();
-        WebhookController controller = new WebhookController(List.of(handler), properties(), new ObjectMapper(), eventService);
+        WebhookController controller = new WebhookController(List.of(handler), properties(), new ObjectMapper(), eventService, null);
 
         ResponseEntity<Void> response = controller.handleWebhook(request("EXPENSE_CREATED"), body);
 

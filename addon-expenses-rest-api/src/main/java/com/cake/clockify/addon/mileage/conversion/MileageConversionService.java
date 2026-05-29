@@ -12,6 +12,7 @@ import com.cake.clockify.addon.mileage.calculation.MileageCalculator;
 import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseGateway;
 import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseSnapshot;
 import com.cake.clockify.addon.mileage.clockify.UpdateFlatExpenseCommand;
+import com.cake.clockify.addon.mileage.metrics.MileageConversionMetrics;
 import com.cake.clockify.addon.mileage.note.MileageNoteService;
 import com.cake.clockify.addon.mileage.settings.MileageSettingsService;
 import com.cake.clockify.addon.mileage.settings.MileageSettingsValidation;
@@ -39,6 +40,7 @@ public class MileageConversionService {
     private final MileageEligibilityService eligibilityService;
     private final MileageCalculator calculator;
     private final MileageNoteService noteService;
+    private final MileageConversionMetrics metrics;
     private final Clock clock;
 
     @Autowired
@@ -50,6 +52,7 @@ public class MileageConversionService {
             MileageEligibilityService eligibilityService,
             MileageCalculator calculator,
             MileageNoteService noteService,
+            MileageConversionMetrics metrics,
             Clock clock) {
         this.settingsService = settingsService;
         this.gateway = gateway;
@@ -58,6 +61,7 @@ public class MileageConversionService {
         this.eligibilityService = eligibilityService;
         this.calculator = calculator;
         this.noteService = noteService;
+        this.metrics = metrics;
         this.clock = clock;
     }
 
@@ -69,8 +73,8 @@ public class MileageConversionService {
             String sourceEventType) {
         String cleanedExpenseId = blankToNull(expenseId);
         if (cleanedExpenseId == null) {
-            return new ConversionResult(null, null, MileageConversionStatus.SKIPPED,
-                    MileageSkipReason.API_RESOURCE_NOT_FOUND, "Expense id is required");
+            return recordOutcome(new ConversionResult(null, null, MileageConversionStatus.SKIPPED,
+                    MileageSkipReason.API_RESOURCE_NOT_FOUND, "Expense id is required"));
         }
         UUID reservedId = reservationRepository.reserve(claims.workspaceId(), cleanedExpenseId, source, sourceEventType);
         MileageConversion conversion = conversionRepository.findByIdAndWorkspaceId(reservedId, claims.workspaceId())
@@ -88,7 +92,7 @@ public class MileageConversionService {
                 conversion.setSkipReason(MileageSkipReason.EVENT_DISABLED);
                 clearFailure(conversion);
                 conversionRepository.saveAndFlush(conversion);
-                return result(conversion, "Native mileage conversion is disabled for " + source);
+                return recordOutcome(result(conversion, "Native mileage conversion is disabled for " + source));
             }
             ClockifyExpenseSnapshot expense = gateway.getExpense(claims.workspaceId(), cleanedExpenseId);
             applySnapshot(conversion, expense);
@@ -99,7 +103,7 @@ public class MileageConversionService {
                 conversion.setSkipReason(MileageSkipReason.ALREADY_CONVERTED);
                 clearFailure(conversion);
                 conversionRepository.saveAndFlush(conversion);
-                return result(conversion, "Restored expense already appears converted");
+                return recordOutcome(result(conversion, "Restored expense already appears converted"));
             }
 
             EligibilityDecision decision = eligibilityService.evaluate(settings, expense, wasSuccessfullyConverted);
@@ -111,14 +115,14 @@ public class MileageConversionService {
                 conversion.setSkipReason(MileageSkipReason.DRY_RUN);
                 clearFailure(conversion);
                 conversionRepository.saveAndFlush(conversion);
-                return result(conversion, decision.message());
+                return recordOutcome(result(conversion, decision.message()));
             }
             if (!decision.eligible()) {
                 conversion.setStatus(MileageConversionStatus.SKIPPED);
                 conversion.setSkipReason(decision.skipReason());
                 clearFailure(conversion);
                 conversionRepository.saveAndFlush(conversion);
-                return result(conversion, decision.message());
+                return recordOutcome(result(conversion, decision.message()));
             }
 
             MileageCalculation calculation = calculator.calculate(expense.quantity().toPlainString(),
@@ -151,7 +155,7 @@ public class MileageConversionService {
             conversion.setSkipReason(null);
             clearFailure(conversion);
             conversionRepository.saveAndFlush(conversion);
-            return result(conversion, "Converted mileage expense");
+            return recordOutcome(result(conversion, "Converted mileage expense"));
         } catch (ClockifyApiException e) {
             return fail(conversion, "clockify_api_error",
                     "Clockify API request failed with status " + e.statusCode());
@@ -167,8 +171,8 @@ public class MileageConversionService {
     public ConversionResult markDeleted(NormalizedClaims claims, String expenseId) {
         String cleanedExpenseId = blankToNull(expenseId);
         if (cleanedExpenseId == null) {
-            return new ConversionResult(null, null, MileageConversionStatus.SKIPPED,
-                    MileageSkipReason.API_RESOURCE_NOT_FOUND, "Expense id is required");
+            return recordOutcome(new ConversionResult(null, null, MileageConversionStatus.SKIPPED,
+                    MileageSkipReason.API_RESOURCE_NOT_FOUND, "Expense id is required"));
         }
         return conversionRepository.findByWorkspaceIdAndExpenseId(claims.workspaceId(), cleanedExpenseId)
                 .map(conversion -> {
@@ -177,17 +181,17 @@ public class MileageConversionService {
                     conversion.setSkipReason(null);
                     clearFailure(conversion);
                     conversionRepository.saveAndFlush(conversion);
-                    return result(conversion, "Mileage conversion marked deleted");
+                    return recordOutcome(result(conversion, "Mileage conversion marked deleted"));
                 })
-                .orElseGet(() -> new ConversionResult(null, cleanedExpenseId, MileageConversionStatus.SKIPPED,
-                        MileageSkipReason.API_RESOURCE_NOT_FOUND, "No mileage conversion exists for deleted expense"));
+                .orElseGet(() -> recordOutcome(new ConversionResult(null, cleanedExpenseId, MileageConversionStatus.SKIPPED,
+                        MileageSkipReason.API_RESOURCE_NOT_FOUND, "No mileage conversion exists for deleted expense")));
     }
 
     @Transactional
     public ConversionResult retry(NormalizedClaims claims, UUID conversionId) {
         if (conversionId == null) {
-            return new ConversionResult(null, null, MileageConversionStatus.SKIPPED,
-                    MileageSkipReason.API_RESOURCE_NOT_FOUND, "Conversion id is required");
+            return recordOutcome(new ConversionResult(null, null, MileageConversionStatus.SKIPPED,
+                    MileageSkipReason.API_RESOURCE_NOT_FOUND, "Conversion id is required"));
         }
         return conversionRepository.findByIdAndWorkspaceId(conversionId, claims.workspaceId())
                 .map(conversion -> {
@@ -196,8 +200,13 @@ public class MileageConversionService {
                             : conversion.getSource();
                     return convertIfEligible(claims, conversion.getExpenseId(), source, "RETRY");
                 })
-                .orElseGet(() -> new ConversionResult(conversionId, null, MileageConversionStatus.SKIPPED,
-                        MileageSkipReason.API_RESOURCE_NOT_FOUND, "Mileage conversion was not found"));
+                .orElseGet(() -> recordOutcome(new ConversionResult(conversionId, null, MileageConversionStatus.SKIPPED,
+                        MileageSkipReason.API_RESOURCE_NOT_FOUND, "Mileage conversion was not found")));
+    }
+
+    private ConversionResult recordOutcome(ConversionResult result) {
+        metrics.record(result);
+        return result;
     }
 
     private ConversionResult fail(MileageConversion conversion, String errorCode, String message) {
@@ -209,7 +218,7 @@ public class MileageConversionService {
         conversion.setErrorCode(errorCode);
         conversion.setErrorMessage(message);
         conversionRepository.saveAndFlush(conversion);
-        return result(conversion, message);
+        return recordOutcome(result(conversion, message));
     }
 
     private static ConversionResult result(MileageConversion conversion, String message) {

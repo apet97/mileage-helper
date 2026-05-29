@@ -25,12 +25,16 @@ This is the standalone repository for Mileage for Clockify. It contains the add-
 13. Native expense conversion must aggressively prevent loops: skip mileage audit markers, output-category expenses, and already-converted expenses before writing back to Clockify.
 14. The Clockify REST client has no default API hosts. Builders and tests must pass explicit backend URLs, add-ons must route from verified token claims or installation context, and reports URLs may only be omitted for clients that do not use reports APIs.
 15. Receipt and file uploads must use the shared Clockify client multipart helper. Do not hand-build multipart `Content-Disposition` or `Content-Type` headers; field names must be constrained and filenames/content types sanitized.
+16. Webhook handling is async (G1). The `/webhook/**` controller must NOT invoke `AddonWebhookHandler.handle` or any Clockify gateway method on the request thread when a `WebhookJobQueue` bean is wired. The contract is: verify → dedupe → enqueue PENDING → 2xx. The `WebhookJobWorker` (Spring profile / property `mileage.worker.enabled`) is the only place that calls handlers. Admin retry stays synchronous.
+17. The worker `claimNext` transaction wraps the `SELECT … FOR UPDATE SKIP LOCKED` and the status flip to CLAIMED in one transaction. Do NOT extend that transaction across the handler dispatch — the Clockify HTTP write must happen outside any DB lock so the row lock does not span a network call.
+18. Prometheus counters and gauges may be tagged ONLY by stable, low-cardinality enums (`outcome`, `status`). Never tag with `userId`, `workspaceId`, `expenseId`, token values, or any identifier; Prometheus cardinality explodes and tagged identifiers leak into scrape endpoints. `MileageConversionMetricsTest` enforces this.
+19. Do not lower `failBuildOnCVSS` below `7.0` in the OWASP dep-check plugin. Add a documented entry in `dependency-check-suppressions.xml` for verified false positives — never blanket-skip findings to get CI green.
 
 ## Module Map
 
-- `addon-expenses-rest-api`: Mileage add-on application, UI, manifest, settings, webhooks, conversions, Dockerfile, compose file, and add-on docs.
-- `addon-core`: Shared add-on auth, lifecycle routing, manifest controller, filters, security headers, and webhook dispatch.
-- `addon-db`: JPA/Flyway persistence for installation context, encrypted tokens, settings, and webhook tokens.
+- `addon-expenses-rest-api`: Mileage add-on application, UI, manifest, settings, webhooks, conversions, async webhook worker (`worker/` package), Prometheus metrics (`metrics/` package), Dockerfile, compose file (two services — `addon` web pod and `addon-worker`), and add-on docs.
+- `addon-core`: Shared add-on auth, lifecycle routing, manifest controller, filters, security headers, async webhook dispatch (`WebhookController` + `WebhookJobQueue` interface).
+- `addon-db`: JPA/Flyway persistence for installation context, encrypted tokens, settings, webhook tokens, webhook events, and the async webhook job queue (`AddonWebhookJob` entity + `AddonWebhookJobClaimService` + `JpaWebhookJobQueue` impl, backing migration `V7__addon_webhook_jobs.sql`).
 - `clockify-rest-client`: Typed Clockify REST client and endpoint-provenance-backed route behavior.
 - `addon-testkit`: Test builders and fixtures shared by add-on/platform tests.
 - `repo`: Vendored Maven artifacts for the Clockify add-on SDK.
@@ -44,7 +48,7 @@ This is the standalone repository for Mileage for Clockify. It contains the add-
 - Main user APIs: `GET /api/mileage/create-context`, `GET /api/mileage/mine`, `GET /api/mileage/mine.csv`, `POST /api/mileage/preview`, `POST /api/mileage/expenses`.
 - Main admin APIs: settings, Mileage category repair, diagnostics, categories, team mileage list/export, conversion list/detail/retry/export under `/api/mileage`.
 - Webhooks: `EXPENSE_CREATED`, `EXPENSE_UPDATED`, `EXPENSE_DELETED`, `EXPENSE_RESTORED`.
-- DB tables: `mileage_workspace_settings`, `mileage_conversion`.
+- DB tables: `mileage_workspace_settings`, `mileage_conversion`. Platform tables (in `addon-db`): `addon_installations`, `addon_webhook_tokens`, `addon_workspace_settings`, `addon_webhook_events`, and `addon_webhook_jobs` (G1 async queue, Flyway V7).
 - Mileage create requests intentionally omit `userId`; the backend injects the verified claims user into Clockify create commands and audit rows.
 - Mileage create requests intentionally omit `taskId`; the UI lists projects and categories but does not call task APIs. Native expense conversion may still preserve an existing Clockify `taskId` from webhook snapshots.
 - Manual mileage expenses default to billable when `billable` is omitted. An explicit `false` still stays non-billable.
@@ -58,6 +62,11 @@ This is the standalone repository for Mileage for Clockify. It contains the add-
 - Mileage CSV exports emit `user_name` next to `user_id` and `project_name` next to `project_id`. Names are resolved live per export through `ClockifyExpenseGateway.listUsers` / `listProjects`; both helpers short-circuit when the row set contains no IDs of that kind and return an empty map on `IOException`/`RuntimeException`, leaving the name cells blank without failing the export.
 - Expense webhook handlers that need an expense ID accept either `id` or `expenseId` payload shapes. This includes updated/deleted webhooks, which have arrived as full payloads in live Clockify testing.
 - Webhook dispatch records/dedupes events, marks processing outcomes internally, and still returns HTTP 2xx after handler or audit-status failures.
+- Webhook handling is asynchronous (G1). `/webhook/**` verifies, dedupes, and persists a PENDING row in `addon_webhook_jobs`, then returns 2xx with zero Clockify writes on the request thread. `WebhookJobWorker` (gated by `mileage.worker.enabled`, default `true`) claims rows via `SELECT … FOR UPDATE SKIP LOCKED`, runs `tryStartProcessing` for the loop-prevention guard, and dispatches to the same typed `AddonWebhookHandler` chain as the legacy sync path. A second `@Scheduled` reaper resets CLAIMED rows older than the configured timeout back to PENDING. The controller falls back to synchronous dispatch when no queue bean is wired (legacy tests with mocked DB).
+- Docker compose runs two services from the same image (G1): `addon` web pod (`MILEAGE_WORKER_ENABLED=false`) and `addon-worker` (no port mapping, default worker on). Scale workers horizontally with `docker compose up --scale addon-worker=N`.
+- Prometheus metrics live behind `/actuator/prometheus`. Counters: `mileage_conversion_outcome_total{outcome=…}` from `MileageConversionMetrics`. Gauge: `mileage_webhook_queue_depth{status=PENDING}` from `WebhookJobMetrics`. Timer: `mileage_webhook_job_process` from `WebhookJobWorker`. HTTP enqueue timing is covered by Spring Boot's auto-bound `http_server_requests_seconds`.
+- Hikari pool is sized explicitly in `application.yaml` (G2): `maximum-pool-size=20`, `minimum-idle=5`, `connection-timeout=30000` ms; each is env-overridable via `SPRING_DATASOURCE_HIKARI_*`.
+- OWASP `dependency-check-maven` 10.0.4 is wired in root `pluginManagement` with `failBuildOnCVSS=7.0` (G4). Suppression registry at `dependency-check-suppressions.xml`. CI runs the gate in the `dep-check` job with `NVD_API_KEY` from secrets and an `actions/cache` step for the NVD data dir; local-only runs are impractical without an NVD key and are deferred to CI.
 - Native conversion eligibility skips disabled/incomplete settings, workspace mismatches, output categories, mileage note markers, existing successful conversions, non-input categories, missing/invalid quantity, and locked/finalized expenses.
 - `ClockifyClientFactory` builds per-workspace clients from installed backend/reports URLs. Missing backend URL is fatal; missing reports URL is allowed until a reports request is attempted.
 - Clockify token timezone normalization accepts `userTimeZone`, `userTimezone`, `timeZone`, `timezone`, and `tz`; keep frontend timezone alias handling aligned with `ClaimsNormalizer`.

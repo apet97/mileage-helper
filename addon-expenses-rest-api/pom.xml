@@ -44,6 +44,11 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
+        <!-- Micrometer Prometheus registry: exposes /actuator/prometheus for scrape-based monitoring -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
         <!-- Spring Boot JPA + Flyway (brought in transitively by addon-db) -->
         <dependency>
             <groupId>org.postgresql</groupId>
@@ -103,6 +108,12 @@
                         </goals>
                     </execution>
                 </executions>
+            </plugin>
+            <plugin>
+                <!-- G4: OWASP dep-check fails the addon-app build when any runtime dep
+                     has a HIGH or CRITICAL CVE. Run with `mvn -pl addon-expenses-rest-api -am dependency-check:check`. -->
+                <groupId>org.owasp</groupId>
+                <artifactId>dependency-check-maven</artifactId>
             </plugin>
         </plugins>
     </build>

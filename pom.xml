@@ -25,6 +25,7 @@
         <flyway.version>10.15.2</flyway.version>
         <wiremock.version>3.9.1</wiremock.version>
         <testcontainers.version>1.20.1</testcontainers.version>
+        <dependency-check.version>10.0.4</dependency-check.version>
     </properties>
     <dependencyManagement>
         <dependencies>
@@ -119,6 +120,27 @@
                     <groupId>org.springframework.boot</groupId>
                     <artifactId>spring-boot-maven-plugin</artifactId>
                     <version>${spring-boot.version}</version>
+                </plugin>
+                <plugin>
+                    <!-- G4: OWASP dependency vulnerability scan. Fails the build on any
+                         HIGH (CVSS >= 7) or CRITICAL finding. Opt in per module by adding
+                         the plugin to its <plugins> block; runs in CI via the dep-check job. -->
+                    <groupId>org.owasp</groupId>
+                    <artifactId>dependency-check-maven</artifactId>
+                    <version>${dependency-check.version}</version>
+                    <configuration>
+                        <failBuildOnCVSS>7.0</failBuildOnCVSS>
+                        <skipTestScope>true</skipTestScope>
+                        <skipProvidedScope>true</skipProvidedScope>
+                        <suppressionFiles>
+                            <suppressionFile>${maven.multiModuleProjectDirectory}/dependency-check-suppressions.xml</suppressionFile>
+                        </suppressionFiles>
+                        <nvdApiKey>${env.NVD_API_KEY}</nvdApiKey>
+                        <formats>
+                            <format>HTML</format>
+                            <format>JSON</format>
+                        </formats>
+                    </configuration>
                 </plugin>
             </plugins>
         </pluginManagement>

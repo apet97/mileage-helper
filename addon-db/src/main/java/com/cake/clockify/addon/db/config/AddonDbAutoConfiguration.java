@@ -3,16 +3,20 @@ package com.cake.clockify.addon.db.config;
 import com.cake.clockify.addon.core.config.AddonCoreAutoConfiguration;
 import com.cake.clockify.addon.core.config.ClockifyAddonProperties;
 import com.cake.clockify.addon.core.crypto.TokenCodec;
+import com.cake.clockify.addon.core.webhook.WebhookJobQueue;
 import com.cake.clockify.addon.core.webhook.WebhookTokenLookup;
 import com.cake.clockify.addon.db.lifecycle.JpaPersistenceLifecycleHandler;
 import com.cake.clockify.addon.db.repository.AddonInstallationRepository;
 import com.cake.clockify.addon.db.repository.AddonWebhookEventRepository;
+import com.cake.clockify.addon.db.repository.AddonWebhookJobRepository;
 import com.cake.clockify.addon.db.repository.AddonWebhookTokenRepository;
 import com.cake.clockify.addon.db.repository.AddonWorkspaceSettingRepository;
 import com.cake.clockify.addon.db.service.AddonInstallationService;
 import com.cake.clockify.addon.db.service.AddonSettingsService;
 import com.cake.clockify.addon.db.service.AddonWebhookEventService;
+import com.cake.clockify.addon.db.service.AddonWebhookJobClaimService;
 import com.cake.clockify.addon.db.service.ClockifyClientFactory;
+import com.cake.clockify.addon.db.service.JpaWebhookJobQueue;
 import com.cake.clockify.addonsdk.clockify.model.ClockifyManifest;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.ObjectProvider;
@@ -79,6 +83,19 @@ public class AddonDbAutoConfiguration {
     public AddonWebhookEventService addonWebhookEventService(
             AddonWebhookEventRepository repository) {
         return new AddonWebhookEventService(repository);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(WebhookJobQueue.class)
+    public WebhookJobQueue webhookJobQueue(AddonWebhookJobRepository repository) {
+        return new JpaWebhookJobQueue(repository);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public AddonWebhookJobClaimService addonWebhookJobClaimService(
+            AddonWebhookJobRepository repository) {
+        return new AddonWebhookJobClaimService(repository);
     }
 
     @Bean
