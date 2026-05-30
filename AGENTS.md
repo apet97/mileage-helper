@@ -18,6 +18,20 @@ This is the standalone repository for Mileage for Clockify. It contains the add-
 2. Read this file, then `CLAUDE.md`, then [README.md](README.md).
 3. For product behavior, use [addon-expenses-rest-api/README.md](addon-expenses-rest-api/README.md), [addon-expenses-rest-api/endpoints.md](addon-expenses-rest-api/endpoints.md), [addon-expenses-rest-api/webhooks.md](addon-expenses-rest-api/webhooks.md), [clockify-rest-client/docs/endpoint-provenance.md](clockify-rest-client/docs/endpoint-provenance.md), and the implemented tests.
 
+## Architecture Decision: Postgres
+
+The persistence layer stays on PostgreSQL. Asked 2026-05-30 whether to migrate to MongoDB; decision was no. Three load-bearing reasons:
+
+1. **`SELECT … FOR UPDATE SKIP LOCKED`** is the atomic primitive the G1 async worker queue is built on; MongoDB has no clean equivalent that preserves the "row lock survives until commit so claim and process can split across transactions" property.
+2. **`BigDecimal ↔ numeric`** keeps financial precision aligned without lossy conversions and supports the no-float hard rule cleanly. Multi-step transactional state transitions on `mileage_conversion` rely on Postgres rollback semantics.
+3. **Flyway + `{h-schema}` + JPA** infrastructure is wired throughout; the V17 migration numbering rule and the per-test-schema isolation pattern depend on it. A rewrite would touch every repository, entity, and migration for zero functional gain.
+
+Performance is nowhere near Postgres limits: 3.9 ms avg worker poll latency, 334 ms per-job process time (dominated by the Clockify HTTPS roundtrip). Revisit only if Postgres genuinely can't do something.
+
+## Local environment file
+
+Clockify credentials and workspace IDs live in `~/.config/clockify-mileage.env` (mode `600`), sourced from `~/.zshrc`. Non-sensitive IDs (workspace, user, project, base URL for the sacrificial developer workspace `672f9cf4ad6f45299c3e3de2`) are checked in to the env file directly; `CLOCKIFY_API_KEY` and `NVD_API_KEY` are placeholders to fill in after rotation. The file is private (mode 600) and outside this repo. Never echo values; probe presence with `[ -n "$VAR" ] && echo set || echo MISSING`.
+
 ## Non-Negotiables
 
 1. Do not guess Clockify API shapes. Prefer typed client tests, endpoint provenance docs, and live sacrificial-workspace evidence only when explicitly permitted.

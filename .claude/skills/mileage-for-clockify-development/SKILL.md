@@ -15,6 +15,14 @@ You are working on a standalone Java 21 / Spring Boot 3.3.x add-on for the Clock
 4. After Behavior, Docker, manifest, or migration changes: also run the hosted probe section below.
 5. Keep `CLAUDE.md` and `AGENTS.md` current — if a change invalidates a Product Fact, a Hard Rule, or the Hosted State entries, update them in the same PR. The meta-rule in `CLAUDE.md` is non-negotiable.
 
+## Persistence: stay on Postgres
+
+Decision recorded 2026-05-30 (`CLAUDE.md` § "Architecture Decision"). Do not propose a migration to MongoDB. The G1 worker queue depends on `SELECT … FOR UPDATE SKIP LOCKED`, which is a Postgres-specific atomic primitive without a clean equivalent in MongoDB. `BigDecimal ↔ numeric` keeps financial precision aligned, multi-step `@Transactional` state transitions rely on Postgres rollback semantics, and the Flyway + `{h-schema}` per-test schema isolation pattern is wired throughout. Performance is nowhere near PG limits at our workload.
+
+## Local environment file
+
+`~/.config/clockify-mileage.env` (mode 600) is sourced from `~/.zshrc`. It holds the workspace/user/project IDs for the sacrificial developer workspace (`672f9cf4ad6f45299c3e3de2`) plus `CLOCKIFY_API_BASE_URL=https://developer.clockify.me/api/v1`. `CLOCKIFY_API_KEY` and `NVD_API_KEY` are placeholders; the user fills them in after rotation. Probe with `[ -n "$VAR" ] && echo set || echo MISSING`. Never echo a value.
+
 ## Hard rules — these crash production if you violate them
 
 | Rule | Why |

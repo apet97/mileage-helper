@@ -190,6 +190,31 @@ Live Clockify smoke is optional and requires local secrets. Never commit or echo
 
 Default CORS allows Clockify origins and the origin from `ADDON_BASE_URL`, which keeps local ngrok iframe/API testing working without adding a broad wildcard.
 
+## Architecture Decision: Postgres (not MongoDB)
+
+Asked 2026-05-30 whether to migrate the persistence layer to MongoDB. Decision: stay on Postgres. Three load-bearing reasons:
+
+1. **`SELECT … FOR UPDATE SKIP LOCKED` has no clean MongoDB equivalent.** The G1 async webhook worker (`AddonWebhookJobRepository.findPendingForUpdateSkipLocked`) depends on it as a single atomic primitive that claims a PENDING row, skips any row another worker has locked, and releases the lock on transaction commit. The two-workers-don't-double-process invariant proven in `WebhookJobQueueSkipLockedTest` is enforced by Postgres row-level lock semantics. MongoDB's `findOneAndUpdate` can simulate a claim but can't give us "the row lock survives until commit so claim+process can split across transactions while we hold the Clockify HTTPS call outside any DB lock".
+2. **Financial precision + multi-step state-machine transactions.** `BigDecimal ↔ numeric` is the natural Java↔SQL mapping for the hard rule "no float/double for mileage, rate, money". `MileageConversionService.convertIfEligible` runs the state transitions (`RECEIVED → CONVERTING → CONVERTED|FAILED`) inside one `@Transactional` boundary with clean rollback on `ClockifyApiException`. MongoDB multi-document transactions exist since 4.0 but with stricter constraints (60 s default timeout, write conflicts force aborts) and the Hibernate/JPA Decimal128 story is weaker.
+3. **Flyway numbering + `{h-schema}` per-test schema isolation + existing JPA layer.** The `V17__addon_webhook_jobs.sql` migration uses `{h-schema}` placeholders so the SKIP LOCKED test runs against a throwaway schema (`mileage_skiplocked`) without polluting `addon_db_test`. MongoDB has no Flyway equivalent with the same boot-time validation that caught the V7→V17 production crash. Switching means rewriting every repository, every native query, every entity, every test fixture for zero functional gain.
+
+Performance reality: worker poll latency is 3.9 ms avg / 12.8 ms max against Railway Postgres; per-job process latency 334 ms avg is the Clockify HTTPS roundtrip, not the DB. We're nowhere near PG limits.
+
+Revisit only if we hit something Postgres genuinely can't do — and we won't, for an add-on of this shape.
+
+## Local environment file
+
+Clockify credentials and workspace IDs are persisted at `~/.config/clockify-mileage.env` (mode `600`) and sourced from `~/.zshrc` so new shell sessions get them automatically. Contents (current session set up 2026-05-30):
+
+- `CLOCKIFY_API_BASE_URL=https://developer.clockify.me/api/v1` — developer environment hosting the sacrificial workspace
+- `CLOCKIFY_WORKSPACE_ID=672f9cf4ad6f45299c3e3de2` — sacrificial workspace where the addon is installed
+- `CLOCKIFY_TEST_USER_ID=672f9cf4ad6f45299c3e3de1` — the API key's user
+- `CLOCKIFY_TEST_PROJECT_ID=68dd9b5ee598361591be848e` — sacrificial project ("01")
+- `CLOCKIFY_API_KEY` — **placeholder, fill in after rotation**. The 2026-05-30 G1–G4 session leaked both the production-workspace key and the developer-workspace key into the conversation transcript; both must be rotated and the new dev key pasted into the file. Until then `mileage-webhook-smoke` will refuse to run.
+- `NVD_API_KEY` — placeholder, fill in to activate the CI dep-check HIGH/CRITICAL gate. Free from `nvd.nist.gov/developers/request-an-api-key`.
+
+The file is in `~/.config/`, not in this repo. Never commit it. Don't echo any of these values back to the user; probe presence with `[ -n "$VAR" ] && echo set || echo MISSING`.
+
 ## Hard Rules
 
 - Do not edit `addon-expenses-rest-api/addon-java-sdk/`.
