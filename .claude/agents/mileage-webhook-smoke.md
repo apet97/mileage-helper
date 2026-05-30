@@ -54,11 +54,15 @@ Sleep ~10 seconds. Re-snapshot the same metrics. Compute deltas:
 
 ## Verify the conversion's downstream effect
 
-Refetch the expense via `GET $BASE/workspaces/{wsId}/expenses/{expId}`. If `outcome="CONVERTED"` ticked, the `notes` field MUST contain the canonical marker:
+Refetch the expense via `GET $BASE/workspaces/{wsId}/expenses/{expId}`. If `outcome="CONVERTED"` ticked, the `notes` field MUST contain the canonical line:
 ```
-Mileage reimbursement: <miles> miles x <rate> = <amount>. Created/converted by Mileage for Clockify
+Mileage reimbursement: <miles> miles x <rate> = <calculatedAmount>. Created/converted by Mileage for Clockify.
 ```
-That marker proves `MileageConversionService.convertIfEligible → gateway.updateFlatExpense` ran end-to-end against the real Clockify backend.
+Two refinements landed after 2026-05-30 — expect them in the live note:
+- If the expense had a user-typed note before conversion, it is PRESERVED, prepended above the canonical line and separated by a blank line (`<original>\n\n Mileage reimbursement: …`). The canonical line is no longer the whole note.
+- When the addon's high-precision `settings.rate()` differs from the Clockify unit-priced category's integer-cent price, the canonical line carries a `(Clockify category charge: <total>)` parenthetical that equals the real Clockify `total`, e.g. `… = 89.915252 (Clockify category charge: 89.90). Created/converted by …`. Identical amounts stay clean (no parenthetical).
+
+That canonical line proves `MileageConversionService.convertIfEligible → gateway.updateFlatExpense` ran end-to-end against the real Clockify backend.
 
 ## Clean up
 

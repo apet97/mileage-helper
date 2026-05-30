@@ -142,7 +142,7 @@ class MileageConversionServiceTest {
     }
 
     @Test
-    void conversionReplacesNativeNoteWithCleanExactGeneratedNote() throws Exception {
+    void conversionPreservesNativeNoteAboveCleanExactGeneratedNote() throws Exception {
         reservedConversion("exp-1", MileageConversionSource.WEBHOOK_CREATED, "EXPENSE_CREATED");
         when(settingsService.validateForNativeConversion("ws-native")).thenReturn(new MileageSettingsValidation(
                 "ws-native", true, true, new BigDecimal("0.725"), "mile",
@@ -160,7 +160,27 @@ class MileageConversionServiceTest {
         assertThat(command.getValue().amount()).isEqualByComparingTo(new BigDecimal("1"));
         assertThat(command.getValue().amountIsQuantity()).isTrue();
         assertThat(command.getValue().notes())
-                .isEqualTo("Mileage reimbursement: 1 mile x 0.725 = 0.725. Created/converted by Mileage for Clockify.");
+                .isEqualTo("Native mileage\n\nMileage reimbursement: 1 mile x 0.725 = 0.725. Created/converted by Mileage for Clockify.");
+    }
+
+    @Test
+    void conversionNoteExplainsClockifyCategoryChargeWhenItDiffersFromTheCalculatedAmount() throws Exception {
+        reservedConversion("exp-1", MileageConversionSource.WEBHOOK_CREATED, "EXPENSE_CREATED");
+        when(settingsService.validateForNativeConversion("ws-native")).thenReturn(new MileageSettingsValidation(
+                "ws-native", true, true, new BigDecimal("7.25123"), "mile",
+                "cat-mileage", "cat-mileage", RoundingMode.HALF_UP, true, true, false, false, false, null, List.of()));
+        when(gateway.getExpense("ws-native", "exp-1")).thenReturn(new ClockifyExpenseSnapshot(
+                "exp-1", "ws-native", "user-1", "2026-05-24T12:00:00Z", "project-1", "task-1",
+                "cat-mileage", "", new BigDecimal("12.4"), true, null, new BigDecimal("8990"), false));
+        when(gateway.updateFlatExpense(eq("ws-native"), eq("exp-1"), any(UpdateFlatExpenseCommand.class)))
+                .thenReturn(objectMapper.createObjectNode().put("id", "exp-1"));
+
+        service.convertIfEligible(claims(), "exp-1", MileageConversionSource.WEBHOOK_CREATED, "EXPENSE_CREATED");
+
+        ArgumentCaptor<UpdateFlatExpenseCommand> command = ArgumentCaptor.forClass(UpdateFlatExpenseCommand.class);
+        verify(gateway).updateFlatExpense(eq("ws-native"), eq("exp-1"), command.capture());
+        assertThat(command.getValue().notes())
+                .isEqualTo("Mileage reimbursement: 12.4 miles x 7.25123 = 89.915252 (Clockify category charge: 89.90). Created/converted by Mileage for Clockify.");
     }
 
     @Test

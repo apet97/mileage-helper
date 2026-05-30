@@ -3,14 +3,16 @@ package com.cake.clockify.addon.mileage.note;
 import com.cake.clockify.addon.mileage.calculation.MileageCalculation;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.UUID;
 
 @Service
 public class MileageNoteService {
     public static final String MARKER_PREFIX = "[MileageAddon:converted:v1";
+    public static final String CONVERTED_SIGNATURE = "Created/converted by Mileage for Clockify.";
     public static final String DEFAULT_NOTE_TEMPLATE =
-            "Mileage reimbursement: {{miles}} {{unit}} x {{rate}} = {{calculatedAmount}}. Created/converted by Mileage for Clockify.";
+            "Mileage reimbursement: {{miles}} {{unit}} x {{rate}} = {{calculatedAmount}}{{categoryCharge}}. Created/converted by Mileage for Clockify.";
     public static final String DEFAULT_UNIT = "mile";
     public static final RoundingMode DEFAULT_ROUNDING_MODE = RoundingMode.HALF_UP;
 
@@ -27,18 +29,34 @@ public class MileageNoteService {
             MileageCalculation calculation,
             String unit,
             UUID conversionId,
-            String template) {
-        if (hasMileageMarker(originalNote)) {
+            String template,
+            BigDecimal categoryCharge) {
+        if (isAlreadyConverted(originalNote)) {
             return originalNote;
         }
         String generated = render(template == null || template.isBlank() ? DEFAULT_NOTE_TEMPLATE : template,
                 calculation,
                 unitLabel(calculation, unit),
-                marker(conversionId));
-        return generated;
+                marker(conversionId),
+                categoryChargeToken(calculation, categoryCharge));
+        if (originalNote == null || originalNote.isBlank()) {
+            return generated;
+        }
+        return originalNote.strip() + "\n\n" + generated;
     }
 
-    private static String render(String template, MileageCalculation calculation, String unit, String marker) {
+    private boolean isAlreadyConverted(String notes) {
+        return notes != null && (notes.contains(MARKER_PREFIX) || notes.contains(CONVERTED_SIGNATURE));
+    }
+
+    private static String categoryChargeToken(MileageCalculation calculation, BigDecimal categoryCharge) {
+        if (categoryCharge == null || categoryCharge.compareTo(calculation.roundedAmount()) == 0) {
+            return "";
+        }
+        return " (Clockify category charge: " + categoryCharge.setScale(2, RoundingMode.HALF_UP).toPlainString() + ")";
+    }
+
+    private static String render(String template, MileageCalculation calculation, String unit, String marker, String categoryCharge) {
         return template
                 .replace("{{miles}}", calculation.milesText())
                 .replace("{{unit}}", unit)
@@ -46,6 +64,7 @@ public class MileageNoteService {
                 .replace("{{calculatedAmount}}", calculation.calculatedAmountText())
                 .replace("{{roundedAmount}}", calculation.roundedAmountText())
                 .replace("{{amount}}", calculation.roundedAmountText())
+                .replace("{{categoryCharge}}", categoryCharge)
                 .replace("{{marker}}", marker);
     }
 

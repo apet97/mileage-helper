@@ -27,7 +27,7 @@ class MileageNoteServiceTest {
 
     @Test
     void rendersExactCleanNoteWithoutVisibleMarkerOrExpenseAmountLine() {
-        String note = service.buildConvertedNote("", calculation, "mi", conversionId, null);
+        String note = service.buildConvertedNote("", calculation, "mi", conversionId, null, null);
 
         assertThat(note).isEqualTo("Mileage reimbursement: 37.4 miles x 0.655 = 24.497. Created/converted by Mileage for Clockify.");
         assertThat(note).doesNotContain("Expense amount");
@@ -37,7 +37,7 @@ class MileageNoteServiceTest {
     @Test
     void supportsCalculatedAndRoundedTemplateTokensWhileKeepingLegacyAmountRounded() {
         String note = service.buildConvertedNote("", calculation, "mi", conversionId,
-                "{{calculatedAmount}} / {{roundedAmount}} / {{amount}} / {{marker}}");
+                "{{calculatedAmount}} / {{roundedAmount}} / {{amount}} / {{marker}}", null);
 
         assertThat(note).contains("24.497 / 24.50 / 24.50 / " + service.marker(conversionId));
     }
@@ -51,31 +51,70 @@ class MileageNoteServiceTest {
                 new BigDecimal("0.73"),
                 RoundingMode.HALF_UP);
 
-        String note = service.buildConvertedNote("Native note that should be replaced", oneMile, "mile", conversionId, null);
+        String note = service.buildConvertedNote("", oneMile, "mile", conversionId, null, null);
 
         assertThat(note).isEqualTo("Mileage reimbursement: 1 mile x 0.725 = 0.725. Created/converted by Mileage for Clockify.");
     }
 
     @Test
-    void replacesOriginalNoteWithGeneratedMileageNote() {
-        String note = service.buildConvertedNote("Client site visit", calculation, "mi", conversionId, null);
+    void appendsClockifyCategoryChargeWhenItDiffersFromTheCalculatedAmount() {
+        MileageCalculation subCent = new MileageCalculation(
+                new BigDecimal("12.4"),
+                new BigDecimal("7.25123"),
+                new BigDecimal("89.915252"),
+                new BigDecimal("89.92"),
+                RoundingMode.HALF_UP);
+
+        String note = service.buildConvertedNote("", subCent, "mile", conversionId, null, new BigDecimal("89.90"));
+
+        assertThat(note).isEqualTo(
+                "Mileage reimbursement: 12.4 miles x 7.25123 = 89.915252 (Clockify category charge: 89.90). Created/converted by Mileage for Clockify.");
+    }
+
+    @Test
+    void omitsClockifyCategoryChargeWhenItMatchesTheRoundedAmount() {
+        String note = service.buildConvertedNote("", calculation, "mi", conversionId, null, new BigDecimal("24.50"));
+
+        assertThat(note).isEqualTo("Mileage reimbursement: 37.4 miles x 0.655 = 24.497. Created/converted by Mileage for Clockify.");
+        assertThat(note).doesNotContain("category charge");
+    }
+
+    @Test
+    void omitsClockifyCategoryChargeWhenChargeIsUnknown() {
+        String note = service.buildConvertedNote("", calculation, "mi", conversionId, null, null);
+
+        assertThat(note).doesNotContain("category charge");
+    }
+
+    @Test
+    void preservesOriginalNotePrependedAboveTheGeneratedNote() {
+        String note = service.buildConvertedNote("Client site visit", calculation, "mi", conversionId, null, null);
+
+        assertThat(note).isEqualTo(
+                "Client site visit\n\nMileage reimbursement: 37.4 miles x 0.655 = 24.497. Created/converted by Mileage for Clockify.");
+    }
+
+    @Test
+    void rendersCanonicalNoteOnlyWhenThereIsNoOriginalNote() {
+        String note = service.buildConvertedNote("   ", calculation, "mi", conversionId, null, null);
 
         assertThat(note).isEqualTo("Mileage reimbursement: 37.4 miles x 0.655 = 24.497. Created/converted by Mileage for Clockify.");
     }
 
     @Test
-    void generatedNoteDoesNotStartWithOriginalNote() {
-        String note = service.buildConvertedNote("Client site visit", calculation, "mi", conversionId, null);
+    void doesNotReStackWhenOriginalNoteIsAlreadyConverted() {
+        String alreadyConverted = "Client site visit\n\nMileage reimbursement: 37.4 miles x 0.655 = 24.497. Created/converted by Mileage for Clockify.";
 
-        assertThat(note).doesNotStartWith("Client site visit");
-        assertThat(note).startsWith("Mileage reimbursement");
+        String note = service.buildConvertedNote(alreadyConverted, calculation, "mi", conversionId, null, null);
+
+        assertThat(note).isEqualTo(alreadyConverted);
     }
 
     @Test
     void doesNotDuplicateMarker() {
         String original = "Already done " + service.marker(conversionId);
 
-        assertThat(service.buildConvertedNote(original, calculation, "mi", conversionId, null)).isEqualTo(original);
+        assertThat(service.buildConvertedNote(original, calculation, "mi", conversionId, null, null)).isEqualTo(original);
     }
 
     @Test

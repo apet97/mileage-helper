@@ -131,7 +131,8 @@ public class MileageApiController {
                 calculation,
                 settings.unit(),
                 conversionId,
-                settings.noteTemplate());
+                settings.noteTemplate(),
+                null);
         CreateFlatExpenseCommand command = new CreateFlatExpenseCommand(
                 settings.outputCategoryId(),
                 userId,
@@ -164,7 +165,8 @@ public class MileageApiController {
                     calculation,
                     settings.unit(),
                     persistedId,
-                    settings.noteTemplate());
+                    settings.noteTemplate(),
+                    null);
         }
         applyAddonFormConversion(
                 conversion,

@@ -133,7 +133,8 @@ public class MileageConversionService {
                     calculation,
                     settings.unit(),
                     conversion.getId(),
-                    settings.noteTemplate());
+                    settings.noteTemplate(),
+                    clockifyCategoryCharge(expense));
             applyCalculation(conversion, settings, calculation, marker);
             conversion.setStatus(MileageConversionStatus.CONVERTING);
             conversionRepository.saveAndFlush(conversion);
@@ -303,6 +304,11 @@ public class MileageConversionService {
 
     private static boolean singleMileageCategory(MileageSettingsValidation settings) {
         return Objects.equals(settings.inputCategoryId(), settings.outputCategoryId());
+    }
+
+    private static BigDecimal clockifyCategoryCharge(ClockifyExpenseSnapshot expense) {
+        BigDecimal total = expense.total();
+        return total == null ? null : total.movePointLeft(2);
     }
 
     private static String blankToNull(String value) {
