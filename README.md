@@ -1,63 +1,89 @@
-# Mileage for Clockify
+# 🚗 Mileage for Clockify
 
-Mileage for Clockify is a Clockify Marketplace add-on for mileage reimbursements. It creates mileage as real Clockify expenses and converts eligible native/mobile `Mileage` category expenses through signed Clockify webhooks.
+> A Clockify Marketplace add-on that turns mileage into real Clockify expenses — and automatically converts native `Mileage`-category expenses into accurate, reimbursable amounts via signed webhooks.
 
-Current hosted test add-on:
+[![CI](https://github.com/apet97/mileage-helper/actions/workflows/ci.yml/badge.svg)](https://github.com/apet97/mileage-helper/actions/workflows/ci.yml)
+![Java 21](https://img.shields.io/badge/Java-21-orange)
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.3.x-6DB33F)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192)
+![Manifest schema](https://img.shields.io/badge/manifest-schema%201.5-555)
+![Minimum plan](https://img.shields.io/badge/min%20plan-PRO-7B61FF)
 
-- App URL: `https://mileage-for-clockify-production.up.railway.app`
-- Manifest: `https://mileage-for-clockify-production.up.railway.app/manifest`
-- Railway deployment ID: use `railway deployment list` for the current Railway deployment ID.
-- Dated deployment evidence belongs in the pre-publish checklist after each deploy; old deployment IDs are historical evidence, not current truth.
-- Dated local hardening review snapshot: 2026-05-27, covering shared multipart receipt/file upload handling, Clockify timezone claim aliases, mileage date-helper asset checks, and secret-scan proof.
-- Dated live Clockify API smoke snapshot: 2026-05-27, using local secrets only, proved sacrificial Mileage receipt expense create, fetch, full update, delete, post-delete non-success, and nonzero binary receipt download for PNG and valid generated PDF receipts. A malformed hand-written PDF fixture returned zero bytes and should not be used as product evidence.
-- Dated hosted checks: 2026-05-27, a pre-deploy check showed health and manifest passing while `/assets/mileage/settings-date.js` returned `404`; after deploying latest `main`, health, manifest, both settings JS assets, icon, and unauthenticated iframe probes passed.
-- Live Clockify smoke is optional and requires local secrets. Never commit or echo API keys/tokens. If not run, final output must say it was skipped.
+Users log mileage from a Clockify sidebar UI and have it created as a proper expense. The add-on also watches the workspace's `Mileage` expense category, so **any** expense created in Clockify — web or mobile — is converted into a reimbursement with a clean, auditable note.
 
-## Repository Layout
+---
 
-- `addon-expenses-rest-api/` - product module with add-on source, UI, manifest, docs, Dockerfile, and compose file.
-- `addon-core/` - shared add-on auth, lifecycle, manifest, webhook, and security-header plumbing.
-- `addon-db/` - Flyway/JPA persistence for installation context and encrypted tokens.
-- `clockify-rest-client/` - typed Clockify REST client and live-evidence-backed route docs.
-- `addon-testkit/` - test builders and fixtures.
-- `repo/` - vendored Maven artifacts for the Clockify add-on SDK.
+## ✨ Features
 
-The ignored local clone `addon-expenses-rest-api/addon-java-sdk/` is read-only reference material. Do not edit or commit it.
+- **Two ways to capture mileage** — submit from the add-on's own form, or just create a native Clockify `Mileage` expense and let the webhook converter handle it.
+- **Exact money math** — every mileage / rate / amount value is `BigDecimal`. Clockify receives the rounded amount while the UI keeps full decimal precision.
+- **Honest notes** — the converted note **preserves any user-typed note** and reconciles the add-on's calculated amount with the real Clockify category charge, e.g. `12.4 miles x 7.25123 = 89.915252 (Clockify category charge: 89.90)`.
+- **Async, built for scale** — webhooks are verified, de-duplicated, and queued in Postgres; a worker drains them with `SELECT … FOR UPDATE SKIP LOCKED`, so Clockify never waits on a conversion or retries on a timeout.
+- **Loop-safe** — the add-on's own write fires another webhook, which the conversion guard correctly skips.
+- **Observable** — Prometheus counters/gauges for conversion outcomes, queue depth, and worker latency at `/actuator/prometheus` (low-cardinality tags only — no PII).
+- **Secure by default** — installation tokens stay server-side, CSP/HSTS/Permissions-Policy headers, OWASP dependency-check gate (fail on CVSS ≥ 7.0), and workspace isolation on every query.
 
-## What It Does
+## 🧭 How conversion works
 
-- Manifest: `GET /manifest`, schema `1.5`, key `mileage-for-clockify`, minimum plan `PRO`.
-- UI: `GET /iframe/mileage`, `GET /iframe/settings`.
-- Manual mileage expenses are billable by default unless the request explicitly sends `billable=false`.
-- The main form hides rate override unless workspace settings allow it; users always see the configured workspace rate context first.
-- Settings use one `Mileage` unit category, fixed unit `mile`, and fixed `HALF_UP` Clockify-style rounding.
-- Setup can use an existing Clockify `Mileage` UNIT/mile category and derive the local rate from Clockify cents pricing.
-- Generated Clockify notes use the exact calculated amount, for example: `Mileage reimbursement: 1 mile x 0.725 = 0.725. Created/converted by Mileage for Clockify.`
-- The add-on displays full calculated mileage decimals in previews, Mine, Team, and Conversions while Clockify receives the rounded expense amount.
-- Mine and Team lists/CSVs hide deleted expenses. The admin Conversions view keeps deleted rows as audit history.
-- Expense webhooks accept both full payloads with `id` and reference payloads with `expenseId`.
-- Receipt uploads are sent through shared Clockify client multipart construction that rejects unsafe field names and sanitizes filename/content-type headers.
-- Clockify timezone claim aliases are normalized server-side and kept aligned with the settings UI date fallback logic. The UI loads `/assets/mileage/settings-date.js` before `/assets/mileage/settings.js` so date presets/defaults use the Clockify claim timezone when valid.
-
-## API Surface
-
-- User APIs: `GET /api/mileage/create-context`, `GET /api/mileage/mine`, `GET /api/mileage/mine.csv`, `POST /api/mileage/preview`, `POST /api/mileage/expenses`.
-- Admin APIs: settings, Mileage category repair, diagnostics, category options, team mileage list/export, conversion list/detail/retry/export under `/api/mileage`.
-- Webhooks: `EXPENSE_CREATED`, `EXPENSE_UPDATED`, `EXPENSE_DELETED`, `EXPENSE_RESTORED`.
-
-## Build And Test
-
-Run from the repository root:
-
-```bash
-./scripts/verify-publish.sh
-mvn -pl addon-expenses-rest-api -am test
-mvn -pl addon-expenses-rest-api -am clean test
+```text
+Clockify ──EXPENSE_CREATED──▶  /webhook/**            ──▶ 2xx (no Clockify write on this thread)
+                               verify → dedupe → enqueue PENDING
+                                       │
+                                       ▼
+                               addon_webhook_jobs  (Postgres queue)
+                                       │   SELECT … FOR UPDATE SKIP LOCKED
+                                       ▼
+                               WebhookJobWorker ──▶ MileageConversionService ──▶ Clockify update
+                                                    (BigDecimal math, loop guard, clean note)
 ```
 
-The publish verifier checks both mileage settings JavaScript assets and the repo-local date-helper behavior script. After deploying static asset changes, probe both `/assets/mileage/settings-date.js` and `/assets/mileage/settings.js`.
+The web pod and worker pod run from the **same image**; scale workers horizontally with `docker compose up --scale addon-worker=N`.
 
-If local Testcontainers cannot discover Docker, use Colima explicitly:
+## 🏗️ Architecture
+
+A small Maven multi-module project: one product module plus the minimal platform modules copied from the add-on factory.
+
+| Module | Responsibility |
+| --- | --- |
+| [`addon-expenses-rest-api/`](addon-expenses-rest-api/) | **Product module** — add-on source, server-rendered iframe UI, manifest, settings, conversion, async worker, Prometheus metrics, Dockerfile & compose. |
+| [`addon-core/`](addon-core/) | Shared add-on auth, lifecycle routing, manifest controller, security headers, async webhook dispatch. |
+| [`addon-db/`](addon-db/) | Flyway / JPA persistence: installation context, encrypted tokens, settings, webhook events, async job queue. |
+| [`clockify-rest-client/`](clockify-rest-client/) | Typed Clockify REST client with endpoint-provenance-backed route behavior. |
+| [`addon-testkit/`](addon-testkit/) | Test builders and fixtures shared across modules. |
+| [`repo/`](repo/) | Vendored Maven artifacts for the Clockify add-on SDK. |
+
+> The ignored local clone `addon-expenses-rest-api/addon-java-sdk/` is read-only reference material — never edit or commit it.
+
+## 🧰 Tech stack
+
+| Layer | Technology |
+| --- | --- |
+| Language | Java 21 |
+| Framework | Spring Boot 3.3.x |
+| Persistence | PostgreSQL · Flyway · JPA/Hibernate |
+| HTTP client | Typed Clockify REST client (JDK `HttpClient`) |
+| Metrics | Micrometer + Prometheus |
+| Build | Maven (multi-module reactor) |
+| Tests | JUnit 5 · AssertJ · Mockito · Testcontainers |
+| Delivery | Docker · Railway |
+
+## 🚀 Quickstart
+
+```bash
+# Full publish safety bundle (asset checks + reactor)
+./scripts/verify-publish.sh
+
+# Fast focused add-on reactor
+mvn -pl addon-expenses-rest-api -am test
+
+# Run locally on Docker (web pod + worker pod + Postgres)
+docker compose -f addon-expenses-rest-api/docker-compose.yml up -d
+curl -fsS http://localhost:8080/manifest
+docker compose -f addon-expenses-rest-api/docker-compose.yml down
+```
+
+<details>
+<summary>Testcontainers can't find Docker? Use Colima explicitly</summary>
 
 ```bash
 DOCKER_HOST=unix:///Users/15x/.colima/default/docker.sock \
@@ -68,31 +94,47 @@ mvn -pl addon-expenses-rest-api -am test \
   -Ddocker.host=unix:///Users/15x/.colima/default/docker.sock \
   -Dapi.version=1.44
 ```
+</details>
 
-## Docker
-
-```bash
-docker compose -f addon-expenses-rest-api/docker-compose.yml build
-docker compose -f addon-expenses-rest-api/docker-compose.yml up -d
-curl -fsS http://localhost:8080/manifest
-docker compose -f addon-expenses-rest-api/docker-compose.yml down
-```
-
-If local port `5432` is occupied, keep the compose database internal:
+<details>
+<summary>Local port 5432 busy? Keep the compose database internal</summary>
 
 ```bash
-docker compose -f addon-expenses-rest-api/docker-compose.yml -f <(printf 'services:\n  db:\n    ports: !reset []\n') up -d
+docker compose -f addon-expenses-rest-api/docker-compose.yml \
+  -f <(printf 'services:\n  db:\n    ports: !reset []\n') up -d
 ```
+</details>
 
-## Documentation Map
+## 🔌 API surface
 
-- [AGENTS.md](AGENTS.md) - binding Codex/agent rules.
-- [CLAUDE.md](CLAUDE.md) - Claude Code project guide.
-- [addon-expenses-rest-api/README.md](addon-expenses-rest-api/README.md) - product module guide.
-- [addon-expenses-rest-api/docs/PRE_PUBLISH_CHECKLIST.md](addon-expenses-rest-api/docs/PRE_PUBLISH_CHECKLIST.md) - current local, live-dev, and manual gates before Marketplace submission.
-- [addon-expenses-rest-api/endpoints.md](addon-expenses-rest-api/endpoints.md), [models.md](addon-expenses-rest-api/models.md), [webhooks.md](addon-expenses-rest-api/webhooks.md), [edge-cases.md](addon-expenses-rest-api/edge-cases.md), [reports.md](addon-expenses-rest-api/reports.md) - active product docs.
-- `addon-expenses-rest-api/MARKETPLACE_OCS/` - copied Marketplace documentation reference.
+- **UI** — `GET /iframe/mileage`, `GET /iframe/settings`
+- **User** — `GET /api/mileage/create-context`, `GET /api/mileage/mine`, `GET /api/mileage/mine.csv`, `POST /api/mileage/preview`, `POST /api/mileage/expenses`
+- **Admin** — settings, Mileage category repair, diagnostics, category options, team list/export, conversion list/detail/retry/export under `/api/mileage`
+- **Webhooks** — `EXPENSE_CREATED`, `EXPENSE_UPDATED`, `EXPENSE_DELETED`, `EXPENSE_RESTORED`
+- **Ops** — `GET /manifest`, `GET /actuator/health`, `GET /actuator/prometheus`
 
-## Configuration
+Manifest: schema `1.5`, key `mileage-for-clockify`, minimum plan `PRO`, scopes `EXPENSE_READ/WRITE`, `USER_READ`, `PROJECT_READ`, `WORKSPACE_READ`.
 
-Runtime configuration uses `SPRING_DATASOURCE_*`, `ADDON_BASE_URL`, `ADDON_KEY`, `ADDON_NAME`, `ADDON_DESCRIPTION`, and `ADDON_CRYPTO_*` variables. Default CORS includes Clockify origins plus the `ADDON_BASE_URL` origin, which is what local ngrok testing needs. See [addon-expenses-rest-api/README.md](addon-expenses-rest-api/README.md) for the full list.
+## 🌐 Production
+
+| | |
+| --- | --- |
+| App URL | `https://mileage-for-clockify-production.up.railway.app` |
+| Manifest | `https://mileage-for-clockify-production.up.railway.app/manifest` |
+| Current deployment id | run `railway deployment list` (old ids in notes are historical, not current truth) |
+
+Dated deploy / smoke evidence lives in [the pre-publish checklist](addon-expenses-rest-api/docs/PRE_PUBLISH_CHECKLIST.md). Live Clockify checks are optional and require local secrets — never commit or echo API keys/tokens.
+
+## ⚙️ Configuration
+
+Runtime config uses `SPRING_DATASOURCE_*` (incl. `SPRING_DATASOURCE_HIKARI_*` pool overrides), `ADDON_BASE_URL`, `ADDON_KEY`, `ADDON_NAME`, `ADDON_DESCRIPTION`, `ADDON_CRYPTO_*`, and `MILEAGE_WORKER_*` (worker toggle, poll delay, stuck-job timeout, batch size). Default CORS allows Clockify origins plus the `ADDON_BASE_URL` origin. Full list: [addon-expenses-rest-api/README.md](addon-expenses-rest-api/README.md).
+
+## 📚 Documentation
+
+| Doc | Purpose |
+| --- | --- |
+| [AGENTS.md](AGENTS.md) | Binding agent rules, module map, non-negotiables. |
+| [CLAUDE.md](CLAUDE.md) | Claude Code project guide. |
+| [addon-expenses-rest-api/README.md](addon-expenses-rest-api/README.md) | Product module guide. |
+| [endpoints.md](addon-expenses-rest-api/endpoints.md) · [models.md](addon-expenses-rest-api/models.md) · [webhooks.md](addon-expenses-rest-api/webhooks.md) · [edge-cases.md](addon-expenses-rest-api/edge-cases.md) · [reports.md](addon-expenses-rest-api/reports.md) | Active product docs. |
+| [PRE_PUBLISH_CHECKLIST.md](addon-expenses-rest-api/docs/PRE_PUBLISH_CHECKLIST.md) | Local, live-dev, and manual gates before Marketplace submission. |
