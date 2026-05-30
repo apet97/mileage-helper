@@ -357,6 +357,36 @@ class MileageConversionServiceTest {
         verify(gateway, never()).updateFlatExpense(any(), any(), any());
     }
 
+    /**
+     * Production-observed loop guard: the addon's own
+     * {@code ClockifyExpenseGateway.updateFlatExpense} triggers Clockify to fire a
+     * second {@code EXPENSE_UPDATED} webhook for the same expense. With the row already
+     * in {@code CONVERTED} state, the eligibility service MUST refuse to re-convert —
+     * otherwise we have an infinite write loop (convert → updated webhook → re-convert
+     * → updated webhook → …). The 2026-05-30 live Clockify smoke proved this fires in
+     * production; this test pins the unit-level behavior so a future eligibility
+     * refactor cannot regress the guard.
+     */
+    @Test
+    void updatedWebhookOnAlreadyConvertedExpenseSkipsToBreakLoop() throws Exception {
+        reservedExisting("exp-loop", MileageConversionStatus.CONVERTED,
+                MileageConversionSource.WEBHOOK_UPDATED, "EXPENSE_UPDATED");
+        when(settingsService.validateForNativeConversion("ws-native")).thenReturn(settings(false));
+        // The expense post-conversion carries the addon's mileage marker in its notes.
+        when(gateway.getExpense("ws-native", "exp-loop")).thenReturn(markedExpense("exp-loop"));
+
+        ConversionResult result = service.convertIfEligible(
+                claims(), "exp-loop", MileageConversionSource.WEBHOOK_UPDATED, "EXPENSE_UPDATED");
+
+        assertThat(result.status()).isEqualTo(MileageConversionStatus.SKIPPED);
+        assertThat(result.skipReason()).isIn(
+                MileageSkipReason.ALREADY_MARKED,
+                MileageSkipReason.ALREADY_CONVERTED,
+                MileageSkipReason.ALREADY_OUTPUT_CATEGORY);
+        // The hard rule: never write back to Clockify when the loop guard fires.
+        verify(gateway, never()).updateFlatExpense(any(), any(), any());
+    }
+
     @Test
     void restoredInputCategoryExpenseConvertsWhenNoSuccessfulConversionExists() throws Exception {
         reservedConversion("exp-1", MileageConversionSource.WEBHOOK_RESTORED, "EXPENSE_RESTORED");

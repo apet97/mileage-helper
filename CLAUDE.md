@@ -2,6 +2,26 @@
 
 This is a standalone Java/Spring Boot Clockify Marketplace add-on repository. The add-on is already implemented; future work should maintain, harden, verify, or extend Mileage for Clockify without replaying the old boilerplate migration.
 
+## Specialized skill + agents for this repo
+
+This repo ships with three sources of agent-facing rules that must stay in sync with the code:
+
+| File | Purpose |
+|---|---|
+| `.claude/skills/mileage-for-clockify-development/SKILL.md` | Project skill — activates on every task in this repo. Encodes hard rules, commands, the deploy/probe procedure, and known production gotchas (Flyway numbering, `@AutoConfiguration` ordering, Clockify multipart `amount` vs `quantity`). |
+| `.claude/agents/mileage-deployer.md` | Subagent — drives publish gate → `railway up` → status monitor → hosted probes → dated evidence block. Dispatch when the user says "deploy" or "push and verify". |
+| `.claude/agents/mileage-webhook-smoke.md` | Subagent — drives the live Clockify E2E webhook smoke. Dispatch when the user says "smoke test the webhook" after a deploy that touched the webhook controller, worker, or conversion service. Never echoes secrets. |
+
+**Meta-rule (non-negotiable).** Any change in this repo that invalidates a Product Fact, Hard Rule, Hosted State entry, env var, command, migration numbering, metric tag, or workflow file MUST update `CLAUDE.md`, `AGENTS.md`, AND the three files above in the SAME PR. If you change behavior that one of these documents describes and you do NOT update the document, the next agent will follow stale guidance and reintroduce a bug we already fixed. Treat the documents as part of the API surface of this repo. Specifically:
+
+- A new Hard Rule, or amendment to an existing one → update `CLAUDE.md` § Hard Rules, `AGENTS.md` § Non-Negotiables, AND `SKILL.md` § "Hard rules — these crash production".
+- New module, package responsibility move, or structural refactor → update `CLAUDE.md` § "Main product packages" and `AGENTS.md` § "Module Map".
+- New env var, metric family, or Flyway migration → update the Environment / Tables / metric sections in BOTH docs AND the SKILL's "Commands you'll use" if relevant.
+- Deploy procedure change (URL, command, probe shape, expected metric) → update `SKILL.md` § "Hosted probe set" AND both agent prompts (`.claude/agents/*.md`).
+- Live-smoke prerequisite change (env var renamed, multipart contract changes, addon install URL changes) → update `SKILL.md` § "Live Clockify E2E webhook smoke" AND the `mileage-webhook-smoke` agent's "Prerequisites".
+
+Skip this and you ship broken docs. We know because we've watched future agents re-discover the V7→V17 trap, the `@AutoConfiguration` ordering trap, and the `amount` vs `quantity` trap during this session. Each was a multi-deploy production incident. Keep the docs current and the next agent skips all three.
+
 ## First Steps
 
 ```bash

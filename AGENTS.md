@@ -2,6 +2,16 @@
 
 This is the standalone repository for Mileage for Clockify. It contains the add-on plus the smallest local platform modules needed to build, test, and package it outside the original add-on factory workspace.
 
+## Specialized skill + agents for this repo
+
+| File | Purpose |
+|---|---|
+| `.claude/skills/mileage-for-clockify-development/SKILL.md` | Project skill — activates on every task. Hard rules, commands, deploy/probe procedure, known production gotchas. |
+| `.claude/agents/mileage-deployer.md` | Subagent — publish gate → Railway deploy → status monitor → hosted probes → dated evidence block. |
+| `.claude/agents/mileage-webhook-smoke.md` | Subagent — live Clockify E2E webhook smoke. Never echoes secrets. |
+
+**Meta-rule (non-negotiable).** Any change that invalidates a Non-Negotiable, Module Map entry, Hosted Verification Snapshot fact, env var, command, migration number, or metric tag MUST update `CLAUDE.md`, this file, AND the three files above in the SAME PR. Skipping the doc sync ships broken guidance to the next agent. The three production traps caught during the 2026-05-30 G1–G4 session (V7→V17 Flyway numbering, `WebhookJobWorkerConfig` `@AutoConfiguration` ordering, Clockify multipart `amount` vs `quantity`) all exist because earlier sessions did not update the documents alongside the code. Don't repeat that pattern.
+
 ## Start Here
 
 1. Run `git status --short --branch`.
