@@ -82,6 +82,17 @@ curl -fsS http://localhost:8080/manifest
 docker compose -f addon-expenses-rest-api/docker-compose.yml down
 ```
 
+### Run as a live Clockify add-on (free public tunnel)
+
+For real Clockify install / iframe / webhook testing without paid hosting, expose the local stack through a free **Cloudflare Tunnel** — no account, no card, and (unlike ngrok's free plan) no browser interstitial on the iframe:
+
+```bash
+scripts/dev-tunnel.sh           # reuse the built image (fast)
+scripts/dev-tunnel.sh --build   # rebuild after code changes
+```
+
+It opens a `https://<random>.trycloudflare.com` tunnel, brings up Postgres + the add-on (web + worker), wires `ADDON_BASE_URL` to the tunnel, waits for `/manifest`, and prints the URL to paste into Clockify's add-on / developer page. `Ctrl-C` tears the whole stack down. Requires `cloudflared` (`brew install cloudflared`) and a running Docker/Colima daemon. The URL is random per run — for a stable one, use a [named Cloudflare tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps).
+
 <details>
 <summary>Testcontainers can't find Docker? Use Colima explicitly</summary>
 
