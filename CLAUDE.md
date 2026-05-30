@@ -210,10 +210,12 @@ Clockify credentials and workspace IDs are persisted at `~/.config/clockify-mile
 - `CLOCKIFY_WORKSPACE_ID=672f9cf4ad6f45299c3e3de2` — sacrificial workspace where the addon is installed
 - `CLOCKIFY_TEST_USER_ID=672f9cf4ad6f45299c3e3de1` — the API key's user
 - `CLOCKIFY_TEST_PROJECT_ID=68dd9b5ee598361591be848e` — sacrificial project ("01")
-- `CLOCKIFY_API_KEY` — **placeholder, fill in after rotation**. The 2026-05-30 G1–G4 session leaked both the production-workspace key and the developer-workspace key into the conversation transcript; both must be rotated and the new dev key pasted into the file. Until then `mileage-webhook-smoke` will refuse to run.
+- `CLOCKIFY_API_KEY` — set. The Clockify dev workspace auto-resets so a leaked key self-invalidates; the value is sandbox-grade. If a future session needs to refresh: ask the user for a new dev workspace key, swap into the file. Never paste a production-tier Clockify key into this file.
 - `NVD_API_KEY` — placeholder, fill in to activate the CI dep-check HIGH/CRITICAL gate. Free from `nvd.nist.gov/developers/request-an-api-key`.
 
-The file is in `~/.config/`, not in this repo. Never commit it. Don't echo any of these values back to the user; probe presence with `[ -n "$VAR" ] && echo set || echo MISSING`.
+The file is in `~/.config/`, not in this repo. Never commit it. Don't echo any of these values back to the user; probe presence with `[ -n "$VAR" ] && echo set || echo MISSING`. Smoke-test the persisted credentials at the start of any task that needs Clockify: `curl -sS -o /dev/null -w "%{http_code}\n" -H "X-Api-Key: $CLOCKIFY_API_KEY" "$CLOCKIFY_API_BASE_URL/user"` — 200 means good, 401 means the dev workspace reset and the key needs refreshing.
+
+If the dev workspace was reset, the Mileage addon also needs to be re-installed before any live webhook smoke can run — point Clockify dashboard → Apps at `https://mileage-for-clockify-production.up.railway.app/manifest`.
 
 ## Hard Rules
 

@@ -21,7 +21,7 @@ Decision recorded 2026-05-30 (`CLAUDE.md` § "Architecture Decision"). Do not pr
 
 ## Local environment file
 
-`~/.config/clockify-mileage.env` (mode 600) is sourced from `~/.zshrc`. It holds the workspace/user/project IDs for the sacrificial developer workspace (`672f9cf4ad6f45299c3e3de2`) plus `CLOCKIFY_API_BASE_URL=https://developer.clockify.me/api/v1`. `CLOCKIFY_API_KEY` and `NVD_API_KEY` are placeholders; the user fills them in after rotation. Probe with `[ -n "$VAR" ] && echo set || echo MISSING`. Never echo a value.
+`~/.config/clockify-mileage.env` (mode 600) is sourced from `~/.zshrc`. All five `CLOCKIFY_*` variables for the sacrificial developer workspace (`672f9cf4ad6f45299c3e3de2`) are set, including the API key — the workspace auto-resets so the key is sandbox-grade and a leak self-invalidates. `NVD_API_KEY` is the only remaining placeholder. Probe with `[ -n "$VAR" ] && echo set || echo MISSING`. Never echo a value. If `/user` returns 401 the dev workspace has reset; ask the user for a fresh key and re-install the addon at `https://mileage-for-clockify-production.up.railway.app/manifest`.
 
 ## Hard rules — these crash production if you violate them
 

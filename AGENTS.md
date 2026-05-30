@@ -30,7 +30,7 @@ Performance is nowhere near Postgres limits: 3.9 ms avg worker poll latency, 334
 
 ## Local environment file
 
-Clockify credentials and workspace IDs live in `~/.config/clockify-mileage.env` (mode `600`), sourced from `~/.zshrc`. Non-sensitive IDs (workspace, user, project, base URL for the sacrificial developer workspace `672f9cf4ad6f45299c3e3de2`) are checked in to the env file directly; `CLOCKIFY_API_KEY` and `NVD_API_KEY` are placeholders to fill in after rotation. The file is private (mode 600) and outside this repo. Never echo values; probe presence with `[ -n "$VAR" ] && echo set || echo MISSING`.
+Clockify credentials and workspace IDs live in `~/.config/clockify-mileage.env` (mode `600`), sourced from `~/.zshrc`. All five `CLOCKIFY_*` variables (workspace, user, project, base URL, API key for the sacrificial dev workspace `672f9cf4ad6f45299c3e3de2`) are set. The dev workspace auto-resets so the API key is sandbox-grade and a leak self-invalidates — don't ever paste a production key here. `NVD_API_KEY` is the only placeholder remaining (fill in to activate the CI HIGH/CRITICAL gate). The file is private (mode 600) and outside this repo. Never echo values; probe presence with `[ -n "$VAR" ] && echo set || echo MISSING`. Smoke-test at task start: `curl -sS -o /dev/null -w "%{http_code}\n" -H "X-Api-Key: $CLOCKIFY_API_KEY" "$CLOCKIFY_API_BASE_URL/user"` — 200 means good, 401 means the dev workspace reset and the key needs refreshing.
 
 ## Non-Negotiables
 
