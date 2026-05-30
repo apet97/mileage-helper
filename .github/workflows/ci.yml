@@ -77,15 +77,35 @@ jobs:
           fi
 
   dep-check:
+    # G4 HIGH/CRITICAL gate. dependency-check-maven 12.x requires an NVD API key —
+    # without one the NVD download partial-fails and the H2 connection pool becomes
+    # null mid-update (NullPointerException on every subsequent CVE). To keep CI
+    # green for forks / first pushes we skip cleanly when the secret is absent.
+    # Add NVD_API_KEY in repo settings (free at https://nvd.nist.gov/developers/request-an-api-key)
+    # to activate the gate.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Detect NVD_API_KEY presence
+        id: nvd
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        run: |
+          if [ -n "$NVD_API_KEY" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::NVD_API_KEY present — running HIGH/CRITICAL gate."
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::NVD_API_KEY secret not set; skipping dep-check. Add it in repo settings to activate the HIGH/CRITICAL CVE gate."
+          fi
       - uses: actions/setup-java@v4
+        if: steps.nvd.outputs.available == 'true'
         with:
           distribution: temurin
           java-version: '21'
           cache: maven
       - name: Cache OWASP dependency-check data
+        if: steps.nvd.outputs.available == 'true'
         uses: actions/cache@v4
         with:
           path: ~/.m2/repository/org/owasp/dependency-check-data
@@ -93,11 +113,12 @@ jobs:
           restore-keys: |
             dep-check-data-${{ runner.os }}-
       - name: OWASP dependency-check
+        if: steps.nvd.outputs.available == 'true'
         env:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         run: mvn -pl addon-expenses-rest-api -am -DskipTests dependency-check:check
       - name: Upload dep-check report
-        if: always()
+        if: always() && steps.nvd.outputs.available == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: dependency-check-report
