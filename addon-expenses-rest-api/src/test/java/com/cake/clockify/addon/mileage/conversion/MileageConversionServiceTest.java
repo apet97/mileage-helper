@@ -266,6 +266,28 @@ class MileageConversionServiceTest {
     }
 
     @Test
+    void addonFormConversionStaysConvertedWhenCreateWebhookRacesAfterCreateResponse() throws Exception {
+        MileageConversion existing = reservedExisting(
+                "exp-addon", MileageConversionStatus.CONVERTED, MileageConversionSource.WEBHOOK_CREATED, "EXPENSE_CREATED");
+        existing.setSource(MileageConversionSource.ADDON_FORM);
+        existing.setSourceEventType("ADDON_FORM");
+        existing.setNoteMarker("[MileageAddon:converted:v1 id=" + existing.getId() + "]");
+        when(settingsService.validateForNativeConversion("ws-native")).thenReturn(settings(false));
+        when(gateway.getExpense("ws-native", "exp-addon")).thenReturn(markedExpense("exp-addon"));
+
+        ConversionResult result = service.convertIfEligible(
+                claims(), "exp-addon", MileageConversionSource.WEBHOOK_CREATED, "EXPENSE_CREATED");
+
+        assertThat(result.status()).isEqualTo(MileageConversionStatus.SKIPPED);
+        assertThat(result.skipReason()).isEqualTo(MileageSkipReason.ALREADY_CONVERTED);
+        assertThat(existing.getSource()).isEqualTo(MileageConversionSource.ADDON_FORM);
+        assertThat(existing.getSourceEventType()).isEqualTo("ADDON_FORM");
+        assertThat(existing.getStatus()).isEqualTo(MileageConversionStatus.CONVERTED);
+        verify(gateway, never()).updateFlatExpense(any(), any(), any());
+        verify(conversionRepository, never()).saveAndFlush(existing);
+    }
+
+    @Test
     void outputCategoryPreventsSecondUpdate() throws Exception {
         reservedConversion("exp-1", MileageConversionSource.WEBHOOK_UPDATED, "EXPENSE_UPDATED");
         when(settingsService.validateForNativeConversion("ws-native")).thenReturn(distinctCategorySettings(false));

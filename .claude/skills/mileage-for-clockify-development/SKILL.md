@@ -37,7 +37,7 @@ Decision recorded 2026-05-30 (`CLAUDE.md` § "Architecture Decision"). Do not pr
 | Prometheus counters/gauges may be tagged ONLY by stable enums (`outcome`, `status`). Never tag with `userId`, `workspaceId`, `expenseId`, token values. | Cardinality explodes; tagged identifiers leak into scrape endpoints. `MileageConversionMetricsTest` enforces this. |
 | Do not lower `failBuildOnCVSS` below `7.0` in the OWASP dep-check plugin. Document suppressions; never blanket-skip findings. | The HIGH/CRITICAL gate is the whole point. |
 | New Flyway migrations must be numbered AFTER the highest applied production migration (currently V19 after the maintenance cleanup). | Flyway validates strict ordering and crashes boot with `Detected resolved migration not applied to database: N`. The d11e2088 deploy crashed on this with V7. |
-| Native expense conversion must aggressively prevent loops: skip mileage audit markers, output-category expenses, and already-converted expenses before writing back to Clockify. | The addon's own update fires another `EXPENSE_UPDATED` webhook; without the guard you'd recursively re-convert. Pinned by `updatedWebhookOnAlreadyConvertedExpenseSkipsToBreakLoop`. |
+| Native expense conversion must aggressively prevent loops: skip mileage audit markers, output-category expenses, and already-converted expenses before writing back to Clockify. Skipped loop-guard webhooks must not rewrite an existing successful audit row away from `CONVERTED`. | The addon's own update fires another `EXPENSE_UPDATED` webhook; without the guard you'd recursively re-convert, and without audit preservation add-on-created rows can appear as `SKIPPED`. Pinned by `updatedWebhookOnAlreadyConvertedExpenseSkipsToBreakLoop` and `addonFormConversionStaysConvertedWhenCreateWebhookRacesAfterCreateResponse`. |
 | User-facing mileage creation must use the verified Clockify user JWT claim. Do not add `userId` back to the create DTO or multipart allowlist. | Anything else lets a user impersonate another user. |
 | No task selector / `taskId` / `TASK_READ` scope unless the product requirement changes and live scope evidence is captured first. | Manifest-scope minimization. |
 | Keep `addon-core` and `addon-db` changes conservative. ASK before structural changes. | These are shared platform modules; structural drift breaks future add-ons. |
@@ -83,6 +83,16 @@ done
 
 ## Deploy + verify
 
+Railway production is the historical hosted target, but the 2026-05-31 live-test path uses Cloudflared because Railway is unavailable. Do not run Railway commands while the subscription is unavailable.
+
+Cloudflared dev/live verification:
+1. `scripts/dev-tunnel.sh --build`.
+2. Paste the printed `https://<random>.trycloudflare.com/manifest` into Clockify. Quick-tunnel URLs are ephemeral; reinstall after every restart.
+3. Probe health, manifest, static assets, iframe, prometheus metric families, and worker liveness through the tunnel URL.
+4. Run the live Clockify E2E webhook smoke against the installed dev workspace.
+5. Append dated evidence to `addon-expenses-rest-api/docs/PRE_PUBLISH_CHECKLIST.md`.
+
+Railway path if the subscription is restored:
 1. Push to `main`.
 2. `railway up --service mileage-for-clockify --detach` to trigger the deploy (Railway is not auto-deploy from GitHub on this project).
 3. Poll `railway deployment list` until the new id transitions to `SUCCESS` (≈2–3 min build + 30s deploy).
@@ -110,9 +120,10 @@ curl -sS "$BASE/actuator/prometheus" | grep -E "^tasks_scheduled_execution_secon
 ## Live Clockify E2E webhook smoke
 
 Requires:
-- The add-on installed in a sacrificial workspace (Clockify dashboard → Apps → install from `https://mileage-for-clockify-production.up.railway.app/manifest`).
+- The add-on installed in a sacrificial workspace (Clockify dashboard → Apps → install from the current hosted or Cloudflared `/manifest` URL).
 - `CLOCKIFY_API_KEY`, `CLOCKIFY_WORKSPACE_ID`, `CLOCKIFY_API_BASE_URL` set in the operator's shell.
 - The Clockify expense-create multipart contract: send the miles value in the **`amount`** multipart field, NOT `quantity`. Clockify computes `total = amount × unitPrice` and writes the resulting `quantity` back. Sending `quantity=N` silently records `quantity=0`. The addon's `ClockifyExpenseGateway.createBody` already uses `amount`; this matters for any ad-hoc smoke hitting Clockify directly.
+- After a CONVERTED native expense triggers the addon's own update webhook, the loop guard should tick `SKIPPED` metrics without changing the stored conversion row away from `CONVERTED`.
 
 For a structured run, dispatch the `mileage-webhook-smoke` subagent.
 

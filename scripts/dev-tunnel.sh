@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 # Mileage for Clockify - one-command local add-on over a Cloudflare Tunnel.
 #
-# Brings up Postgres + the add-on (web + worker) with docker compose, opens a
-# public https://<random>.trycloudflare.com tunnel, wires ADDON_BASE_URL to it,
-# waits for /manifest, and prints the URL to paste into Clockify. Ctrl-C tears
-# the whole stack down.
+# Brings up Postgres + the add-on with docker compose, opens a public
+# https://<random>.trycloudflare.com tunnel, wires ADDON_BASE_URL to it, waits
+# for /manifest, and prints the URL to paste into Clockify. Ctrl-C tears the
+# whole stack down.
+#
+# The tunneled web container runs the worker too so /actuator/prometheus on the
+# public URL exposes worker liveness and webhook-smoke deltas. The normal compose
+# file still keeps web/worker split for production-shape local runs.
 #
 # Usage:
 #   scripts/dev-tunnel.sh            # reuse the existing image (fast)
@@ -66,14 +70,17 @@ services:
   addon:
     environment:
       ADDON_BASE_URL: "$BASE_URL"
+      MILEAGE_WORKER_ENABLED: "true"
   addon-worker:
     environment:
       ADDON_BASE_URL: "$BASE_URL"
 YAML
 
 # --- bring up the stack ----------------------------------------------------
-say "starting Postgres + add-on (web + worker)${REBUILD_FLAG:+ - rebuilding}..."
-docker compose -f "$COMPOSE" -f "$OVERRIDE" up -d $REBUILD_FLAG
+say "starting Postgres + add-on with worker enabled${REBUILD_FLAG:+ - rebuilding}..."
+docker compose -f "$COMPOSE" -f "$OVERRIDE" stop addon-worker >/dev/null 2>&1 || true
+docker compose -f "$COMPOSE" -f "$OVERRIDE" rm -f addon-worker >/dev/null 2>&1 || true
+docker compose -f "$COMPOSE" -f "$OVERRIDE" up -d $REBUILD_FLAG db addon
 
 # --- wait for the app ------------------------------------------------------
 say "waiting for /manifest ..."
@@ -97,5 +104,5 @@ cat <<BANNER
 
 BANNER
 
-# Tail app + worker logs; Ctrl-C triggers cleanup.
-docker compose -f "$COMPOSE" -f "$OVERRIDE" logs -f addon addon-worker
+# Tail app logs; Ctrl-C triggers cleanup.
+docker compose -f "$COMPOSE" -f "$OVERRIDE" logs -f addon

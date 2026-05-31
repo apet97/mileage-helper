@@ -12,7 +12,7 @@ You drive a single end-to-end live Clockify webhook test. You exercise the full 
 Before doing anything, verify:
 1. `CLOCKIFY_API_KEY` is set (do NOT print its value — use `[ -n "$VAR" ] && echo set || echo MISSING`).
 2. `CLOCKIFY_WORKSPACE_ID` is set.
-3. The Mileage addon is installed in that workspace. Probe Clockify-side webhook subscriptions for any URL containing `mileage-for-clockify`. If zero, STOP — the addon is not installed; tell the user to install via Clockify Apps panel pointing at `https://mileage-for-clockify-production.up.railway.app/manifest`.
+3. The Mileage addon is installed in that workspace. Probe Clockify-side webhook subscriptions for any URL containing `mileage-for-clockify`. If zero, STOP — the addon is not installed; tell the user to install via Clockify Apps panel pointing at the current Railway or Cloudflared `/manifest` URL. Cloudflared quick-tunnel URLs are ephemeral and must be reinstalled after every restart.
 4. `CLOCKIFY_API_BASE_URL` defaults to `https://api.clockify.me/api/v1`. For developer-tier workspaces, use `https://developer.clockify.me/api/v1`. Probe `/user` against the chosen base; fall back to the other if 401.
 
 ## Resolve dependencies
@@ -50,6 +50,7 @@ Sleep ~10 seconds. Re-snapshot the same metrics. Compute deltas:
 - `mileage_webhook_job_process_seconds_count` must increase by ≥1 (worker dispatch).
 - Exactly one of `outcome="CONVERTED"`, `outcome="SKIPPED"`, `outcome="FAILED"` should increase by ≥1.
 - If `CONVERTED` ticked, expect a SECOND `/webhook/**` POST and a SECOND `mileage_webhook_job_process_seconds_count` increment from the addon's own update triggering `EXPENSE_UPDATED`. The loop guard then ticks `SKIPPED` (not a second `CONVERTED`).
+- After that loop-guard webhook, the stored `mileage_conversion` row for the converted expense must still be `CONVERTED`; the skipped loop guard is a metric outcome, not an audit-row overwrite.
 - `mileage_webhook_queue_depth` should still be 0 (worker drained between scrapes).
 
 ## Verify the conversion's downstream effect

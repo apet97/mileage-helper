@@ -80,6 +80,14 @@ public class MileageConversionService {
         MileageConversion conversion = conversionRepository.findByIdAndWorkspaceId(reservedId, claims.workspaceId())
                 .orElseThrow(() -> new IllegalStateException("Reserved mileage conversion was not found"));
         boolean wasSuccessfullyConverted = isSuccessfullyConverted(Optional.of(conversion));
+        if (wasSuccessfullyConverted && source != MileageConversionSource.WEBHOOK_RESTORED) {
+            return recordOutcome(new ConversionResult(
+                    conversion.getId(),
+                    conversion.getExpenseId(),
+                    MileageConversionStatus.SKIPPED,
+                    MileageSkipReason.ALREADY_CONVERTED,
+                    "Expense was already converted"));
+        }
         try {
             MileageSettingsValidation settings = settingsService.validateForNativeConversion(claims.workspaceId());
             conversion.setSource(source);

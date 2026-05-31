@@ -65,7 +65,7 @@ A small Maven multi-module project: one product module plus the minimal platform
 | Metrics | Micrometer + Prometheus |
 | Build | Maven (multi-module reactor) |
 | Tests | JUnit 5 · AssertJ · Mockito · Testcontainers |
-| Delivery | Docker · Railway |
+| Delivery | Docker · Cloudflared dev tunnel · Railway historical production |
 
 ## 🚀 Quickstart
 
@@ -91,7 +91,7 @@ scripts/dev-tunnel.sh           # reuse the built image (fast)
 scripts/dev-tunnel.sh --build   # rebuild after code changes
 ```
 
-It opens a `https://<random>.trycloudflare.com` tunnel, brings up Postgres + the add-on (web + worker), wires `ADDON_BASE_URL` to the tunnel, waits for `/manifest`, and prints the URL to paste into Clockify's add-on / developer page. `Ctrl-C` tears the whole stack down. Requires `cloudflared` (`brew install cloudflared`) and a running Docker/Colima daemon. The URL is random per run — for a stable one, use a [named Cloudflare tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps).
+It opens a `https://<random>.trycloudflare.com` tunnel, brings up Postgres + the add-on, wires `ADDON_BASE_URL` to the tunnel, waits for `/manifest`, and prints the URL to paste into Clockify's add-on / developer page. In tunnel mode the web container runs the webhook worker too, so the public `/actuator/prometheus` endpoint shows worker liveness and live-smoke deltas; normal compose still uses separate web and worker services. `Ctrl-C` tears the whole stack down. Requires `cloudflared` (`brew install cloudflared`) and a running Docker/Colima daemon. The URL is random per run — reinstall the manifest after each restart. For a stable one, use a [named Cloudflare tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps).
 
 <details>
 <summary>Testcontainers can't find Docker? Use Colima explicitly</summary>
