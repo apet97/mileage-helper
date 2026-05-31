@@ -12,6 +12,7 @@ import com.cake.clockify.addon.mileage.security.MileageAuthorizationService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -36,6 +37,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
         "addon.base-url=https://mileage.example.com",
         "addon.crypto.active-key-id=k1",
         "addon.crypto.keys.k1=00000000000000000000000000000000000000000000000000000000000000aa",
+        "mileage.worker.enabled=false",
         "spring.jpa.hibernate.ddl-auto=validate",
         "spring.jpa.properties.hibernate.default_schema=mileage_test",
         "spring.flyway.schemas=mileage_test",
@@ -82,6 +84,28 @@ class MileageSettingsServiceTest {
         assertThatThrownBy(() -> conversionRepository.saveAndFlush(
                 conversion("ws-unique", "exp-unique", MileageConversionStatus.RECEIVED)))
                 .hasRootCauseInstanceOf(org.postgresql.util.PSQLException.class);
+    }
+
+    @Test
+    void mileageConversionSchemaOmitsObsoleteAuditSurface() {
+        var columns = jdbcTemplate.queryForList("""
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'mileage_test'
+                  AND table_name = 'mileage_conversion'
+                """, String.class);
+
+        assertThat(columns)
+                .doesNotContain("currency", "raw_event_hash", "clockify_request_id");
+        assertThat(MileageConversionStatus.values())
+                .extracting(Enum::name)
+                .doesNotContain("FETCHED");
+        assertThatThrownBy(() -> jdbcTemplate.update("""
+                INSERT INTO mileage_test.mileage_conversion
+                    (id, workspace_id, expense_id, source, status)
+                VALUES (?, 'ws-schema', 'exp-schema', 'WEBHOOK_CREATED', 'FETCHED')
+                """, UUID.randomUUID()))
+                .isInstanceOf(DataAccessException.class);
     }
 
     @Test

@@ -1,17 +1,4 @@
 {
-  "hooks": {
-    "SessionStart": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "cd /Users/15x/Downloads/WORKING/addons-me/mileage-for-clockify && git status --short --branch && mvn -q -pl addon-expenses-rest-api -am -o compile 2>&1 | tail -5 || echo 'offline-compile-skipped'"
-          }
-        ]
-      }
-    ]
-  },
   "permissions": {
     "allow": [
       "Bash(mvn -pl addon-expenses-rest-api*)",

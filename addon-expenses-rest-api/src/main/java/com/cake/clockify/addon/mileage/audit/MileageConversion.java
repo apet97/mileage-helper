@@ -66,9 +66,6 @@ public class MileageConversion implements Persistable<UUID> {
     @Column(name = "rounded_amount", precision = 18, scale = 2)
     private BigDecimal roundedAmount;
 
-    @Column(name = "currency", length = 16)
-    private String currency;
-
     @Column(name = "rounding_mode", length = 32)
     private String roundingMode;
 
@@ -88,12 +85,6 @@ public class MileageConversion implements Persistable<UUID> {
 
     @Column(name = "note_marker", length = 128)
     private String noteMarker;
-
-    @Column(name = "raw_event_hash", length = 128)
-    private String rawEventHash;
-
-    @Column(name = "clockify_request_id", length = 128)
-    private String clockifyRequestId;
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
@@ -157,8 +148,6 @@ public class MileageConversion implements Persistable<UUID> {
     public void setCalculatedAmount(BigDecimal calculatedAmount) { this.calculatedAmount = calculatedAmount; }
     public BigDecimal getRoundedAmount() { return roundedAmount; }
     public void setRoundedAmount(BigDecimal roundedAmount) { this.roundedAmount = roundedAmount; }
-    public String getCurrency() { return currency; }
-    public void setCurrency(String currency) { this.currency = currency; }
     public String getRoundingMode() { return roundingMode; }
     public void setRoundingMode(String roundingMode) { this.roundingMode = roundingMode; }
     public MileageConversionStatus getStatus() { return status; }
@@ -171,10 +160,6 @@ public class MileageConversion implements Persistable<UUID> {
     public void setErrorMessage(String errorMessage) { this.errorMessage = errorMessage; }
     public String getNoteMarker() { return noteMarker; }
     public void setNoteMarker(String noteMarker) { this.noteMarker = noteMarker; }
-    public String getRawEventHash() { return rawEventHash; }
-    public void setRawEventHash(String rawEventHash) { this.rawEventHash = rawEventHash; }
-    public String getClockifyRequestId() { return clockifyRequestId; }
-    public void setClockifyRequestId(String clockifyRequestId) { this.clockifyRequestId = clockifyRequestId; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }

@@ -33,7 +33,7 @@ class WebhookJobWorkerTest {
     private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
 
     @Test
-    void workerDispatchesClaimedJobAndMarksConverted() {
+    void workerDispatchesClaimedJobAndMarksCompleted() {
         RecordingHandler handler = new RecordingHandler();
         AddonWebhookJobClaimService claimService = mock(AddonWebhookJobClaimService.class);
         WebhookEventService eventService = mock(WebhookEventService.class);
@@ -47,7 +47,7 @@ class WebhookJobWorkerTest {
         assertThat(handler.invocations).isEqualTo(1);
         assertThat(handler.lastClaims.workspaceId()).isEqualTo("ws-worker");
         assertThat(handler.lastEventType).isEqualTo("EXPENSE_CREATED");
-        verify(claimService).markCompleted(JOB_ID, AddonWebhookJob.STATUS_CONVERTED, null);
+        verify(claimService).markCompleted(JOB_ID, AddonWebhookJob.STATUS_COMPLETED, null);
         verify(eventService).markProcessed(EVENT_ID);
     }
 

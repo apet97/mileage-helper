@@ -104,7 +104,7 @@ public class WebhookJobWorker {
         AddonWebhookJob job = claimed.get();
         try {
             dispatch(job);
-            claimService.markCompleted(job.getId(), AddonWebhookJob.STATUS_CONVERTED, null);
+            claimService.markCompleted(job.getId(), AddonWebhookJob.STATUS_COMPLETED, null);
             markEventProcessed(job);
         } catch (Exception e) {
             String redacted = redactErrorMessage(e);

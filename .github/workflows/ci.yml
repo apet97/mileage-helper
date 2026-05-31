@@ -26,6 +26,8 @@ jobs:
           --health-retries 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -40,7 +42,7 @@ jobs:
       - name: Date helper tests
         run: node scripts/test-mileage-date-helpers.mjs
       - name: Whitespace check
-        run: git diff --check HEAD^ HEAD || true
+        run: git diff --check HEAD^ HEAD
 
   secret-scan:
     runs-on: ubuntu-latest

@@ -28,7 +28,7 @@ You are a focused deployment agent for Mileage for Clockify. Your job is to take
    /assets/mileage/settings.js            → expect 200 text/javascript
    /assets/mileage/icon.png               → expect 200 image/png
    /iframe/mileage (unauthenticated)      → expect 401 with CSP + HSTS + Cache-Control: no-store + Permissions-Policy + Referrer-Policy + X-Content-Type-Options
-   /actuator/prometheus                   → expect mileage_conversion_outcome_total (9 outcomes),
+   /actuator/prometheus                   → expect mileage_conversion_outcome_total (8 active outcomes),
                                                    mileage_webhook_queue_depth{status="PENDING"},
                                                    mileage_webhook_job_process_seconds_*,
                                                    tasks_scheduled_execution_seconds_count{code_function="pollAndProcess",outcome="SUCCESS",exception="none"} > 0

@@ -15,7 +15,7 @@ import java.util.UUID;
 /**
  * Persisted job row for the async webhook queue.
  *
- * <p>Lifecycle: {@code PENDING → CLAIMED → CONVERTED|FAILED}.
+ * <p>Lifecycle: {@code PENDING → CLAIMED → COMPLETED|FAILED}.
  * Workers transition rows via {@code SELECT … FOR UPDATE SKIP LOCKED} so they can scale
  * horizontally without coordination beyond the database.
  */
@@ -25,7 +25,7 @@ public class AddonWebhookJob {
 
     public static final String STATUS_PENDING = "PENDING";
     public static final String STATUS_CLAIMED = "CLAIMED";
-    public static final String STATUS_CONVERTED = "CONVERTED";
+    public static final String STATUS_COMPLETED = "COMPLETED";
     public static final String STATUS_FAILED = "FAILED";
 
     @Id
