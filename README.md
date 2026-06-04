@@ -1,4 +1,4 @@
-# 🚗 Mileage for Clockify
+# Mileage for Clockify
 
 > A Clockify Marketplace add-on that turns mileage into real Clockify expenses — and automatically converts native `Mileage`-category expenses into accurate, reimbursable amounts via signed webhooks.
 
@@ -13,7 +13,7 @@ Users log mileage from a Clockify sidebar UI and have it created as a proper exp
 
 ---
 
-## ✨ Features
+## Features
 
 - **Two ways to capture mileage** — submit from the add-on's own form, or just create a native Clockify `Mileage` expense and let the webhook converter handle it.
 - **Exact money math** — every mileage / rate / amount value is `BigDecimal`. Clockify receives the rounded amount while the UI keeps full decimal precision.
@@ -23,7 +23,7 @@ Users log mileage from a Clockify sidebar UI and have it created as a proper exp
 - **Observable** — Prometheus counters/gauges for conversion outcomes, queue depth, and worker latency at `/actuator/prometheus` (low-cardinality tags only — no PII).
 - **Secure by default** — installation tokens stay server-side, CSP/HSTS/Permissions-Policy headers, OWASP dependency-check gate (fail on CVSS ≥ 7.0), and workspace isolation on every query.
 
-## 🧭 How conversion works
+## How conversion works
 
 ```text
 Clockify ──EXPENSE_CREATED──▶  /webhook/**            ──▶ 2xx (no Clockify write on this thread)
@@ -39,7 +39,7 @@ Clockify ──EXPENSE_CREATED──▶  /webhook/**            ──▶ 2xx (n
 
 The web pod and worker pod run from the **same image**; scale workers horizontally with `docker compose up --scale addon-worker=N`.
 
-## 🏗️ Architecture
+## Architecture
 
 A small Maven multi-module project: one product module plus the minimal platform modules copied from the add-on factory.
 
@@ -54,7 +54,7 @@ A small Maven multi-module project: one product module plus the minimal platform
 
 > The ignored local clone `addon-expenses-rest-api/addon-java-sdk/` is read-only reference material — never edit or commit it.
 
-## 🧰 Tech stack
+## Tech stack
 
 | Layer | Technology |
 | --- | --- |
@@ -65,9 +65,9 @@ A small Maven multi-module project: one product module plus the minimal platform
 | Metrics | Micrometer + Prometheus |
 | Build | Maven (multi-module reactor) |
 | Tests | JUnit 5 · AssertJ · Mockito · Testcontainers |
-| Delivery | Docker · Cloudflared dev tunnel · Railway historical production |
+| Delivery | Docker · Cloudflared dev tunnel · OCI stable host · Railway historical production |
 
-## 🚀 Quickstart
+## Quickstart
 
 ```bash
 # Full publish safety bundle (asset checks + reactor)
@@ -91,19 +91,16 @@ scripts/dev-tunnel.sh           # reuse the built image (fast)
 scripts/dev-tunnel.sh --build   # rebuild after code changes
 ```
 
-It opens a `https://<random>.trycloudflare.com` tunnel, brings up Postgres + the add-on, wires `ADDON_BASE_URL` to the tunnel, waits for `/manifest`, and prints the URL to paste into Clockify's add-on / developer page. In tunnel mode the web container runs the webhook worker too, so the public `/actuator/prometheus` endpoint shows worker liveness and live-smoke deltas; normal compose still uses separate web and worker services. `Ctrl-C` tears the whole stack down. Requires `cloudflared` (`brew install cloudflared`) and a running Docker/Colima daemon. The URL is random per run — reinstall the manifest after each restart. For a stable one, use a [named Cloudflare tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps).
+It opens a `https://<random>.trycloudflare.com` tunnel, brings up Postgres + the add-on, wires `ADDON_BASE_URL` to the tunnel, waits for `/manifest`, and prints the URL to paste into Clockify's add-on / developer page. In tunnel mode the web container runs the webhook worker too, so the public `/actuator/prometheus` endpoint shows worker liveness and live-smoke deltas; normal compose still uses separate web and worker services. `Ctrl-C` tears the whole stack down. Requires `cloudflared` (`brew install cloudflared`) and a running Docker daemon. The URL is random per run — reinstall the manifest after each restart. For a stable one, use a [named Cloudflare tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps).
 
 <details>
-<summary>Testcontainers can't find Docker? Use Colima explicitly</summary>
+<summary>Testcontainers can't find Docker? Use Docker Desktop explicitly</summary>
 
 ```bash
-DOCKER_HOST=unix:///Users/15x/.colima/default/docker.sock \
+DOCKER_HOST=unix:///Users/15x/.docker/run/docker.sock \
 TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock \
 DOCKER_API_VERSION=1.44 \
-mvn -pl addon-expenses-rest-api -am test \
-  -Ddocker.client.strategy=org.testcontainers.dockerclient.EnvironmentAndSystemPropertyClientProviderStrategy \
-  -Ddocker.host=unix:///Users/15x/.colima/default/docker.sock \
-  -Dapi.version=1.44
+mvn -pl addon-expenses-rest-api -am test
 ```
 </details>
 
@@ -116,7 +113,7 @@ docker compose -f addon-expenses-rest-api/docker-compose.yml \
 ```
 </details>
 
-## 🔌 API surface
+## API surface
 
 - **UI** — `GET /iframe/mileage`, `GET /iframe/settings`
 - **User** — `GET /api/mileage/create-context`, `GET /api/mileage/mine`, `GET /api/mileage/mine.csv`, `POST /api/mileage/preview`, `POST /api/mileage/expenses`
@@ -126,21 +123,22 @@ docker compose -f addon-expenses-rest-api/docker-compose.yml \
 
 Manifest: schema `1.5`, key `mileage-for-clockify`, minimum plan `PRO`, scopes `EXPENSE_READ/WRITE`, `USER_READ`, `PROJECT_READ`, `WORKSPACE_READ`.
 
-## 🌐 Production
+## Production
 
 | | |
 | --- | --- |
-| App URL | `https://mileage-for-clockify-production.up.railway.app` |
-| Manifest | `https://mileage-for-clockify-production.up.railway.app/manifest` |
-| Current deployment id | run `railway deployment list` (old ids in notes are historical, not current truth) |
+| App URL | `https://89-168-93-85.sslip.io` |
+| Manifest | `https://89-168-93-85.sslip.io/manifest` |
+| Runtime | OCI VM, systemd Java service behind Caddy |
+| Railway | Historical target; use `railway deployment list` only when Railway is explicitly restored |
 
 Dated deploy / smoke evidence lives in [the pre-publish checklist](addon-expenses-rest-api/docs/PRE_PUBLISH_CHECKLIST.md). Live Clockify checks are optional and require local secrets — never commit or echo API keys/tokens.
 
-## ⚙️ Configuration
+## Configuration
 
 Runtime config uses `SPRING_DATASOURCE_*` (incl. `SPRING_DATASOURCE_HIKARI_*` pool overrides), `ADDON_BASE_URL`, `ADDON_KEY`, `ADDON_NAME`, `ADDON_DESCRIPTION`, `ADDON_CRYPTO_*`, and `MILEAGE_WORKER_*` (worker toggle, poll delay, stuck-job timeout, batch size). Default CORS allows Clockify origins plus the `ADDON_BASE_URL` origin. Full list: [addon-expenses-rest-api/README.md](addon-expenses-rest-api/README.md).
 
-## 📚 Documentation
+## Documentation
 
 | Doc | Purpose |
 | --- | --- |

@@ -5,13 +5,13 @@ description: Project-specialized knowledge for the Mileage for Clockify add-on. 
 
 # Mileage for Clockify — Development Skill
 
-You are working on a standalone Java 21 / Spring Boot 3.3.x add-on for the Clockify Marketplace. The add-on is functionally complete, security-hardened, scale-hardened, and runs in production at `https://mileage-for-clockify-production.up.railway.app`. The mode is **maintenance**: small diffs, focused regression tests, full reactor verification for behavior changes, hosted probes after deploys.
+You are working on a standalone Java 21 / Spring Boot 3.3.x add-on for the Clockify Marketplace. The add-on is functionally complete, security-hardened, scale-hardened, and currently runs on OCI at `https://89-168-93-85.sslip.io`; Railway is historical unless explicitly restored. The mode is **maintenance**: small diffs, focused regression tests, full reactor verification for behavior changes, hosted probes after deploys.
 
 ## When the user gives you any task in this repo
 
 1. Read `CLAUDE.md`, `AGENTS.md`, and the relevant `README.md` / module docs.
 2. Plan the smallest diff that achieves the goal.
-3. Run the full reactor before claiming done. Use Colima wiring on this Mac.
+3. Run the full reactor before claiming done. Use Docker Desktop wiring on this Mac.
 4. After Behavior, Docker, manifest, or migration changes: also run the hosted probe section below.
 5. Keep `CLAUDE.md` and `AGENTS.md` current — if a change invalidates a Product Fact, a Hard Rule, or the Hosted State entries, update them in the same PR. The meta-rule in `CLAUDE.md` is non-negotiable.
 
@@ -21,7 +21,7 @@ Decision recorded 2026-05-30 (`CLAUDE.md` § "Architecture Decision"). Do not pr
 
 ## Local environment file
 
-`~/.config/clockify-mileage.env` (mode 600) is sourced from `~/.zshrc`. All five `CLOCKIFY_*` variables for the sacrificial developer workspace (`672f9cf4ad6f45299c3e3de2`) are set, including the API key — the workspace auto-resets so the key is sandbox-grade and a leak self-invalidates. `NVD_API_KEY` is the only remaining placeholder. Probe with `[ -n "$VAR" ] && echo set || echo MISSING`. Never echo a value. If `/user` returns 401 the dev workspace has reset; ask the user for a fresh key and re-install the addon at `https://mileage-for-clockify-production.up.railway.app/manifest`.
+`~/.config/clockify-mileage.env` (mode 600) is sourced from `~/.zshrc`. All five `CLOCKIFY_*` variables for the sacrificial developer workspace (`672f9cf4ad6f45299c3e3de2`) are set, including the API key — the workspace auto-resets so the key is sandbox-grade and a leak self-invalidates. `NVD_API_KEY` is the only remaining placeholder. Probe with `[ -n "$VAR" ] && echo set || echo MISSING`. Never echo a value. If `/user` returns 401 the dev workspace has reset; ask the user for a fresh key and re-install the addon at `https://89-168-93-85.sslip.io/manifest` unless a different live target was explicitly requested.
 
 ## Hard rules — these crash production if you violate them
 
@@ -33,6 +33,7 @@ Decision recorded 2026-05-30 (`CLAUDE.md` § "Architecture Decision"). Do not pr
 | Webhook handlers must acknowledge HTTP 2xx even after internal failure (logging the failure first). | Clockify retries 4xx/5xx; blindly retrying internal failures storms us. |
 | Webhook controller MUST NOT call `AddonWebhookHandler.handle` or any Clockify gateway method on the request thread when a `WebhookJobQueue` bean is wired. Verify → dedupe → enqueue PENDING → 2xx. | The G1 async contract; reverting reintroduces the timeout-and-retry storm. |
 | `WebhookJobWorkerConfig` MUST stay an `@AutoConfiguration(after = AddonDbAutoConfiguration.class)` registered in `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`. | Plain `@Configuration` (even with `@ConditionalOnBean` at the `@Bean` method level) silently skips the worker beans in production. The 2026-05-30 deploys `33e2c56c` and `fdf6a328` proved this; only `9d89508d` registered the worker. |
+| Lifecycle `DELETED` cleanup for `AddonWebhookToken` MUST stay a scoped bulk DML delete by workspace and add-on key. | Spring Data entity deletes can stale-delete token rows during rapid Clockify uninstall/reinstall and log `ObjectOptimisticLockingFailureException` / `StaleObjectStateException` even though Clockify receives 200. |
 | Worker `claimNext` transaction must wrap `SELECT … FOR UPDATE SKIP LOCKED` and the status flip to `CLAIMED` in ONE transaction. Do NOT extend it across the handler dispatch. | The Clockify HTTPS write must happen outside any DB lock so the row lock doesn't span a network call. |
 | Prometheus counters/gauges may be tagged ONLY by stable enums (`outcome`, `status`). Never tag with `userId`, `workspaceId`, `expenseId`, token values. | Cardinality explodes; tagged identifiers leak into scrape endpoints. `MileageConversionMetricsTest` enforces this. |
 | Do not lower `failBuildOnCVSS` below `7.0` in the OWASP dep-check plugin. Document suppressions; never blanket-skip findings. | The HIGH/CRITICAL gate is the whole point. |
@@ -54,14 +55,11 @@ mvn -pl addon-expenses-rest-api -am test
 # Clean reactor (use after dep bumps or weird state)
 mvn -pl addon-expenses-rest-api -am clean test
 
-# Full reactor with Colima Testcontainers — the canonical local CI parity check
-DOCKER_HOST=unix:///Users/15x/.colima/default/docker.sock \
+# Full reactor with Docker Desktop Testcontainers — the canonical local CI parity check
+DOCKER_HOST=unix:///Users/15x/.docker/run/docker.sock \
 TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock \
 DOCKER_API_VERSION=1.44 \
-mvn -pl addon-expenses-rest-api -am test \
-  -Ddocker.client.strategy=org.testcontainers.dockerclient.EnvironmentAndSystemPropertyClientProviderStrategy \
-  -Ddocker.host=unix:///Users/15x/.colima/default/docker.sock \
-  -Dapi.version=1.44
+mvn -pl addon-expenses-rest-api -am test
 
 # Docker image (builds BOTH addon web pod and addon-worker pod)
 docker compose -f addon-expenses-rest-api/docker-compose.yml build
@@ -83,7 +81,14 @@ done
 
 ## Deploy + verify
 
-Railway production is the historical hosted target, but the 2026-05-31 live-test path uses Cloudflared because Railway is unavailable. Do not run Railway commands while the subscription is unavailable.
+OCI is the current hosted target. Railway is historical unless explicitly restored, and Cloudflared remains the local live-test fallback.
+
+OCI path:
+1. `mvn -pl addon-expenses-rest-api -am package -DskipTests`.
+2. Copy `addon-expenses-rest-api/target/mileage-for-clockify-0.1.0-SNAPSHOT.jar` to the OCI host and replace `/opt/mileage-for-clockify/mileage-for-clockify.jar` after taking a timestamped backup.
+3. `sudo systemctl restart mileage-for-clockify.service`.
+4. Probe `https://89-168-93-85.sslip.io/actuator/health`, `/manifest`, static assets, and prometheus worker lines.
+5. For reinstall lifecycle fixes, reinstall the add-on and grep fresh `journalctl -u mileage-for-clockify.service` logs for absence of `Lifecycle DELETED handler ... failed`, `ObjectOptimisticLockingFailureException`, and `StaleObjectStateException`.
 
 Cloudflared dev/live verification:
 1. `scripts/dev-tunnel.sh --build`.
@@ -104,7 +109,7 @@ For a structured run, dispatch the `mileage-deployer` subagent.
 ## Hosted probe set (run after every deploy)
 
 ```bash
-BASE=https://mileage-for-clockify-production.up.railway.app
+BASE=https://89-168-93-85.sslip.io
 curl -sS -w "\n  %{http_code}\n" "$BASE/actuator/health"
 curl -sS -w "\n  %{http_code}\n" "$BASE/manifest"
 curl -sS -o /dev/null -D - "$BASE/assets/mileage/settings-date.js" | head -3

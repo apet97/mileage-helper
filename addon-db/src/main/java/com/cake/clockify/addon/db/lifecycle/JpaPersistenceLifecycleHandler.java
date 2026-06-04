@@ -139,7 +139,7 @@ public class JpaPersistenceLifecycleHandler implements AddonLifecycleHandler {
     public void onDeleted(NormalizedClaims claims) {
         String workspaceId = claims.workspaceId();
         installationService.markUninstalled(workspaceId);
-        webhookTokenRepo.deleteAllByWorkspaceIdAndAddonKey(workspaceId, props.key());
+        webhookTokenRepo.deleteAllByWorkspaceIdAndAddonKeyBulk(workspaceId, props.key());
         log.debug("Auto-deleted installation and webhook tokens for workspace {}", workspaceId);
     }
 

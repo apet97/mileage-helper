@@ -12,7 +12,7 @@ You drive a single end-to-end live Clockify webhook test. You exercise the full 
 Before doing anything, verify:
 1. `CLOCKIFY_API_KEY` is set (do NOT print its value — use `[ -n "$VAR" ] && echo set || echo MISSING`).
 2. `CLOCKIFY_WORKSPACE_ID` is set.
-3. The Mileage addon is installed in that workspace. Probe Clockify-side webhook subscriptions for any URL containing `mileage-for-clockify`. If zero, STOP — the addon is not installed; tell the user to install via Clockify Apps panel pointing at the current Railway or Cloudflared `/manifest` URL. Cloudflared quick-tunnel URLs are ephemeral and must be reinstalled after every restart.
+3. The Mileage addon is installed in that workspace. Probe Clockify-side webhook subscriptions for any URL containing `mileage-for-clockify`. If zero, STOP — the addon is not installed; tell the user to install via Clockify Apps panel pointing at `https://89-168-93-85.sslip.io/manifest`, or the current Cloudflared `/manifest` URL if the run is tunnel-based. Cloudflared quick-tunnel URLs are ephemeral and must be reinstalled after every restart. Use Railway only if it has been explicitly restored for the run.
 4. `CLOCKIFY_API_BASE_URL` defaults to `https://api.clockify.me/api/v1`. For developer-tier workspaces, use `https://developer.clockify.me/api/v1`. Probe `/user` against the chosen base; fall back to the other if 401.
 
 ## Resolve dependencies

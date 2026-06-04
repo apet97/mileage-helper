@@ -27,9 +27,10 @@ This module is the implemented product module inside the standalone repository. 
 
 ## Hosted Test Deployment
 
-- URL: `https://mileage-for-clockify-production.up.railway.app`
-- Manifest: `https://mileage-for-clockify-production.up.railway.app/manifest`
-- Railway deployment ID: use `railway deployment list` for the current Railway deployment ID.
+- URL: `https://89-168-93-85.sslip.io`
+- Manifest: `https://89-168-93-85.sslip.io/manifest`
+- Runtime: OCI VM with `mileage-for-clockify.service` behind Caddy.
+- Railway deployment ID: historical only unless Railway is explicitly restored; use `railway deployment list` only for Railway runs.
 - Dated deployment evidence belongs in the pre-publish checklist after each deploy; old deployment IDs are historical evidence, not current truth.
 - Hosted rechecks, dated 2026-05-27: a pre-deploy check showed health and manifest passing while `/assets/mileage/settings-date.js` returned `404`, proving production was still serving an older deployment; after deploying latest `main`, health, manifest, both settings JS assets, icon, and unauthenticated iframe probes passed. New deploys that include static asset changes must probe both `/assets/mileage/settings-date.js` and `/assets/mileage/settings.js`. Clockify reinstall, settings load, mileage create/use, and delete-list behavior were last user-tested on 2026-05-26.
 - Expanded live Clockify API smoke on 2026-05-27 used local secrets only and proved workspace/user/category reads plus sacrificial Mileage receipt expense create, fetch, full update, delete, and post-delete non-success (`400`). Follow-up receipt probes created sacrificial PNG and valid generated PDF receipts, observed `fileId`, downloaded nonzero binary content through the expense file endpoint, then deleted both expenses. A malformed hand-written PDF fixture returned zero bytes and should not be used as product evidence.

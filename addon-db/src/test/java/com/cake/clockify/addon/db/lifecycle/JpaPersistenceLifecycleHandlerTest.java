@@ -157,6 +157,14 @@ class JpaPersistenceLifecycleHandlerTest {
         verify(webhookTokenRepository, org.mockito.Mockito.never()).save(any());
     }
 
+    @Test
+    void deletedLifecycleUsesIdempotentBulkWebhookTokenCleanup() {
+        handler.onDeleted(claims());
+
+        verify(installationService).markUninstalled("ws-1");
+        verify(webhookTokenRepository).deleteAllByWorkspaceIdAndAddonKeyBulk("ws-1", "test-addon");
+    }
+
     private static NormalizedClaims claims() {
         return new NormalizedClaims(
                 "ws-1",
