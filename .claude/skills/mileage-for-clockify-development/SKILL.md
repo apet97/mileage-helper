@@ -122,6 +122,8 @@ curl -sS "$BASE/actuator/prometheus" | grep -E "^mileage_conversion_outcome_tota
 curl -sS "$BASE/actuator/prometheus" | grep -E "^tasks_scheduled_execution_seconds_count.*pollAndProcess.*outcome=\"SUCCESS\""
 ```
 
+After static asset deploys, live-click Mine, Team, and Conversions CSV buttons in the installed iframe and verify non-empty downloads plus `/api/mileage/*.csv` 200 metrics. CSV export clicks intentionally share the delegated `handleCsvExport` handler in `settings.js`; do not split them back into per-button listeners without live Conversions CSV proof.
+
 ## Live Clockify E2E webhook smoke
 
 Requires:

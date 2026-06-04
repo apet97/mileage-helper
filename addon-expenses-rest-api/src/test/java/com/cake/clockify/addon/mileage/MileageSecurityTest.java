@@ -220,7 +220,11 @@ class MileageSecurityTest {
         String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
 
         assertThat(javascript).contains("downloadCsv");
-        assertThat(javascript).contains("csvPath(\"mine\"");
+        assertThat(javascript).contains("handleCsvExport");
+        assertThat(javascript).contains("csvPath(exportConfig[0], exportConfig[1])");
+        assertThat(javascript).contains("\"btn-export-mine\": [\"mine\", \"/api/mileage/mine.csv\", \"mileage-mine.csv\"]");
+        assertThat(javascript).contains("\"btn-export-team\": [\"team\", \"/api/mileage/team.csv\", \"mileage-team.csv\"]");
+        assertThat(javascript).contains("\"btn-export-conversions\": [\"conversion\", \"/api/mileage/conversions.csv\", \"mileage-conversions.csv\"]");
         assertThat(javascript).contains("rangeQuery(\"mine\"");
         assertThat(javascript).contains("from=");
         assertThat(javascript).contains("to=");
@@ -291,9 +295,8 @@ class MileageSecurityTest {
         assertThat(javascript).contains("/api/mileage/team?pageSize=50\" + query");
         assertThat(javascript).contains("const query = rangeQuery(\"conversion\")");
         assertThat(javascript).contains("/api/mileage/conversions?pageSize=50\" + query");
-        assertThat(javascript).contains("downloadCsv(csvPath(\"mine\"");
-        assertThat(javascript).contains("downloadCsv(csvPath(\"team\"");
-        assertThat(javascript).contains("downloadCsv(csvPath(\"conversion\"");
+        assertThat(javascript).contains("document.addEventListener(\"click\", handleCsvExport)");
+        assertThat(javascript).contains("downloadCsv(csvPath(exportConfig[0], exportConfig[1]), exportConfig[2])");
     }
 
     @Test

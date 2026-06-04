@@ -807,9 +807,28 @@
     }
   }
 
+  function handleCsvExport(event) {
+    const button = event.target.closest("button");
+    if (!button) {
+      return;
+    }
+    const exports = {
+      "btn-export-mine": ["mine", "/api/mileage/mine.csv", "mileage-mine.csv"],
+      "btn-export-team": ["team", "/api/mileage/team.csv", "mileage-team.csv"],
+      "btn-export-conversions": ["conversion", "/api/mileage/conversions.csv", "mileage-conversions.csv"]
+    };
+    const exportConfig = exports[button.id];
+    if (!exportConfig) {
+      return;
+    }
+    event.preventDefault();
+    downloadCsv(csvPath(exportConfig[0], exportConfig[1]), exportConfig[2]);
+  }
+
   document.querySelectorAll("[data-tab-target]").forEach(button => {
     button.addEventListener("click", () => switchTab(button.dataset.tabTarget));
   });
+  document.addEventListener("click", handleCsvExport);
   on("btn-preview", "click", previewMileage);
   on("mileage-form", "submit", createMileage);
   on("settings-form", "submit", saveSettings);
@@ -818,9 +837,6 @@
   on("btn-refresh-team", "click", loadTeam);
   on("btn-refresh-conversions", "click", loadConversions);
   on("btn-refresh-diagnostics", "click", loadDiagnostics);
-  on("btn-export-mine", "click", () => downloadCsv(csvPath("mine", "/api/mileage/mine.csv"), "mileage-mine.csv"));
-  on("btn-export-team", "click", () => downloadCsv(csvPath("team", "/api/mileage/team.csv"), "mileage-team.csv"));
-  on("btn-export-conversions", "click", () => downloadCsv(csvPath("conversion", "/api/mileage/conversions.csv"), "mileage-conversions.csv"));
 
   tokenClaims = claimsFromToken();
   applyTheme();
