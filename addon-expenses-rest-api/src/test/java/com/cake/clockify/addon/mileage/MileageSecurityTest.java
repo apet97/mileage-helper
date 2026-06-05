@@ -354,6 +354,25 @@ class MileageSecurityTest {
         assertThat(css).contains("display: none");
     }
 
+    @Test
+    void settingsIframeExposesEditableNoteTemplate() {
+        String html = new MileageIframeController().settings(requestWithRole("OWNER")).getBody();
+
+        assertThat(html).contains("id=\"settings-note-template\"");
+        assertThat(html).doesNotContain("id=\"settings-template\"");
+        assertThat(html).doesNotContain("<style");
+        assertThat(html).doesNotContain("onclick=");
+    }
+
+    @Test
+    void mileageJavascriptLoadsAndSavesNoteTemplate() throws Exception {
+        String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
+
+        assertThat(javascript).contains("settings-note-template");
+        assertThat(javascript).contains("settings.noteTemplate");
+        assertThat(javascript).contains("noteTemplate: formValue(\"settings-note-template\") || null");
+    }
+
     private static MockHttpServletRequest requestWithRole(String role) {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setAttribute(com.cake.clockify.addon.core.auth.RequestAttributes.NORMALIZED_CLAIMS, claims(role));

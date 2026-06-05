@@ -191,6 +191,11 @@ public class MileageIframeController {
                               <label class="check-row"><input id="settings-rate-override" name="allowUserRateOverride" type="checkbox"><span>Allow rate override</span></label>
                             </div>
                           </fieldset>
+                          <fieldset class="wide settings-group">
+                            <legend>Expense note</legend>
+                            <label class="wide"><span>Note template</span><textarea id="settings-note-template" name="noteTemplate" rows="3" placeholder="Mileage reimbursement: {{miles}} {{unit}} x {{rate}} = {{calculatedAmount}}{{categoryCharge}}. Created/converted by Mileage for Clockify."></textarea></label>
+                            <p class="hint">Tokens: {{miles}} {{unit}} {{rate}} {{calculatedAmount}} {{amount}} {{categoryCharge}}. Leave blank for the default note. A hidden marker is always appended to keep conversions loop-safe.</p>
+                          </fieldset>
                           <div class="actions wide"><button type="submit">Save Settings</button></div>
                         </form>
                       </section>

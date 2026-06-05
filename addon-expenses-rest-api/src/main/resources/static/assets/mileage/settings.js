@@ -603,6 +603,7 @@
           element("settings-convert-create").checked = settings.convertOnCreate;
           element("settings-convert-update").checked = settings.convertOnUpdate;
           element("settings-rate-override").checked = settings.allowUserRateOverride;
+          element("settings-note-template").value = settings.noteTemplate || "";
           element("settings-status").textContent = settings.completeForNativeConversion
             ? "Ready"
             : defaultMileageCategory ? "Default Mileage found" : "Needs configuration";
@@ -620,6 +621,7 @@
       convertOnCreate: element("settings-convert-create").checked,
       convertOnUpdate: element("settings-convert-update").checked,
       allowUserRateOverride: element("settings-rate-override").checked,
+      noteTemplate: formValue("settings-note-template") || null,
     };
     apiFetch("/api/mileage/settings", {
       method: "PUT",
