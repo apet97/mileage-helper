@@ -22,6 +22,8 @@ Users log mileage from a Clockify sidebar UI and have it created as a proper exp
 - **Loop-safe** — the add-on's own write fires another webhook, which the conversion guard correctly skips.
 - **Observable** — Prometheus counters/gauges for conversion outcomes, queue depth, and worker latency at `/actuator/prometheus` (low-cardinality tags only — no PII).
 - **Secure by default** — installation tokens stay server-side, CSP/HSTS/Permissions-Policy headers, OWASP dependency-check gate (fail on CVSS ≥ 7.0), and workspace isolation on every query.
+- **Printable reimbursement report** — `GET /iframe/report` renders a per-user, print-to-PDF mileage report (no PDF library); admins can filter Team/Conversions by user and open a report for anyone, while members always get their own.
+- **Sensible defaults** — fresh workspaces start at a `0.725` per-mile rate, and the converted-note template is admin-editable in Settings (a hidden loop-safe marker is always appended).
 
 ## How conversion works
 
@@ -115,9 +117,9 @@ docker compose -f addon-expenses-rest-api/docker-compose.yml \
 
 ## API surface
 
-- **UI** — `GET /iframe/mileage`, `GET /iframe/settings`
+- **UI** — `GET /iframe/mileage`, `GET /iframe/settings`, `GET /iframe/report` (printable per-user reimbursement report)
 - **User** — `GET /api/mileage/create-context`, `GET /api/mileage/mine`, `GET /api/mileage/mine.csv`, `POST /api/mileage/preview`, `POST /api/mileage/expenses`
-- **Admin** — settings, Mileage category repair, diagnostics, category options, team list/export, conversion list/detail/retry/export under `/api/mileage`
+- **Admin** — settings, Mileage category repair, diagnostics, category options, user options, team list/export, conversion list/detail/retry/export under `/api/mileage`. Team and Conversions views (and their CSVs) accept an optional `userId` filter backed by `GET /api/mileage/options/users`.
 - **Webhooks** — `EXPENSE_CREATED`, `EXPENSE_UPDATED`, `EXPENSE_DELETED`, `EXPENSE_RESTORED`
 - **Ops** — `GET /manifest`, `GET /actuator/health`, `GET /actuator/prometheus`
 

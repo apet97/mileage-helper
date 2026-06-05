@@ -259,7 +259,7 @@
     if (query === null) {
       return null;
     }
-    return path + (query ? "?" + query.slice(1) : "");
+    return path + (query ? "?" + query.slice(1) : "") + userFilterQuery(scope);
   }
 
   function selectedDateRange(scope) {
@@ -475,7 +475,7 @@
     if (query === null) {
       return Promise.resolve();
     }
-    return apiFetch("/api/mileage/team?pageSize=50" + query)
+    return apiFetch("/api/mileage/team?pageSize=50" + query + userFilterQuery("team"))
       .then(data => renderMileageRows(rows, data.conversions || [], true, "No team mileage rows yet."))
       .catch(error => toast(error.message, "error"));
   }
@@ -577,6 +577,31 @@
     }).catch(error => toast(error.message, "error"));
   }
 
+  function loadUserOptions() {
+    const selects = [element("team-user-filter"), element("conversion-user-filter")].filter(Boolean);
+    if (!selects.length) {
+      return Promise.resolve();
+    }
+    return apiFetch("/api/mileage/options/users").then(data => {
+      selects.forEach(select => {
+        const current = select.value;
+        select.replaceChildren();
+        appendOption(select, "", "All users");
+        (data.users || []).forEach(user => appendOption(select, user.id, user.name || user.id));
+        select.value = current;
+      });
+    }).catch(error => toast(error.message, "error"));
+  }
+
+  function userFilterQuery(scope) {
+    const selectId = scope === "team" ? "team-user-filter" : scope === "conversion" ? "conversion-user-filter" : "";
+    if (!selectId) {
+      return "";
+    }
+    const userId = formValue(selectId);
+    return userId ? "&userId=" + encodeURIComponent(userId) : "";
+  }
+
   function loadSettings() {
     if (!element("settings-form")) {
       return Promise.resolve();
@@ -603,6 +628,7 @@
           element("settings-convert-create").checked = settings.convertOnCreate;
           element("settings-convert-update").checked = settings.convertOnUpdate;
           element("settings-rate-override").checked = settings.allowUserRateOverride;
+          element("settings-note-template").value = settings.noteTemplate || "";
           element("settings-status").textContent = settings.completeForNativeConversion
             ? "Ready"
             : defaultMileageCategory ? "Default Mileage found" : "Needs configuration";
@@ -620,6 +646,7 @@
       convertOnCreate: element("settings-convert-create").checked,
       convertOnUpdate: element("settings-convert-update").checked,
       allowUserRateOverride: element("settings-rate-override").checked,
+      noteTemplate: formValue("settings-note-template"),
     };
     apiFetch("/api/mileage/settings", {
       method: "PUT",
@@ -673,7 +700,7 @@
     if (query === null) {
       return Promise.resolve();
     }
-    return apiFetch("/api/mileage/conversions?pageSize=50" + query).then(data => {
+    return apiFetch("/api/mileage/conversions?pageSize=50" + query + userFilterQuery("conversion")).then(data => {
       rows.replaceChildren();
       const items = data.conversions || [];
       if (!items.length) {
@@ -807,6 +834,52 @@
     }
   }
 
+  function reportPath(scope, userId) {
+    const range = validSelectedDateRange(scope);
+    if (!range) {
+      return null;
+    }
+    let path = "/iframe/report?from=" + encodeURIComponent(range.from) + "&to=" + encodeURIComponent(range.to);
+    if (userId) {
+      path += "&userId=" + encodeURIComponent(userId);
+    }
+    if (authToken) {
+      path += "&auth_token=" + encodeURIComponent(authToken);
+    }
+    return path;
+  }
+
+  function handleReportClick(event) {
+    const button = event.target.closest("button");
+    if (!button) {
+      return;
+    }
+    const reports = {
+      "btn-report-mine": ["mine", null],
+      "btn-report-team": ["team", "team-user-filter"]
+    };
+    const config = reports[button.id];
+    if (!config) {
+      return;
+    }
+    event.preventDefault();
+    let userId = null;
+    if (config[1]) {
+      userId = formValue(config[1]);
+      if (!userId) {
+        toast("Select a user to generate a report.", "error");
+        return;
+      }
+    }
+    const path = reportPath(config[0], userId);
+    if (path) {
+      const reportWindow = window.open(path, "_blank");
+      if (reportWindow) {
+        reportWindow.opener = null;
+      }
+    }
+  }
+
   function handleCsvExport(event) {
     const button = event.target.closest("button");
     if (!button) {
@@ -829,6 +902,7 @@
     button.addEventListener("click", () => switchTab(button.dataset.tabTarget));
   });
   document.addEventListener("click", handleCsvExport);
+  document.addEventListener("click", handleReportClick);
   on("btn-preview", "click", previewMileage);
   on("mileage-form", "submit", createMileage);
   on("settings-form", "submit", saveSettings);
@@ -837,6 +911,8 @@
   on("btn-refresh-team", "click", loadTeam);
   on("btn-refresh-conversions", "click", loadConversions);
   on("btn-refresh-diagnostics", "click", loadDiagnostics);
+  on("team-user-filter", "change", loadTeam);
+  on("conversion-user-filter", "change", loadConversions);
 
   tokenClaims = claimsFromToken();
   applyTheme();
@@ -845,5 +921,6 @@
   defaultDate();
   loadCreateContext();
   loadProjects();
+  loadUserOptions();
   switchTab(userIsAdmin && window.location.pathname.endsWith("/iframe/settings") ? "admin-settings" : "mine");
 })();

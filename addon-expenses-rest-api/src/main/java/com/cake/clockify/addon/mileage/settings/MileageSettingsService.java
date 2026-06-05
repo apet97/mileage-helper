@@ -14,6 +14,9 @@ import java.util.List;
 public class MileageSettingsService {
     public static final String DEFAULT_UNIT = "mile";
     public static final RoundingMode DEFAULT_ROUNDING_MODE = RoundingMode.HALF_UP;
+    /** Seeded as the starting rate for a workspace with no saved settings row (US IRS-style default). */
+    public static final BigDecimal DEFAULT_RATE = new BigDecimal("0.725");
+    private static final int MAX_NOTE_TEMPLATE_LENGTH = 500;
 
     private final MileageSettingsRepository repository;
 
@@ -65,7 +68,7 @@ public class MileageSettingsService {
             if (request.convertOnUpdate() != null) settings.setConvertOnUpdate(request.convertOnUpdate());
             if (request.dryRunMode() != null) settings.setDryRunMode(request.dryRunMode());
             if (request.allowUserRateOverride() != null) settings.setAllowUserRateOverride(request.allowUserRateOverride());
-            if (request.noteTemplate() != null) settings.setNoteTemplate(blankToNull(request.noteTemplate()));
+            if (request.noteTemplate() != null) settings.setNoteTemplate(normalizeNoteTemplate(request.noteTemplate()));
         }
         normalize(settings);
         settings.setUpdatedByUserId(updatedByUserId);
@@ -113,6 +116,7 @@ public class MileageSettingsService {
         MileageWorkspaceSettings settings = new MileageWorkspaceSettings();
         settings.setWorkspaceId(workspaceId);
         settings.setEnabled(true);
+        settings.setRate(DEFAULT_RATE);
         settings.setUnit(DEFAULT_UNIT);
         settings.setRoundingMode(DEFAULT_ROUNDING_MODE.name());
         settings.setConvertOnCreate(true);
@@ -186,6 +190,18 @@ public class MileageSettingsService {
 
     private static String blankToNull(String raw) {
         return raw == null || raw.isBlank() ? null : raw.trim();
+    }
+
+    private static String normalizeNoteTemplate(String raw) {
+        String cleaned = blankToNull(raw);
+        if (cleaned == null) {
+            return null;
+        }
+        if (cleaned.length() > MAX_NOTE_TEMPLATE_LENGTH) {
+            throw new IllegalArgumentException(
+                    "noteTemplate must be " + MAX_NOTE_TEMPLATE_LENGTH + " characters or fewer");
+        }
+        return cleaned;
     }
 
     private MileageWorkspaceSettings getNormalizedSettings(String workspaceId) {

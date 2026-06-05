@@ -192,6 +192,69 @@ class MileageConversionControllerTest {
     }
 
     @Test
+    void adminCanFilterTeamMileageByUser() throws Exception {
+        when(conversionRepository.findAllByWorkspaceIdAndUserIdAndStatusNotAndExpenseDateBetween(
+                eq("ws-admin"), eq("user-two"), eq(MileageConversionStatus.DELETED), any(LocalDate.class), any(LocalDate.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(conversion("ws-admin"))));
+
+        mockMvc.perform(get("/api/mileage/team")
+                        .queryParam("userId", "user-two")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("ADMIN")))
+                .andExpect(status().isOk());
+
+        verify(conversionRepository).findAllByWorkspaceIdAndUserIdAndStatusNotAndExpenseDateBetween(
+                eq("ws-admin"), eq("user-two"), eq(MileageConversionStatus.DELETED), any(LocalDate.class), any(LocalDate.class), any(Pageable.class));
+    }
+
+    @Test
+    void adminCanFilterConversionsByUserAndStatus() throws Exception {
+        when(conversionRepository.findAllByWorkspaceIdAndUserIdAndStatusAndExpenseDateBetween(
+                eq("ws-admin"), eq("user-two"), eq(MileageConversionStatus.CONVERTED), eq(LocalDate.parse("2026-05-01")), eq(LocalDate.parse("2026-05-31")), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(conversion("ws-admin"))));
+
+        mockMvc.perform(get("/api/mileage/conversions")
+                        .queryParam("userId", "user-two")
+                        .queryParam("status", "CONVERTED")
+                        .queryParam("from", "2026-05-01")
+                        .queryParam("to", "2026-05-31")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("OWNER")))
+                .andExpect(status().isOk());
+
+        verify(conversionRepository).findAllByWorkspaceIdAndUserIdAndStatusAndExpenseDateBetween(
+                eq("ws-admin"), eq("user-two"), eq(MileageConversionStatus.CONVERTED), eq(LocalDate.parse("2026-05-01")), eq(LocalDate.parse("2026-05-31")), any(Pageable.class));
+    }
+
+    @Test
+    void adminCanFilterConversionsByUserWithoutStatus() throws Exception {
+        when(conversionRepository.findAllByWorkspaceIdAndUserIdAndExpenseDateBetween(
+                eq("ws-admin"), eq("user-two"), any(LocalDate.class), any(LocalDate.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(conversion("ws-admin"))));
+
+        mockMvc.perform(get("/api/mileage/conversions")
+                        .queryParam("userId", "user-two")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("OWNER")))
+                .andExpect(status().isOk());
+
+        verify(conversionRepository).findAllByWorkspaceIdAndUserIdAndExpenseDateBetween(
+                eq("ws-admin"), eq("user-two"), any(LocalDate.class), any(LocalDate.class), any(Pageable.class));
+    }
+
+    @Test
+    void adminCanFilterTeamCsvByUser() throws Exception {
+        when(conversionRepository.findAllByWorkspaceIdAndUserIdAndStatusNotAndExpenseDateBetween(
+                eq("ws-admin"), eq("user-two"), eq(MileageConversionStatus.DELETED), any(LocalDate.class), any(LocalDate.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(conversion("ws-admin"))));
+
+        mockMvc.perform(get("/api/mileage/team.csv")
+                        .queryParam("userId", "user-two")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("OWNER")))
+                .andExpect(status().isOk());
+
+        verify(conversionRepository).findAllByWorkspaceIdAndUserIdAndStatusNotAndExpenseDateBetween(
+                eq("ws-admin"), eq("user-two"), eq(MileageConversionStatus.DELETED), any(LocalDate.class), any(LocalDate.class), any(Pageable.class));
+    }
+
+    @Test
     void adminCanReadConversionDetail() throws Exception {
         when(conversionRepository.findByIdAndWorkspaceId(CONVERSION_ID, "ws-admin"))
                 .thenReturn(Optional.of(conversion("ws-admin")));

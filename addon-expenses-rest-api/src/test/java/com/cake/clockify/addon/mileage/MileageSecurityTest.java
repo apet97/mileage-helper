@@ -354,6 +354,83 @@ class MileageSecurityTest {
         assertThat(css).contains("display: none");
     }
 
+    @Test
+    void teamAndConversionsPanelsExposeUserFilter() {
+        String html = new MileageIframeController().mileage(requestWithRole("OWNER")).getBody();
+
+        assertThat(html).contains("id=\"team-user-filter\"");
+        assertThat(html).contains("id=\"conversion-user-filter\"");
+        assertThat(html).doesNotContain("id=\"field-user\"");
+        assertThat(html).doesNotContain("User ID");
+    }
+
+    @Test
+    void mileageJavascriptWiresUserFilterWithoutSendingUserIdForCreate() throws Exception {
+        String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
+
+        assertThat(javascript).contains("/api/mileage/options/users");
+        assertThat(javascript).contains("function userFilterQuery(scope)");
+        assertThat(javascript).contains("\"&userId=\" + encodeURIComponent");
+        // CSV export lines must stay byte-identical:
+        assertThat(javascript).contains("downloadCsv(csvPath(exportConfig[0], exportConfig[1]), exportConfig[2])");
+        // create flow still must not send userId:
+        assertThat(javascript).doesNotContain("field-user");
+        assertThat(javascript).doesNotContain("userId:");
+        assertThat(javascript).doesNotContain("append(\"userId\"");
+    }
+
+    @Test
+    void settingsIframeExposesEditableNoteTemplate() {
+        String html = new MileageIframeController().settings(requestWithRole("OWNER")).getBody();
+
+        assertThat(html).contains("id=\"settings-note-template\"");
+        assertThat(html).doesNotContain("id=\"settings-template\"");
+        assertThat(html).doesNotContain("<style");
+        assertThat(html).doesNotContain("onclick=");
+    }
+
+    @Test
+    void mileageJavascriptLoadsAndSavesNoteTemplate() throws Exception {
+        String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
+
+        assertThat(javascript).contains("settings-note-template");
+        assertThat(javascript).contains("settings.noteTemplate");
+        // Empty textarea must send "" (not null) so the admin can clear a saved template back to default;
+        // the backend normalizeNoteTemplate() converts blank to null and clears the column.
+        assertThat(javascript).contains("noteTemplate: formValue(\"settings-note-template\")");
+        assertThat(javascript).doesNotContain("noteTemplate: formValue(\"settings-note-template\") || null");
+    }
+
+    @Test
+    void reportJavascriptStripsAuthTokenAndWiresPrint() throws Exception {
+        String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/report.js"));
+
+        assertThat(javascript).contains("auth_token");
+        assertThat(javascript).contains("history.replaceState");
+        assertThat(javascript).contains("window.print()");
+        assertThat(javascript).contains("btn-print");
+    }
+
+    @Test
+    void mineAndTeamPanelsExposeReportButtons() {
+        String html = new MileageIframeController().mileage(requestWithRole("OWNER")).getBody();
+
+        assertThat(html).contains("id=\"btn-report-mine\"");
+        assertThat(html).contains("id=\"btn-report-team\"");
+        assertThat(html).doesNotContain("onclick=");
+        assertThat(html).doesNotContain("auth_token=");
+    }
+
+    @Test
+    void mileageJavascriptOpensReportInNewTab() throws Exception {
+        String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
+
+        assertThat(javascript).contains("function handleReportClick");
+        assertThat(javascript).contains("/iframe/report?from=");
+        assertThat(javascript).contains("window.open");
+        assertThat(javascript).contains("document.addEventListener(\"click\", handleReportClick)");
+    }
+
     private static MockHttpServletRequest requestWithRole(String role) {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setAttribute(com.cake.clockify.addon.core.auth.RequestAttributes.NORMALIZED_CLAIMS, claims(role));

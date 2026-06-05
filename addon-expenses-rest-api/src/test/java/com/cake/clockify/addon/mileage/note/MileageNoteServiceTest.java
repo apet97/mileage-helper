@@ -43,6 +43,23 @@ class MileageNoteServiceTest {
     }
 
     @Test
+    void appendsHiddenMarkerWhenCustomTemplateOmitsSignatureAndMarker() {
+        String note = service.buildConvertedNote("", calculation, "mi", conversionId,
+                "Trip: {{miles}} {{unit}} @ {{rate}}", null);
+
+        assertThat(note).startsWith("Trip: 37.4 miles @ 0.655");
+        assertThat(note).contains(service.marker(conversionId));
+        assertThat(note).endsWith(service.marker(conversionId));
+    }
+
+    @Test
+    void doesNotAppendMarkerWhenDefaultTemplateAlreadyCarriesSignature() {
+        String note = service.buildConvertedNote("", calculation, "mi", conversionId, null, null);
+
+        assertThat(note).doesNotContain("[MileageAddon");
+    }
+
+    @Test
     void usesSingularMileForOneMileAndExactCalculatedAmount() {
         MileageCalculation oneMile = new MileageCalculation(
                 new BigDecimal("1"),

@@ -135,6 +135,7 @@ public class MileageIframeController {
                               <div class="actions">
                                 <button type="button" id="btn-refresh-mine">Refresh</button>
                                 <button type="button" id="btn-export-mine">CSV</button>
+                                <button type="button" id="btn-report-mine">Report</button>
                               </div>
                             </div>
                           </div>
@@ -161,11 +162,13 @@ public class MileageIframeController {
                           </div>
                           <div class="list-actions">
                 """
+                + userFilterControls("team")
                 + dateRangeControls("team")
                 + """
                             <div class="actions">
                               <button type="button" id="btn-refresh-team">Refresh</button>
                               <button type="button" id="btn-export-team">CSV</button>
+                              <button type="button" id="btn-report-team">Report</button>
                             </div>
                           </div>
                         </header>
@@ -191,6 +194,11 @@ public class MileageIframeController {
                               <label class="check-row"><input id="settings-rate-override" name="allowUserRateOverride" type="checkbox"><span>Allow rate override</span></label>
                             </div>
                           </fieldset>
+                          <fieldset class="wide settings-group">
+                            <legend>Expense note</legend>
+                            <label class="wide"><span>Note template</span><textarea id="settings-note-template" name="noteTemplate" rows="3" placeholder="Mileage reimbursement: {{miles}} {{unit}} x {{rate}} = {{calculatedAmount}}{{categoryCharge}}. Created/converted by Mileage for Clockify."></textarea></label>
+                            <p class="hint">Tokens: {{miles}} {{unit}} {{rate}} {{calculatedAmount}} {{amount}} {{categoryCharge}}. Leave blank for the default note. A hidden loop-safety marker is added automatically unless your template already includes the standard signature line, so conversions never re-convert.</p>
+                          </fieldset>
                           <div class="actions wide"><button type="submit">Save Settings</button></div>
                         </form>
                       </section>
@@ -207,6 +215,7 @@ public class MileageIframeController {
                           </div>
                           <div class="list-actions">
                 """
+                + userFilterControls("conversion")
                 + dateRangeControls("conversion")
                 + """
                             <div class="actions">
@@ -218,6 +227,14 @@ public class MileageIframeController {
                         <div class="table-wrap"><table><thead><tr><th>Date</th><th>Expense</th><th>Source</th><th>User</th><th>Status</th><th>Miles</th><th>Rate</th><th>Amount</th><th>Updated</th></tr></thead><tbody id="conversion-rows"></tbody></table></div>
                       </section>
                 """;
+    }
+
+    private static String userFilterControls(String prefix) {
+        return """
+                              <div class="user-filter">
+                                <label><span>User</span><select id="%1$s-user-filter"><option value="">All users</option></select></label>
+                              </div>
+                """.formatted(prefix);
     }
 
     private static String dateRangeControls(String prefix) {
