@@ -7,6 +7,7 @@ import com.cake.clockify.addon.mileage.api.model.MileageCategoryOptionsResponse;
 import com.cake.clockify.addon.mileage.api.model.MileageDiagnosticsResponse;
 import com.cake.clockify.addon.mileage.api.model.MileageSettingsRequest;
 import com.cake.clockify.addon.mileage.api.model.MileageSettingsResponse;
+import com.cake.clockify.addon.mileage.api.model.MileageUserOptionsResponse;
 import com.cake.clockify.addon.mileage.clockify.ClockifyCategoryOption;
 import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseGateway;
 import com.cake.clockify.addon.mileage.security.MileageAuthorizationService;
@@ -106,6 +107,13 @@ public class MileageSettingsController {
                     claims.workspaceId(), e.statusCode());
             return ResponseEntity.ok(MileageCategoryOptionsResponse.unavailable(CATEGORY_LOOKUP_UNAVAILABLE));
         }
+    }
+
+    @GetMapping("/api/mileage/options/users")
+    public ResponseEntity<MileageUserOptionsResponse> users(HttpServletRequest request)
+            throws IOException, InterruptedException {
+        NormalizedClaims claims = adminClaims(request);
+        return ResponseEntity.ok(new MileageUserOptionsResponse(gateway.listUsers(claims.workspaceId())));
     }
 
     @GetMapping("/api/mileage/diagnostics")

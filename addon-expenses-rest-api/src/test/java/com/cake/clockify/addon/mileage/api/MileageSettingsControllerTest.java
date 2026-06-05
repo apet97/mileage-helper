@@ -5,6 +5,7 @@ import com.cake.clockify.addon.core.auth.RequestAttributes;
 import com.cake.clockify.addon.db.service.AddonInstallationService;
 import com.cake.clockify.addon.mileage.clockify.ClockifyCategoryOption;
 import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseGateway;
+import com.cake.clockify.addon.mileage.clockify.ClockifyUserOption;
 import com.cake.clockify.addon.mileage.security.MileageAuthorizationService;
 import com.cake.clockify.addon.mileage.settings.MileageSettingsService;
 import com.cake.clockify.addon.mileage.settings.MileageSettingsValidation;
@@ -145,6 +146,27 @@ class MileageSettingsControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.categories[0].type").value("UNIT"))
                 .andExpect(jsonPath("$.categories[1].type").value("FLAT"));
+    }
+
+    @Test
+    void adminCanListUserOptions() throws Exception {
+        when(gateway.listUsers("ws-admin")).thenReturn(List.of(
+                new ClockifyUserOption("user-1", "Ada Lovelace", "ada@example.test"),
+                new ClockifyUserOption("user-2", "Alan Turing", "alan@example.test")));
+
+        mockMvc.perform(get("/api/mileage/options/users")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("OWNER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.users[0].id").value("user-1"))
+                .andExpect(jsonPath("$.users[0].name").value("Ada Lovelace"))
+                .andExpect(jsonPath("$.users[1].id").value("user-2"));
+    }
+
+    @Test
+    void memberCannotListUserOptions() throws Exception {
+        mockMvc.perform(get("/api/mileage/options/users")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("MEMBER")))
+                .andExpect(status().isForbidden());
     }
 
     @Test
