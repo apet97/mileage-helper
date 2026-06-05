@@ -61,22 +61,25 @@ class ReportMergerTest {
     }
 
     @Test
-    void mileageOnlyBuildsMileageRowsForDegradedFallback() {
+    void mileageOnlyBuildsMileageRowsWithResolvedProjectNamesForDegradedFallback() {
         List<ReportRow> rows = ReportMerger.mileageOnly(
                 List.of(conversion("e1", "u1", "2", "7.25", "14.5")),
-                Map.of("u1", "Ada Lovelace"));
+                Map.of("u1", "Ada Lovelace"),
+                Map.of("proj-e1", "North Route"));
 
         assertThat(rows).hasSize(1);
         assertThat(rows.get(0).mileage()).isTrue();
         assertThat(rows.get(0).categoryName()).isEqualTo("Mileage");
         assertThat(rows.get(0).amount()).isEqualByComparingTo("14.5");
         assertThat(rows.get(0).userName()).isEqualTo("Ada Lovelace");
+        assertThat(rows.get(0).projectName()).isEqualTo("North Route"); // resolved from projectId, not dropped
     }
 
     private static MileageConversion conversion(String expenseId, String userId, String miles, String rate, String calc) {
         MileageConversion conversion = new MileageConversion();
         conversion.setExpenseId(expenseId);
         conversion.setUserId(userId);
+        conversion.setProjectId("proj-" + expenseId);
         conversion.setMiles(new BigDecimal(miles));
         conversion.setRate(new BigDecimal(rate));
         conversion.setCalculatedAmount(new BigDecimal(calc));

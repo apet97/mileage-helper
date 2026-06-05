@@ -47,19 +47,31 @@ final class ReportMerger {
         return rows;
     }
 
-    /** Mileage-only rows for the degraded fallback (when the live expense list cannot be fetched). */
+    /** Mileage-only rows for the degraded fallback (when the live expense list cannot be fetched). Project
+        names are best-effort resolved from {@code projectNamesById} (loaded independently of the failed
+        expense call) so project attribution survives a partial Clockify outage. */
     static List<ReportRow> mileageOnly(
             Iterable<MileageConversion> conversions,
-            Map<String, String> userNamesById) {
+            Map<String, String> userNamesById,
+            Map<String, String> projectNamesById) {
         List<ReportRow> rows = new ArrayList<>();
         for (MileageConversion conversion : conversions) {
             rows.add(new ReportRow(
                     conversion.getExpenseId(), conversion.getExpenseDate(), conversion.getUserId(),
-                    userName(conversion.getUserId(), userNamesById), null, MILEAGE_CATEGORY_LABEL, true,
+                    userName(conversion.getUserId(), userNamesById),
+                    projectName(conversion.getProjectId(), projectNamesById), MILEAGE_CATEGORY_LABEL, true,
                     conversion.getMiles(), conversion.getRate(), orZero(conversion.getCalculatedAmount())));
         }
         rows.sort(ROW_ORDER);
         return rows;
+    }
+
+    private static String projectName(String projectId, Map<String, String> projectNamesById) {
+        if (projectId == null || projectId.isBlank()) {
+            return "";
+        }
+        String name = projectNamesById.get(projectId);
+        return name == null || name.isBlank() ? "" : name;
     }
 
     private static final Comparator<ReportRow> ROW_ORDER = Comparator

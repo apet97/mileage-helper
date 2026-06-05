@@ -20,7 +20,7 @@ class MileageReportRendererTest {
                 List.of(
                         mileage("e1", "2026-05-03", "Ada <Lovelace>", "North <b>Route</b>", "3.5", "7.2531", "25.38585"),
                         native_("e2", "2026-05-04", "Alan Turing", "", "Meals", "18.00")),
-                true, false, false);
+                true, false, false, false);
 
         assertThat(html).contains("Expense Report");
         assertThat(html).contains("2026-05-01 to 2026-05-31");
@@ -46,7 +46,7 @@ class MileageReportRendererTest {
         String html = MileageReportRenderer.render(
                 "Ada Lovelace", FROM, TO,
                 List.of(mileage("e1", "2026-05-03", "Ada Lovelace", "Route", "1", "7.25", "7.25")),
-                false, false, false);
+                false, false, false, false);
 
         assertThat(html).doesNotContain("<th>User</th>");
         // 3-column "Total" (Date|Project|Category) when no User column
@@ -54,13 +54,14 @@ class MileageReportRendererTest {
     }
 
     @Test
-    void showsDegradedBannerAndTruncationNotice() {
+    void showsDegradedScanAndRowCapNotices() {
         String html = MileageReportRenderer.render(
                 "All users", FROM, TO,
                 List.of(mileage("e1", "2026-05-03", "Ada", "Route", "1", "7.25", "7.25")),
-                true, true, true);
+                true, true, true, true);
 
         assertThat(html).contains("Live expense data is unavailable; showing reconciled mileage rows only.");
+        assertThat(html).contains("The expense scan stopped at its page budget");
         assertThat(html).contains("Showing the first 1 rows");
     }
 

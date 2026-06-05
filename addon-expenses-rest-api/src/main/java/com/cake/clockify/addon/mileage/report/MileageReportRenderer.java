@@ -21,7 +21,8 @@ public final class MileageReportRenderer {
             LocalDate to,
             List<ReportRow> rows,
             boolean includeUser,
-            boolean truncated,
+            boolean scanTruncated,
+            boolean rowCapHit,
             boolean degraded) {
         int leadColumns = includeUser ? 4 : 3;
         BigDecimal totalAmount = BigDecimal.ZERO;
@@ -54,7 +55,11 @@ public final class MileageReportRenderer {
             notices.append("<p class=\"report-truncated\">Live expense data is unavailable; "
                     + "showing reconciled mileage rows only.</p>");
         }
-        if (truncated) {
+        if (scanTruncated) {
+            notices.append("<p class=\"report-truncated\">The expense scan stopped at its page budget; "
+                    + "some in-range expenses may be missing. Narrow the date range for a complete report.</p>");
+        }
+        if (rowCapHit) {
             notices.append("<p class=\"report-truncated\">Showing the first ").append(rows.size())
                     .append(" rows. Totals reflect only the rows shown.</p>");
         }

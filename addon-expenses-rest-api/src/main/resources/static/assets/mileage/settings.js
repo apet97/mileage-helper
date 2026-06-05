@@ -840,6 +840,7 @@
       return null;
     }
     let path = "/iframe/report?from=" + encodeURIComponent(range.from) + "&to=" + encodeURIComponent(range.to);
+    path += "&scope=" + encodeURIComponent(scope); // "mine" pins to the requester; "team" = admin all-users/filter
     if (userId) {
       path += "&userId=" + encodeURIComponent(userId);
     }

@@ -5,6 +5,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.LocalDate;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -20,6 +22,7 @@ public interface MileageConversionRepository extends JpaRepository<MileageConver
     Page<MileageConversion> findAllByWorkspaceIdAndUserIdAndStatusNotAndExpenseDateBetween(String workspaceId, String userId, MileageConversionStatus status, LocalDate from, LocalDate to, Pageable pageable);
     Page<MileageConversion> findAllByWorkspaceIdAndStatusAndExpenseDateBetween(String workspaceId, MileageConversionStatus status, LocalDate from, LocalDate to, Pageable pageable);
     Page<MileageConversion> findAllByWorkspaceIdAndUserIdAndStatusAndExpenseDateBetween(String workspaceId, String userId, MileageConversionStatus status, LocalDate from, LocalDate to, Pageable pageable);
+    List<MileageConversion> findByWorkspaceIdAndStatusAndExpenseIdIn(String workspaceId, MileageConversionStatus status, Collection<String> expenseIds);
     long countByWorkspaceIdAndExpenseId(String workspaceId, String expenseId);
     void deleteByWorkspaceId(String workspaceId);
 }
