@@ -198,6 +198,10 @@ class MileageSettingsServiceTest {
                         "ws-dates", from, to, PageRequest.of(0, 10)))
                 .extracting(MileageConversion::getExpenseId)
                 .containsExactlyInAnyOrder("exp-this-week", "exp-failed", "exp-other-user");
+        assertThat(conversionRepository.findAllByWorkspaceIdAndUserIdAndStatusAndExpenseDateBetween(
+                        "ws-dates", "user-one", MileageConversionStatus.CONVERTED, from, to, PageRequest.of(0, 10)))
+                .extracting(MileageConversion::getExpenseId)
+                .containsExactly("exp-this-week");
     }
 
     @Test
@@ -257,7 +261,9 @@ class MileageSettingsServiceTest {
         assertThat(response.convertOnUpdate()).isTrue();
         assertThat(response.completeForAddonCreate()).isFalse();
         assertThat(response.completeForNativeConversion()).isFalse();
-        assertThat(response.diagnostics()).contains("rate is required", "outputCategoryId is required");
+        assertThat(response.rate()).isEqualTo("0.725");
+        assertThat(response.diagnostics()).contains("outputCategoryId is required");
+        assertThat(response.diagnostics()).doesNotContain("rate is required");
     }
 
     @Test
@@ -290,6 +296,29 @@ class MileageSettingsServiceTest {
         assertThat(saved.getRoundingMode()).isEqualTo("HALF_UP");
         assertThat(saved.isPreserveOriginalNotes()).isFalse();
         assertThat(saved.getUpdatedByUserId()).isEqualTo("admin-1");
+    }
+
+    @Test
+    void savesCustomNoteTemplate() {
+        MileageSettingsRequest request = new MileageSettingsRequest(
+                true, "0.725", "mi", null, "cat-output", "cat-output", "HALF_UP",
+                true, true, null, false, false, "Trip {{miles}} {{unit}} @ {{rate}}");
+
+        MileageWorkspaceSettings saved = settingsService.saveSettings("ws-note-template", request, "admin-1");
+
+        assertThat(saved.getNoteTemplate()).isEqualTo("Trip {{miles}} {{unit}} @ {{rate}}");
+    }
+
+    @Test
+    void rejectsNoteTemplateLongerThanLimit() {
+        String tooLong = "x".repeat(501);
+        MileageSettingsRequest request = new MileageSettingsRequest(
+                true, "0.725", "mi", null, "cat-output", "cat-output", "HALF_UP",
+                true, true, null, false, false, tooLong);
+
+        assertThatThrownBy(() -> settingsService.saveSettings("ws-note-too-long", request, "admin-1"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("noteTemplate");
     }
 
     @Test
@@ -326,11 +355,13 @@ class MileageSettingsServiceTest {
     }
 
     @Test
-    void validationRequiresRateAndOutputCategoryForCreateExpense() {
+    void validationDefaultsRateAndStillRequiresOutputCategoryForCreateExpense() {
         MileageSettingsValidation validation = settingsService.validateForAddonCreate("ws-incomplete");
 
         assertThat(validation.complete()).isFalse();
-        assertThat(validation.diagnostics()).contains("rate is required", "outputCategoryId is required");
+        assertThat(validation.rate()).isEqualByComparingTo(new BigDecimal("0.725"));
+        assertThat(validation.diagnostics()).contains("outputCategoryId is required");
+        assertThat(validation.diagnostics()).doesNotContain("rate is required");
     }
 
     @Test
@@ -344,6 +375,13 @@ class MileageSettingsServiceTest {
         assertThatThrownBy(() -> authorizationService.requireAdmin(claims("MEMBER")))
                 .isInstanceOf(org.springframework.web.server.ResponseStatusException.class)
                 .hasMessageContaining("Admin role is required");
+    }
+
+    @Test
+    void isAdminReturnsTrueForOwnerAndAdminFalseForMember() {
+        assertThat(authorizationService.isAdmin(claims("OWNER"))).isTrue();
+        assertThat(authorizationService.isAdmin(claims("ADMIN"))).isTrue();
+        assertThat(authorizationService.isAdmin(claims("MEMBER"))).isFalse();
     }
 
     private static MileageConversion conversion(String workspaceId, String expenseId, MileageConversionStatus status) {

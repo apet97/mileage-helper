@@ -13,9 +13,13 @@ public class MileageAuthorizationService {
     private static final Set<String> ADMIN_ROLES = Set.of("OWNER", "ADMIN");
 
     public void requireAdmin(NormalizedClaims claims) {
-        String role = claims == null ? null : claims.workspaceRole();
-        if (role == null || !ADMIN_ROLES.contains(role.toUpperCase(Locale.ROOT))) {
+        if (!isAdmin(claims)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Admin role is required");
         }
+    }
+
+    public boolean isAdmin(NormalizedClaims claims) {
+        String role = claims == null ? null : claims.workspaceRole();
+        return role != null && ADMIN_ROLES.contains(role.toUpperCase(Locale.ROOT));
     }
 }
