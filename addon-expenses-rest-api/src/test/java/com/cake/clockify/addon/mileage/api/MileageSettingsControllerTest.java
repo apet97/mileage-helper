@@ -10,6 +10,7 @@ import com.cake.clockify.addon.mileage.security.MileageAuthorizationService;
 import com.cake.clockify.addon.mileage.settings.MileageSettingsService;
 import com.cake.clockify.addon.mileage.settings.MileageSettingsValidation;
 import com.cake.clockify.client.ClockifyApiException;
+import com.cake.clockify.client.ClockifyTransportException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -123,6 +124,42 @@ class MileageSettingsControllerTest {
     }
 
     @Test
+    void savingSettingsStillSucceedsWhenCategoryPriceSyncHitsTransportTimeout() throws Exception {
+        when(settingsService.getEffectiveSettings("ws-admin")).thenReturn(settingsResponse(List.of()));
+        // The real production timeout path is a ClockifyTransportException (RuntimeException); the best-effort
+        // sync must still not fail the committed save.
+        when(gateway.createOrRepairMileageCategory("ws-admin", new BigDecimal("0.655")))
+                .thenThrow(new ClockifyTransportException("request timed out", null));
+
+        mockMvc.perform(put("/api/mileage/settings")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("OWNER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"rate":"0.655","mileageCategoryId":"cat-mileage"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rate").value("0.655"));
+    }
+
+    @Test
+    void savingSettingsStillSucceedsWhenCategoryPriceSyncHitsUnexpectedError() throws Exception {
+        when(settingsService.getEffectiveSettings("ws-admin")).thenReturn(settingsResponse(List.of()));
+        // An unexpected (non-Clockify) RuntimeException is logged at error but must still NOT fail the already
+        // committed save — the save is the user's action; the price sync is a best-effort side-effect.
+        when(gateway.createOrRepairMileageCategory("ws-admin", new BigDecimal("0.655")))
+                .thenThrow(new IllegalStateException("unexpected bug"));
+
+        mockMvc.perform(put("/api/mileage/settings")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("OWNER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"rate":"0.655","mileageCategoryId":"cat-mileage"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rate").value("0.655"));
+    }
+
+    @Test
     void memberCannotSaveSettings() throws Exception {
         mockMvc.perform(put("/api/mileage/settings")
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("MEMBER"))
@@ -206,9 +243,21 @@ class MileageSettingsControllerTest {
 
     @Test
     void userOptionsDegradeGracefullyWhenClockifyTimesOut() throws Exception {
-        // A Clockify cold-start timeout surfaces as an IOException; the user filter must degrade to an empty
-        // list + warning (HTTP 200) instead of 500-ing the Team/Conversions panels.
+        // A raw IOException from the gateway must degrade to an empty list + warning (HTTP 200).
         when(gateway.listUsers("ws-admin")).thenThrow(new IOException("request timed out"));
+
+        mockMvc.perform(get("/api/mileage/options/users")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("OWNER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.users").isEmpty())
+                .andExpect(jsonPath("$.warning").value(org.hamcrest.Matchers.containsString("temporarily unavailable")));
+    }
+
+    @Test
+    void userOptionsDegradeGracefullyOnClockifyTransportTimeout() throws Exception {
+        // The real production timeout path: a ClockifyTransportException (RuntimeException) wrapping
+        // HttpTimeoutException. The narrowed catch must still degrade this to 200 + warning, not 500.
+        when(gateway.listUsers("ws-admin")).thenThrow(new ClockifyTransportException("request timed out", null));
 
         mockMvc.perform(get("/api/mileage/options/users")
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("OWNER")))

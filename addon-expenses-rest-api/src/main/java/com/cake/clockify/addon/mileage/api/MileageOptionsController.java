@@ -4,6 +4,8 @@ import com.cake.clockify.addon.core.auth.NormalizedClaims;
 import com.cake.clockify.addon.core.auth.RequestAttributes;
 import com.cake.clockify.addon.mileage.api.model.MileageProjectOptionsResponse;
 import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseGateway;
+import com.cake.clockify.client.ClockifyApiException;
+import com.cake.clockify.client.ClockifyTransportException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,9 +35,12 @@ public class MileageOptionsController {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return unavailable(claims.workspaceId(), e);
-        } catch (IOException | RuntimeException e) {
-            // A Clockify timeout/transport failure is an IOException; degrade to an empty list + warning
-            // (a populated dropdown is a convenience, not a reason to 500 the whole panel).
+        } catch (IOException | ClockifyTransportException | ClockifyApiException e) {
+            // A Clockify cold-start timeout surfaces as a ClockifyTransportException (a RuntimeException
+            // wrapping HttpTimeoutException); a permission/transport error is ClockifyApiException/IOException.
+            // Degrade to an empty list + warning — a populated dropdown is a convenience, not a reason to 500
+            // the whole panel. Any OTHER RuntimeException is a real bug and is allowed to propagate (500) so we
+            // never mislabel a logic error as a transient outage.
             return unavailable(claims.workspaceId(), e);
         }
     }

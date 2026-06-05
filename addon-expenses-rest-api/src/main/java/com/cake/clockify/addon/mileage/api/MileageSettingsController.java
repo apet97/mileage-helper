@@ -13,6 +13,7 @@ import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseGateway;
 import com.cake.clockify.addon.mileage.security.MileageAuthorizationService;
 import com.cake.clockify.addon.mileage.settings.MileageSettingsService;
 import com.cake.clockify.client.ClockifyApiException;
+import com.cake.clockify.client.ClockifyTransportException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -84,8 +85,14 @@ public class MileageSettingsController {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             log.warn("Mileage category price sync interrupted for workspace {}", workspaceId);
-        } catch (IOException | RuntimeException e) {
-            log.warn("Mileage category price sync failed for workspace {}: {}", workspaceId, e.toString());
+        } catch (IOException | ClockifyTransportException | ClockifyApiException e) {
+            // Expected Clockify outage/permission failure — best-effort sync, never fail the committed save.
+            log.warn("Mileage category price sync skipped for workspace {} after Clockify failure: {}",
+                    workspaceId, e.toString());
+        } catch (RuntimeException e) {
+            // Unexpected: a real bug, not a Clockify hiccup. Log loudly (with stack) but still do not fail the
+            // already-committed save — and do not let it masquerade as a routine outage in the logs.
+            log.error("Mileage category price sync hit an unexpected error for workspace {}", workspaceId, e);
         }
     }
 
@@ -139,9 +146,12 @@ public class MileageSettingsController {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return usersUnavailable(claims.workspaceId(), e);
-        } catch (IOException | RuntimeException e) {
-            // A Clockify timeout/transport failure is an IOException; degrade to empty list + warning so the
-            // Team/Conversions user filter stays usable rather than 500-ing.
+        } catch (IOException | ClockifyTransportException | ClockifyApiException e) {
+            // A Clockify cold-start timeout surfaces as a ClockifyTransportException (a RuntimeException
+            // wrapping HttpTimeoutException); permission/transport errors are ClockifyApiException/IOException.
+            // Degrade to empty list + warning so the Team/Conversions user filter stays usable rather than
+            // 500-ing. Any OTHER RuntimeException is a real bug and propagates (500) rather than being mislabeled
+            // a transient outage.
             return usersUnavailable(claims.workspaceId(), e);
         }
     }
