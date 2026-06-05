@@ -17,11 +17,12 @@ All API routes are scoped by the verified Clockify add-on JWT claims. There are 
 - `POST /api/mileage/settings/mileage-category`
 - `GET /api/mileage/options/categories`
 - `GET /api/mileage/options/projects`
+- `GET /api/mileage/options/users` - admin user directory for the Team/Conversions user filter (from `gateway.listUsers`).
 - `GET /api/mileage/diagnostics`
-- `GET /api/mileage/team?page=0&pageSize=50&from=YYYY-MM-DD&to=YYYY-MM-DD` - admin/team visible mileage rows, excluding `DELETED`.
-- `GET /api/mileage/team.csv?from=YYYY-MM-DD&to=YYYY-MM-DD` - admin/team visible CSV export, excluding `DELETED`.
-- `GET /api/mileage/conversions?page=0&pageSize=50&status=CONVERTED&from=YYYY-MM-DD&to=YYYY-MM-DD` - audit view. Includes `DELETED` rows unless a different status filter is supplied.
-- `GET /api/mileage/conversions.csv?from=YYYY-MM-DD&to=YYYY-MM-DD` - audit CSV export. Includes `DELETED` rows.
+- `GET /api/mileage/team?page=0&pageSize=50&userId=&from=YYYY-MM-DD&to=YYYY-MM-DD` - admin/team visible mileage rows, excluding `DELETED`. Optional `userId` filters to one user.
+- `GET /api/mileage/team.csv?userId=&from=YYYY-MM-DD&to=YYYY-MM-DD` - admin/team visible CSV export, excluding `DELETED`. Optional `userId` filters to one user.
+- `GET /api/mileage/conversions?page=0&pageSize=50&status=CONVERTED&userId=&from=YYYY-MM-DD&to=YYYY-MM-DD` - audit view. Includes `DELETED` rows unless a different status filter is supplied. Optional `userId` filters to one user.
+- `GET /api/mileage/conversions.csv?userId=&from=YYYY-MM-DD&to=YYYY-MM-DD` - audit CSV export. Includes `DELETED` rows. Optional `userId` filters to one user.
 - `GET /api/mileage/conversions/{id}`
 - `POST /api/mileage/conversions/{id}/retry`
 
@@ -37,6 +38,7 @@ CSV exports paginate server-side up to 100000 rows. Responses include `X-Mileage
 
 - `GET /iframe/mileage`
 - `GET /iframe/settings`
+- `GET /iframe/report?userId=&from=YYYY-MM-DD&to=YYYY-MM-DD` - printable per-user mileage reimbursement report (server-rendered HTML; admin may pass `userId`, a non-admin always gets their own). `from`/`to` are required. Uses external `/assets/mileage/report.css` and `/assets/mileage/report.js`; capped at 1000 rows with a visible truncation notice.
 
 ## Platform Routes
 

@@ -114,15 +114,21 @@ curl -sS -w "\n  %{http_code}\n" "$BASE/actuator/health"
 curl -sS -w "\n  %{http_code}\n" "$BASE/manifest"
 curl -sS -o /dev/null -D - "$BASE/assets/mileage/settings-date.js" | head -3
 curl -sS -o /dev/null -D - "$BASE/assets/mileage/settings.js"      | head -3
+curl -sS -o /dev/null -D - "$BASE/assets/mileage/report.css"       | head -3
+curl -sS -o /dev/null -D - "$BASE/assets/mileage/report.js"        | head -3
 curl -sS -o /dev/null -D - "$BASE/assets/mileage/icon.png"         | head -3
 curl -sS -o /dev/null -D - "$BASE/iframe/mileage"                  | head -10
+# /iframe/report is wired + guarded: no auth_token => 401 (a real report needs the iframe's auth_token query param)
+curl -sS -o /dev/null -w "  %{http_code}\n" "$BASE/iframe/report"
 # G3 metrics — confirm all three families and check for no PII tags
 curl -sS "$BASE/actuator/prometheus" | grep -E "^mileage_conversion_outcome_total|^mileage_webhook_queue_depth|^mileage_webhook_job_process_seconds_count"
 # Worker liveness — proves the @Scheduled poll loop is hitting the DB
 curl -sS "$BASE/actuator/prometheus" | grep -E "^tasks_scheduled_execution_seconds_count.*pollAndProcess.*outcome=\"SUCCESS\""
 ```
 
-After static asset deploys, live-click Mine, Team, and Conversions CSV buttons in the installed iframe and verify non-empty downloads plus `/api/mileage/*.csv` 200 metrics. CSV export clicks intentionally share the delegated `handleCsvExport` handler in `settings.js`; do not split them back into per-button listeners without live Conversions CSV proof.
+After static asset deploys, live-click Mine, Team, and Conversions CSV buttons in the installed iframe and verify non-empty downloads plus `/api/mileage/*.csv` 200 metrics. CSV export clicks intentionally share the delegated `handleCsvExport` handler in `settings.js`; do not split them back into per-button listeners without live Conversions CSV proof. Also probe the two report assets (`/assets/mileage/report.css`, `/assets/mileage/report.js`) and confirm `GET /iframe/report` with no `auth_token` returns `401` (route wired + guarded). The Report buttons (Mine + Team) open `/iframe/report` in a new tab via `handleReportClick`; the Team report requires a user to be selected in the Team user filter.
+
+Product notes for this feature set: fresh workspaces default the rate to `0.725` (`MileageSettingsService.defaults()`); the converted-note template is admin-editable in Settings (`settings-note-template`, ≤500 chars) and `MileageNoteService` always appends the hidden loop-safe marker when a custom template omits both the marker and the human signature; Team/Conversions admin views and CSVs take an optional `userId` filter backed by `GET /api/mileage/options/users`.
 
 ## Live Clockify E2E webhook smoke
 
