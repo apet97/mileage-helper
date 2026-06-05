@@ -10,6 +10,7 @@ import com.cake.clockify.addon.mileage.audit.MileageConversionSource;
 import com.cake.clockify.addon.mileage.audit.MileageConversionStatus;
 import com.cake.clockify.addon.mileage.calculation.MileageCalculator;
 import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseGateway;
+import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseSnapshot;
 import com.cake.clockify.addon.mileage.clockify.CreateFlatExpenseCommand;
 import com.cake.clockify.addon.mileage.clockify.UpdateFlatExpenseCommand;
 import com.cake.clockify.addon.mileage.note.MileageNoteService;
@@ -255,6 +256,28 @@ class MileageApiControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.expenseId").value("exp-1"))
                 .andExpect(jsonPath("$.roundedAmount").value("24.50"));
+
+        ArgumentCaptor<UpdateFlatExpenseCommand> update = ArgumentCaptor.forClass(UpdateFlatExpenseCommand.class);
+        verify(gateway).updateFlatExpense(eq("ws-api"), eq("exp-1"), update.capture());
+        assertThat(update.getValue().notes()).contains("(Clockify category charge: 89.90)");
+        // Fast path: when the create response carries `total`, no extra getExpense round-trip is needed.
+        verify(gateway, never()).getExpense(any(), any());
+    }
+
+    @Test
+    void createAnnotatesNoteFromExpenseSnapshotWhenCreateResponseOmitsTotal() throws Exception {
+        when(settingsService.validateForAddonCreate("ws-api")).thenReturn(settings(false));
+        // Live prod: the addon-API expense-create response omits the computed `total`, so the charge must be
+        // read from the authoritative getExpense snapshot (the native-conversion path). 37.4 mi rounds to
+        // 24.50; snapshot total 8990 cents = 89.90 diverges, so the note must carry the reconciling annotation.
+        when(gateway.createFlatExpense(eq("ws-api"), any(CreateFlatExpenseCommand.class))).thenReturn(createdExpense("exp-1"));
+        when(gateway.getExpense("ws-api", "exp-1")).thenReturn(snapshot("exp-1", new BigDecimal("8990")));
+
+        mockMvc.perform(post("/api/mileage/expenses")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createBody("37.4", null)))
+                .andExpect(status().isOk());
 
         ArgumentCaptor<UpdateFlatExpenseCommand> update = ArgumentCaptor.forClass(UpdateFlatExpenseCommand.class);
         verify(gateway).updateFlatExpense(eq("ws-api"), eq("exp-1"), update.capture());
@@ -601,6 +624,11 @@ class MileageApiControllerTest {
 
     private static ObjectNode createdExpense(String id, long totalCents) {
         return createdExpense(id).put("total", totalCents);
+    }
+
+    private static ClockifyExpenseSnapshot snapshot(String id, BigDecimal totalCents) {
+        return new ClockifyExpenseSnapshot(id, "ws-api", "user-claims", "2026-05-24", null, null,
+                "cat-output", "", new BigDecimal("37.4"), Boolean.TRUE, "", totalCents, Boolean.FALSE);
     }
 
     private static MileageSettingsValidation settings(boolean allowOverride) {
