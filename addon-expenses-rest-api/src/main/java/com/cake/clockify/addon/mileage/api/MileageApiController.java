@@ -36,6 +36,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
@@ -158,16 +159,18 @@ public class MileageApiController {
         MileageConversion conversion = conversionRepository.findByIdAndWorkspaceId(persistedId, workspaceId)
                 .orElseThrow(() -> new IllegalStateException("Reserved mileage conversion was not found"));
         String persistedMarker = noteService.marker(persistedId);
-        String persistedNote = note;
-        if (!persistedId.equals(conversionId)) {
-            persistedNote = noteService.buildConvertedNote(
-                    request.notes(),
-                    calculation,
-                    settings.unit(),
-                    persistedId,
-                    settings.noteTemplate(),
-                    null);
-        }
+        // Reconcile the note with the actual Clockify category charge from the create response. The add-on
+        // rate may differ from the category's integer-cent unit price (a unit category charges miles ×
+        // priceInCents), so the note shows "(Clockify category charge: X)" exactly like native conversions.
+        // This also re-marks the note if the reservation returned a different conversion id than the create note used.
+        BigDecimal categoryCharge = clockifyCategoryCharge(response);
+        String finalNote = noteService.buildConvertedNote(
+                request.notes(),
+                calculation,
+                settings.unit(),
+                persistedId,
+                settings.noteTemplate(),
+                categoryCharge);
         applyAddonFormConversion(
                 conversion,
                 workspaceId,
@@ -179,7 +182,7 @@ public class MileageApiController {
                 calculation,
                 persistedMarker);
         conversionRepository.saveAndFlush(conversion);
-        if (!Objects.equals(persistedNote, note)) {
+        if (!Objects.equals(finalNote, note)) {
             gateway.updateFlatExpense(workspaceId, expenseId, new UpdateFlatExpenseCommand(
                     settings.outputCategoryId(),
                     userId,
@@ -188,7 +191,7 @@ public class MileageApiController {
                     null,
                     billableOrDefault(request.billable()),
                     clockifyExpenseAmount(settings, calculation),
-                    persistedNote,
+                    finalNote,
                     settings.roundingMode(),
                     singleMileageCategory(settings)));
         }
@@ -239,13 +242,28 @@ public class MileageApiController {
         return calculator.calculate(miles, rate, settings.roundingMode());
     }
 
-    private static java.math.BigDecimal clockifyExpenseAmount(
+    private static BigDecimal clockifyExpenseAmount(
             MileageSettingsValidation settings,
             MileageCalculation calculation) {
         if (singleMileageCategory(settings)) {
             return calculation.miles();
         }
         return calculation.roundedAmount();
+    }
+
+    /** The Clockify-computed expense total (cents) from a create response, as major units, or null if absent. */
+    private static BigDecimal clockifyCategoryCharge(JsonNode response) {
+        JsonNode total = response == null ? null : response.get("total");
+        if (total == null || total.isNull()) {
+            return null;
+        }
+        if (total.isNumber()) {
+            return total.decimalValue().movePointLeft(2);
+        }
+        if (total.isTextual() && !total.asText().isBlank()) {
+            return new BigDecimal(total.asText()).movePointLeft(2);
+        }
+        return null;
     }
 
     private static boolean singleMileageCategory(MileageSettingsValidation settings) {

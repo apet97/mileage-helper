@@ -574,6 +574,9 @@
       project.replaceChildren();
       appendOption(project, "", "No project");
       (data.projects || []).forEach(item => appendOption(project, item.id, item.name));
+      if (data.warning) {
+        toast(data.warning, "error");
+      }
     }).catch(error => toast(error.message, "error"));
   }
 
@@ -590,6 +593,9 @@
         (data.users || []).forEach(user => appendOption(select, user.id, user.name || user.id));
         select.value = current;
       });
+      if (data.warning) {
+        toast(data.warning, "error");
+      }
     }).catch(error => toast(error.message, "error"));
   }
 

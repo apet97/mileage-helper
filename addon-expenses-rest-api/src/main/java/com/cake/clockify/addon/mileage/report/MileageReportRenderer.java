@@ -75,6 +75,7 @@ public final class MileageReportRenderer {
                   <meta charset="UTF-8">
                   <meta name="viewport" content="width=device-width, initial-scale=1.0">
                   <title>Expense Report</title>
+                  <link rel="icon" type="image/png" href="/assets/mileage/icon.png">
                   <link rel="stylesheet" href="/assets/mileage/report.css">
                   <script src="/assets/mileage/report.js" defer></script>
                 </head>

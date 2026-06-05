@@ -40,6 +40,15 @@ class MileageSecurityTest {
     }
 
     @Test
+    void mileageIframeDeclaresFaviconLinkToStopAutoFaviconRequest() {
+        String html = new MileageIframeController().mileage(requestWithRole("ADMIN")).getBody();
+
+        assertThat(html).contains("<link rel=\"icon\" type=\"image/png\" href=\"/assets/mileage/icon.png\">");
+        // still CSP-safe — no inline style introduced by the head change
+        assertThat(html).doesNotContain("<style");
+    }
+
+    @Test
     void installationTokenNeverAppearsInIframeHtml() {
         String html = new MileageIframeController().mileage(requestWithRole("ADMIN")).getBody();
 

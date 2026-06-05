@@ -42,6 +42,15 @@ public record MileageConversionDetailResponse(
     }
 
     public static MileageConversionDetailResponse from(MileageConversion conversion, String userName) {
+        return from(conversion, userName, true);
+    }
+
+    /**
+     * @param userIdFallback when no resolved {@code userName} is available, {@code true} echoes the raw
+     *        {@code userId} (admin Team/Conversions lists, so unresolved users stay identifiable),
+     *        {@code false} leaves {@code userName} null (the "/mine" own-rows view, which has no User column).
+     */
+    public static MileageConversionDetailResponse from(MileageConversion conversion, String userName, boolean userIdFallback) {
         return new MileageConversionDetailResponse(
                 conversion.getId(),
                 conversion.getWorkspaceId(),
@@ -52,7 +61,7 @@ public record MileageConversionDetailResponse(
                 conversion.getSourceCategoryId(),
                 conversion.getTargetCategoryId(),
                 conversion.getUserId(),
-                userName == null || userName.isBlank() ? conversion.getUserId() : userName,
+                resolveUserName(conversion.getUserId(), userName, userIdFallback),
                 conversion.getProjectId(),
                 conversion.getTaskId(),
                 conversion.getExpenseDate() == null ? null : conversion.getExpenseDate().toString(),
@@ -70,6 +79,13 @@ public record MileageConversionDetailResponse(
                 conversion.getUpdatedAt(),
                 conversion.getConvertedAt(),
                 conversion.getDeletedAt());
+    }
+
+    private static String resolveUserName(String userId, String userName, boolean userIdFallback) {
+        if (userName != null && !userName.isBlank()) {
+            return userName;
+        }
+        return userIdFallback ? userId : null;
     }
 
     private static String text(java.math.BigDecimal value) {

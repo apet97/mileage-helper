@@ -13,6 +13,7 @@ import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseGateway;
 import com.cake.clockify.addon.mileage.security.MileageAuthorizationService;
 import com.cake.clockify.addon.mileage.settings.MileageSettingsService;
 import com.cake.clockify.client.ClockifyApiException;
+import com.cake.clockify.client.ClockifyTransportException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,6 +36,8 @@ public class MileageSettingsController {
     private static final Logger log = LoggerFactory.getLogger(MileageSettingsController.class);
     private static final String CATEGORY_LOOKUP_UNAVAILABLE =
             "Clockify did not allow reading expense categories. Try Use or Repair Mileage Category, or verify expense permissions for this workspace.";
+    private static final String USERS_UNAVAILABLE =
+            "Clockify users are temporarily unavailable. Try again in a moment.";
 
     private final MileageSettingsService settingsService;
     private final ClockifyExpenseGateway gateway;
@@ -64,7 +67,33 @@ public class MileageSettingsController {
             @RequestBody MileageSettingsRequest body) {
         NormalizedClaims claims = adminClaims(request);
         settingsService.saveSettings(claims.workspaceId(), body, claims.userId());
+        // Keep the Clockify Mileage category's unit price in step with the saved rate so add-on-created and
+        // native-converted expenses are charged the intended amount (a unit category forces total = miles ×
+        // price). Best-effort: a Clockify outage must not fail the save.
+        syncMileageCategoryPrice(claims.workspaceId());
         return ResponseEntity.ok(enrichSettings(claims.workspaceId(), settingsService.getEffectiveSettings(claims.workspaceId())));
+    }
+
+    private void syncMileageCategoryPrice(String workspaceId) {
+        MileageSettingsResponse settings = settingsService.getEffectiveSettings(workspaceId);
+        if (!hasText(settings.rate())
+                || settings.mileageCategoryId() == null || settings.mileageCategoryId().isBlank()) {
+            return;
+        }
+        try {
+            gateway.createOrRepairMileageCategory(workspaceId, new BigDecimal(settings.rate()));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn("Mileage category price sync interrupted for workspace {}", workspaceId);
+        } catch (IOException | ClockifyTransportException | ClockifyApiException e) {
+            // Expected Clockify outage/permission failure — best-effort sync, never fail the committed save.
+            log.warn("Mileage category price sync skipped for workspace {} after Clockify failure: {}",
+                    workspaceId, e.toString());
+        } catch (RuntimeException e) {
+            // Unexpected: a real bug, not a Clockify hiccup. Log loudly (with stack) but still do not fail the
+            // already-committed save — and do not let it masquerade as a routine outage in the logs.
+            log.error("Mileage category price sync hit an unexpected error for workspace {}", workspaceId, e);
+        }
     }
 
     @PostMapping("/api/mileage/settings/mileage-category")
@@ -110,10 +139,26 @@ public class MileageSettingsController {
     }
 
     @GetMapping("/api/mileage/options/users")
-    public ResponseEntity<MileageUserOptionsResponse> users(HttpServletRequest request)
-            throws IOException, InterruptedException {
+    public ResponseEntity<MileageUserOptionsResponse> users(HttpServletRequest request) {
         NormalizedClaims claims = adminClaims(request);
-        return ResponseEntity.ok(new MileageUserOptionsResponse(gateway.listUsers(claims.workspaceId())));
+        try {
+            return ResponseEntity.ok(MileageUserOptionsResponse.from(gateway.listUsers(claims.workspaceId())));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return usersUnavailable(claims.workspaceId(), e);
+        } catch (IOException | ClockifyTransportException | ClockifyApiException e) {
+            // A Clockify cold-start timeout surfaces as a ClockifyTransportException (a RuntimeException
+            // wrapping HttpTimeoutException); permission/transport errors are ClockifyApiException/IOException.
+            // Degrade to empty list + warning so the Team/Conversions user filter stays usable rather than
+            // 500-ing. Any OTHER RuntimeException is a real bug and propagates (500) rather than being mislabeled
+            // a transient outage.
+            return usersUnavailable(claims.workspaceId(), e);
+        }
+    }
+
+    private static ResponseEntity<MileageUserOptionsResponse> usersUnavailable(String workspaceId, Exception e) {
+        log.warn("Clockify user lookup failed for workspace {}: {}", workspaceId, e.toString());
+        return ResponseEntity.ok(MileageUserOptionsResponse.unavailable(USERS_UNAVAILABLE));
     }
 
     @GetMapping("/api/mileage/diagnostics")
