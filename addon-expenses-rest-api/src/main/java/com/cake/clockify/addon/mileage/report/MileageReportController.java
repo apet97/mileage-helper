@@ -71,11 +71,14 @@ public class MileageReportController {
         if (fromDate.isAfter(toDate)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "from must be on or before to");
         }
+        // Reimbursement document: only CONVERTED rows represent money actually written to Clockify.
+        // Excluding DRY_RUN/FAILED/CONVERTING/SKIPPED keeps the printed Total honest (those rows
+        // retain a calculatedAmount but were never reimbursed, and the report has no Status column).
         Page<MileageConversion> page = conversionRepository
-                .findAllByWorkspaceIdAndUserIdAndStatusNotAndExpenseDateBetween(
+                .findAllByWorkspaceIdAndUserIdAndStatusAndExpenseDateBetween(
                         claims.workspaceId(),
                         targetUserId,
-                        MileageConversionStatus.DELETED,
+                        MileageConversionStatus.CONVERTED,
                         fromDate,
                         toDate,
                         PageRequest.of(0, MAX_REPORT_ROWS, REPORT_SORT));
@@ -113,7 +116,7 @@ public class MileageReportController {
         }
         try {
             return gateway.listProjects(workspaceId).stream()
-                    .filter(project -> project.id() != null && !project.id().isBlank())
+                    .filter(project -> project.id() != null && !project.id().isBlank() && project.name() != null)
                     .collect(Collectors.toMap(ClockifyProjectOption::id, ClockifyProjectOption::name, (left, right) -> left));
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();

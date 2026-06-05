@@ -102,6 +102,13 @@ body {
   font-weight: 700;
 }
 
+/* The "Total" label uses colspan="2", which shifts the Miles total <td> to nth-child(2)
+   so the body td:nth-child(3..5) right-align rules miss it. Right-align all tfoot numeric
+   cells directly so the grand-total row lines up under the Miles/Amount columns. */
+.report-table tfoot td {
+  text-align: right;
+}
+
 .report-truncated {
   margin: 0 0 16px;
   padding: 8px 12px;

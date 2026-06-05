@@ -646,7 +646,7 @@
       convertOnCreate: element("settings-convert-create").checked,
       convertOnUpdate: element("settings-convert-update").checked,
       allowUserRateOverride: element("settings-rate-override").checked,
-      noteTemplate: formValue("settings-note-template") || null,
+      noteTemplate: formValue("settings-note-template"),
     };
     apiFetch("/api/mileage/settings", {
       method: "PUT",

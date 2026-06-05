@@ -395,7 +395,10 @@ class MileageSecurityTest {
 
         assertThat(javascript).contains("settings-note-template");
         assertThat(javascript).contains("settings.noteTemplate");
-        assertThat(javascript).contains("noteTemplate: formValue(\"settings-note-template\") || null");
+        // Empty textarea must send "" (not null) so the admin can clear a saved template back to default;
+        // the backend normalizeNoteTemplate() converts blank to null and clears the column.
+        assertThat(javascript).contains("noteTemplate: formValue(\"settings-note-template\")");
+        assertThat(javascript).doesNotContain("noteTemplate: formValue(\"settings-note-template\") || null");
     }
 
     @Test

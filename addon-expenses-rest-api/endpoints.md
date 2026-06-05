@@ -38,7 +38,7 @@ CSV exports paginate server-side up to 100000 rows. Responses include `X-Mileage
 
 - `GET /iframe/mileage`
 - `GET /iframe/settings`
-- `GET /iframe/report?userId=&from=YYYY-MM-DD&to=YYYY-MM-DD` - printable per-user mileage reimbursement report (server-rendered HTML; admin may pass `userId`, a non-admin always gets their own). `from`/`to` are required. Uses external `/assets/mileage/report.css` and `/assets/mileage/report.js`; capped at 1000 rows with a visible truncation notice.
+- `GET /iframe/report?userId=&from=YYYY-MM-DD&to=YYYY-MM-DD` - printable per-user mileage reimbursement report (server-rendered HTML; admin may pass `userId`, a non-admin always gets their own). `from`/`to` are required. Includes only `CONVERTED` rows so the printed Total reflects actual reimbursements. Uses external `/assets/mileage/report.css` and `/assets/mileage/report.js`; capped at 1000 rows with a visible truncation notice.
 
 ## Platform Routes
 

@@ -397,7 +397,7 @@ public class MileageConversionController {
         }
         try {
             return gateway.listUsers(workspaceId).stream()
-                    .filter(user -> user.id() != null && !user.id().isBlank())
+                    .filter(user -> user.id() != null && !user.id().isBlank() && user.name() != null)
                     .collect(Collectors.toMap(
                             ClockifyUserOption::id,
                             ClockifyUserOption::name,
@@ -431,7 +431,7 @@ public class MileageConversionController {
         }
         try {
             return gateway.listProjects(workspaceId).stream()
-                    .filter(project -> project.id() != null && !project.id().isBlank())
+                    .filter(project -> project.id() != null && !project.id().isBlank() && project.name() != null)
                     .collect(Collectors.toMap(
                             ClockifyProjectOption::id,
                             ClockifyProjectOption::name,

@@ -51,8 +51,8 @@ class MileageReportControllerTest {
 
     @Test
     void memberGetsOwnReport() throws Exception {
-        when(conversionRepository.findAllByWorkspaceIdAndUserIdAndStatusNotAndExpenseDateBetween(
-                eq("ws-admin"), eq("user-claims"), eq(MileageConversionStatus.DELETED),
+        when(conversionRepository.findAllByWorkspaceIdAndUserIdAndStatusAndExpenseDateBetween(
+                eq("ws-admin"), eq("user-claims"), eq(MileageConversionStatus.CONVERTED),
                 eq(LocalDate.parse("2026-05-01")), eq(LocalDate.parse("2026-05-31")), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(row())));
         when(gateway.listUsers("ws-admin")).thenReturn(List.of(new ClockifyUserOption("user-claims", "Ada Lovelace", "ada@example.test")));
@@ -70,8 +70,8 @@ class MileageReportControllerTest {
 
     @Test
     void adminGetsReportForAnotherUser() throws Exception {
-        when(conversionRepository.findAllByWorkspaceIdAndUserIdAndStatusNotAndExpenseDateBetween(
-                eq("ws-admin"), eq("user-two"), eq(MileageConversionStatus.DELETED),
+        when(conversionRepository.findAllByWorkspaceIdAndUserIdAndStatusAndExpenseDateBetween(
+                eq("ws-admin"), eq("user-two"), eq(MileageConversionStatus.CONVERTED),
                 any(LocalDate.class), any(LocalDate.class), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(row())));
 
@@ -82,15 +82,15 @@ class MileageReportControllerTest {
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("OWNER")))
                 .andExpect(status().isOk());
 
-        verify(conversionRepository).findAllByWorkspaceIdAndUserIdAndStatusNotAndExpenseDateBetween(
-                eq("ws-admin"), eq("user-two"), eq(MileageConversionStatus.DELETED),
+        verify(conversionRepository).findAllByWorkspaceIdAndUserIdAndStatusAndExpenseDateBetween(
+                eq("ws-admin"), eq("user-two"), eq(MileageConversionStatus.CONVERTED),
                 any(LocalDate.class), any(LocalDate.class), any(Pageable.class));
     }
 
     @Test
     void memberCannotReadAnotherUsersReport() throws Exception {
-        when(conversionRepository.findAllByWorkspaceIdAndUserIdAndStatusNotAndExpenseDateBetween(
-                eq("ws-admin"), eq("user-claims"), eq(MileageConversionStatus.DELETED),
+        when(conversionRepository.findAllByWorkspaceIdAndUserIdAndStatusAndExpenseDateBetween(
+                eq("ws-admin"), eq("user-claims"), eq(MileageConversionStatus.CONVERTED),
                 any(LocalDate.class), any(LocalDate.class), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(row())));
 
@@ -102,8 +102,8 @@ class MileageReportControllerTest {
                 .andExpect(status().isOk());
 
         // The foreign userId is ignored; the query is forced to the requester.
-        verify(conversionRepository).findAllByWorkspaceIdAndUserIdAndStatusNotAndExpenseDateBetween(
-                eq("ws-admin"), eq("user-claims"), eq(MileageConversionStatus.DELETED),
+        verify(conversionRepository).findAllByWorkspaceIdAndUserIdAndStatusAndExpenseDateBetween(
+                eq("ws-admin"), eq("user-claims"), eq(MileageConversionStatus.CONVERTED),
                 any(LocalDate.class), any(LocalDate.class), any(Pageable.class));
     }
 
