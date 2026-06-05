@@ -86,12 +86,10 @@ body {
   letter-spacing: 0.04em;
 }
 
-.report-table td:nth-child(3),
-.report-table td:nth-child(4),
-.report-table td:nth-child(5),
-.report-table th:nth-child(3),
-.report-table th:nth-child(4),
-.report-table th:nth-child(5) {
+/* Numeric columns (Miles, Rate, Amount) are tagged class="num" by the renderer so alignment is
+   independent of column position — the optional User column and the colspan="N" Total label shift
+   the numeric cells around, which a nth-child rule cannot track. */
+.report-table .num {
   text-align: right;
 }
 
@@ -102,9 +100,6 @@ body {
   font-weight: 700;
 }
 
-/* The "Total" label uses colspan="2", which shifts the Miles total <td> to nth-child(2)
-   so the body td:nth-child(3..5) right-align rules miss it. Right-align all tfoot numeric
-   cells directly so the grand-total row lines up under the Miles/Amount columns. */
 .report-table tfoot td {
   text-align: right;
 }

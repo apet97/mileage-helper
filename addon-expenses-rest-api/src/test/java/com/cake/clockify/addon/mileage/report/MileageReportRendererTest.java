@@ -1,36 +1,39 @@
 package com.cake.clockify.addon.mileage.report;
 
-import com.cake.clockify.addon.mileage.audit.MileageConversion;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class MileageReportRendererTest {
 
+    private static final LocalDate FROM = LocalDate.parse("2026-05-01");
+    private static final LocalDate TO = LocalDate.parse("2026-05-31");
+
     @Test
-    void rendersHeaderRowsTotalsAndEscapesDynamicText() {
-        MileageConversion row = row("2026-05-24", "p1", "12.5", "0.725", "9.0625");
-
+    void rendersColumnsMileageNativeRowsTotalsAndEscapes() {
         String html = MileageReportRenderer.render(
-                "Ada <Lovelace>",
-                LocalDate.parse("2026-05-01"),
-                LocalDate.parse("2026-05-31"),
-                List.of(row),
-                Map.of("p1", "North <b>Route</b>"),
-                false);
+                "All users", FROM, TO,
+                List.of(
+                        mileage("e1", "2026-05-03", "Ada <Lovelace>", "North <b>Route</b>", "3.5", "7.2531", "25.38585"),
+                        native_("e2", "2026-05-04", "Alan Turing", "", "Meals", "18.00")),
+                true, false, false);
 
-        assertThat(html).contains("Mileage Reimbursement Report");
-        assertThat(html).contains("Ada &lt;Lovelace&gt;");
+        assertThat(html).contains("Expense Report");
         assertThat(html).contains("2026-05-01 to 2026-05-31");
+        // all-users mode includes the User column
+        assertThat(html).contains("<th>User</th>");
+        assertThat(html).contains("Ada &lt;Lovelace&gt;");
         assertThat(html).contains("North &lt;b&gt;Route&lt;/b&gt;");
-        assertThat(html).contains("12.5");
-        assertThat(html).contains("0.725");
-        assertThat(html).contains("9.0625");
+        // mileage row carries miles/rate; native row leaves them blank
+        assertThat(html).contains("<td class=\"num\">3.5</td><td class=\"num\">7.2531</td><td class=\"num\">25.38585</td>");
+        assertThat(html).contains("<td>Meals</td><td class=\"num\"></td><td class=\"num\"></td><td class=\"num\">18</td>");
+        // totals sum the displayed amounts (25.38585 + 18.00) under a 4-column "Total" (Date|User|Project|Category)
+        assertThat(html).contains("<th colspan=\"4\">Total</th><td class=\"num\"></td><td class=\"num\"></td><td class=\"num\">43.38585</td>");
+        // CSP-safe
         assertThat(html).contains("<link rel=\"stylesheet\" href=\"/assets/mileage/report.css\">");
         assertThat(html).contains("src=\"/assets/mileage/report.js\" defer");
         assertThat(html).contains("id=\"btn-print\"");
@@ -39,40 +42,35 @@ class MileageReportRendererTest {
     }
 
     @Test
-    void sumsMilesAndCalculatedAmountInTotalsRow() {
+    void omitsUserColumnInSingleUserMode() {
         String html = MileageReportRenderer.render(
-                "Ada",
-                LocalDate.parse("2026-05-01"),
-                LocalDate.parse("2026-05-31"),
-                List.of(
-                        row("2026-05-10", "p1", "10", "0.725", "7.25"),
-                        row("2026-05-11", "p1", "2.5", "0.725", "1.8125")),
-                Map.of("p1", "Route"),
-                false);
+                "Ada Lovelace", FROM, TO,
+                List.of(mileage("e1", "2026-05-03", "Ada Lovelace", "Route", "1", "7.25", "7.25")),
+                false, false, false);
 
-        assertThat(html).contains("<th colspan=\"2\">Total</th><td>12.5</td><td></td><td>9.0625</td>");
+        assertThat(html).doesNotContain("<th>User</th>");
+        // 3-column "Total" (Date|Project|Category) when no User column
+        assertThat(html).contains("<th colspan=\"3\">Total</th>");
     }
 
     @Test
-    void showsTruncationNoticeWhenCapped() {
+    void showsDegradedBannerAndTruncationNotice() {
         String html = MileageReportRenderer.render(
-                "Ada",
-                LocalDate.parse("2026-05-01"),
-                LocalDate.parse("2026-05-31"),
-                List.of(row("2026-05-10", "p1", "1", "0.725", "0.725")),
-                Map.of("p1", "Route"),
-                true);
+                "All users", FROM, TO,
+                List.of(mileage("e1", "2026-05-03", "Ada", "Route", "1", "7.25", "7.25")),
+                true, true, true);
 
+        assertThat(html).contains("Live expense data is unavailable; showing reconciled mileage rows only.");
         assertThat(html).contains("Showing the first 1 rows");
     }
 
-    private static MileageConversion row(String date, String projectId, String miles, String rate, String calculated) {
-        MileageConversion conversion = new MileageConversion();
-        conversion.setExpenseDate(LocalDate.parse(date));
-        conversion.setProjectId(projectId);
-        conversion.setMiles(new BigDecimal(miles));
-        conversion.setRate(new BigDecimal(rate));
-        conversion.setCalculatedAmount(new BigDecimal(calculated));
-        return conversion;
+    private static ReportRow mileage(String id, String date, String user, String project, String miles, String rate, String amount) {
+        return new ReportRow(id, LocalDate.parse(date), "u", user, project, "Mileage", true,
+                new BigDecimal(miles), new BigDecimal(rate), new BigDecimal(amount));
+    }
+
+    private static ReportRow native_(String id, String date, String user, String project, String category, String amount) {
+        return new ReportRow(id, LocalDate.parse(date), "u", user, project, category, false,
+                null, null, new BigDecimal(amount));
     }
 }

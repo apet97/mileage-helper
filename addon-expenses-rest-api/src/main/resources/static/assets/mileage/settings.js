@@ -865,11 +865,7 @@
     event.preventDefault();
     let userId = null;
     if (config[1]) {
-      userId = formValue(config[1]);
-      if (!userId) {
-        toast("Select a user to generate a report.", "error");
-        return;
-      }
+      userId = formValue(config[1]); // empty selection => all users (reportPath omits userId)
     }
     const path = reportPath(config[0], userId);
     if (path) {

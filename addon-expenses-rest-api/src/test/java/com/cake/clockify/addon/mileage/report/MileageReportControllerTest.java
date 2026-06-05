@@ -7,7 +7,8 @@ import com.cake.clockify.addon.mileage.audit.MileageConversion;
 import com.cake.clockify.addon.mileage.audit.MileageConversionRepository;
 import com.cake.clockify.addon.mileage.audit.MileageConversionStatus;
 import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseGateway;
-import com.cake.clockify.addon.mileage.clockify.ClockifyProjectOption;
+import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseListItem;
+import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseListResult;
 import com.cake.clockify.addon.mileage.clockify.ClockifyUserOption;
 import com.cake.clockify.addon.mileage.security.MileageAuthorizationService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -18,6 +19,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -26,6 +28,7 @@ import java.util.List;
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -50,61 +53,107 @@ class MileageReportControllerTest {
     }
 
     @Test
-    void memberGetsOwnReport() throws Exception {
-        when(conversionRepository.findAllByWorkspaceIdAndUserIdAndStatusAndExpenseDateBetween(
-                eq("ws-admin"), eq("user-claims"), eq(MileageConversionStatus.CONVERTED),
-                eq(LocalDate.parse("2026-05-01")), eq(LocalDate.parse("2026-05-31")), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of(row())));
-        when(gateway.listUsers("ws-admin")).thenReturn(List.of(new ClockifyUserOption("user-claims", "Ada Lovelace", "ada@example.test")));
-        when(gateway.listProjects("ws-admin")).thenReturn(List.of(new ClockifyProjectOption("p1", "North Route")));
+    void adminWithoutUserIdReportsAllUsers() throws Exception {
+        when(conversionRepository.findAllByWorkspaceIdAndStatusAndExpenseDateBetween(
+                eq("ws-admin"), eq(MileageConversionStatus.CONVERTED), any(LocalDate.class), any(LocalDate.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+        when(gateway.listUsers("ws-admin")).thenReturn(List.of(new ClockifyUserOption("user-1", "Ada Lovelace", "a@x.test")));
+        when(gateway.listExpensesForReport(eq("ws-admin"), isNull(), any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(new ClockifyExpenseListResult(List.of(native_("e2", "user-1", "Meals", "18.00")), false));
 
         mockMvc.perform(get("/iframe/report")
-                        .queryParam("from", "2026-05-01")
-                        .queryParam("to", "2026-05-31")
+                        .queryParam("from", "2026-05-01").queryParam("to", "2026-05-31")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("OWNER")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("<th>User</th>")))
+                .andExpect(content().string(containsString("Ada Lovelace")))
+                .andExpect(content().string(containsString("Meals")));
+
+        verify(conversionRepository).findAllByWorkspaceIdAndStatusAndExpenseDateBetween(
+                eq("ws-admin"), eq(MileageConversionStatus.CONVERTED), any(LocalDate.class), any(LocalDate.class), any(Pageable.class));
+        verify(gateway).listExpensesForReport(eq("ws-admin"), isNull(), any(LocalDate.class), any(LocalDate.class));
+    }
+
+    @Test
+    void adminWithUserIdReportsSingleUser() throws Exception {
+        when(conversionRepository.findAllByWorkspaceIdAndUserIdAndStatusAndExpenseDateBetween(
+                eq("ws-admin"), eq("user-two"), eq(MileageConversionStatus.CONVERTED), any(LocalDate.class), any(LocalDate.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+        when(gateway.listUsers("ws-admin")).thenReturn(List.of());
+        when(gateway.listExpensesForReport(eq("ws-admin"), eq("user-two"), any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(new ClockifyExpenseListResult(List.of(), false));
+
+        mockMvc.perform(get("/iframe/report")
+                        .queryParam("userId", "user-two")
+                        .queryParam("from", "2026-05-01").queryParam("to", "2026-05-31")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("OWNER")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Expense Report")));
+
+        verify(gateway).listExpensesForReport(eq("ws-admin"), eq("user-two"), any(LocalDate.class), any(LocalDate.class));
+        verify(conversionRepository).findAllByWorkspaceIdAndUserIdAndStatusAndExpenseDateBetween(
+                eq("ws-admin"), eq("user-two"), eq(MileageConversionStatus.CONVERTED), any(LocalDate.class), any(LocalDate.class), any(Pageable.class));
+    }
+
+    @Test
+    void memberReportsOwnEvenWithForeignUserId() throws Exception {
+        when(conversionRepository.findAllByWorkspaceIdAndUserIdAndStatusAndExpenseDateBetween(
+                eq("ws-admin"), eq("user-claims"), eq(MileageConversionStatus.CONVERTED), any(LocalDate.class), any(LocalDate.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of()));
+        when(gateway.listUsers("ws-admin")).thenReturn(List.of());
+        when(gateway.listExpensesForReport(eq("ws-admin"), eq("user-claims"), any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(new ClockifyExpenseListResult(List.of(), false));
+
+        mockMvc.perform(get("/iframe/report")
+                        .queryParam("userId", "user-two")
+                        .queryParam("from", "2026-05-01").queryParam("to", "2026-05-31")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("MEMBER")))
+                .andExpect(status().isOk());
+
+        // foreign userId ignored: query + gateway forced to the requester
+        verify(gateway).listExpensesForReport(eq("ws-admin"), eq("user-claims"), any(LocalDate.class), any(LocalDate.class));
+        verify(conversionRepository).findAllByWorkspaceIdAndUserIdAndStatusAndExpenseDateBetween(
+                eq("ws-admin"), eq("user-claims"), eq(MileageConversionStatus.CONVERTED), any(LocalDate.class), any(LocalDate.class), any(Pageable.class));
+    }
+
+    @Test
+    void mileageExpenseShowsReconciledValuesAndNativeShowsNative() throws Exception {
+        when(conversionRepository.findAllByWorkspaceIdAndUserIdAndStatusAndExpenseDateBetween(
+                eq("ws-admin"), eq("user-claims"), eq(MileageConversionStatus.CONVERTED), any(LocalDate.class), any(LocalDate.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(conversion("e1", "user-claims", "3.5", "7.2531", "25.38585"))));
+        when(gateway.listUsers("ws-admin")).thenReturn(List.of(new ClockifyUserOption("user-claims", "Ada", "a@x.test")));
+        when(gateway.listExpensesForReport(eq("ws-admin"), eq("user-claims"), any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(new ClockifyExpenseListResult(List.of(
+                        new ClockifyExpenseListItem("e1", "user-claims", LocalDate.parse("2026-05-03"), "North Route", "cat-mileage", "Mileage", new BigDecimal("7.25")),
+                        native_("e2", "user-claims", "Meals", "18.00")), false));
+
+        mockMvc.perform(get("/iframe/report")
+                        .queryParam("userId", "user-claims")
+                        .queryParam("from", "2026-05-01").queryParam("to", "2026-05-31")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("OWNER")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("25.38585")))  // our reconciled amount, not native 7.25
+                .andExpect(content().string(containsString("7.2531")))    // our rate
+                .andExpect(content().string(containsString("Meals")))     // native category
+                .andExpect(content().string(containsString(">18</td>"))); // native amount
+    }
+
+    @Test
+    void degradesToMileageOnlyWhenExpenseListingFails() throws Exception {
+        when(conversionRepository.findAllByWorkspaceIdAndUserIdAndStatusAndExpenseDateBetween(
+                eq("ws-admin"), eq("user-claims"), eq(MileageConversionStatus.CONVERTED), any(LocalDate.class), any(LocalDate.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(conversion("e1", "user-claims", "2", "7.25", "14.5"))));
+        when(gateway.listUsers("ws-admin")).thenReturn(List.of(new ClockifyUserOption("user-claims", "Ada", "a@x.test")));
+        when(gateway.listExpensesForReport(eq("ws-admin"), eq("user-claims"), any(LocalDate.class), any(LocalDate.class)))
+                .thenThrow(new IOException("clockify unavailable"));
+
+        mockMvc.perform(get("/iframe/report")
+                        .queryParam("userId", "user-claims")
+                        .queryParam("from", "2026-05-01").queryParam("to", "2026-05-31")
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("MEMBER")))
                 .andExpect(status().isOk())
-                .andExpect(content().contentTypeCompatibleWith("text/html"))
-                .andExpect(content().string(containsString("Ada Lovelace")))
-                .andExpect(content().string(containsString("North Route")));
-    }
-
-    @Test
-    void adminGetsReportForAnotherUser() throws Exception {
-        when(conversionRepository.findAllByWorkspaceIdAndUserIdAndStatusAndExpenseDateBetween(
-                eq("ws-admin"), eq("user-two"), eq(MileageConversionStatus.CONVERTED),
-                any(LocalDate.class), any(LocalDate.class), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of(row())));
-
-        mockMvc.perform(get("/iframe/report")
-                        .queryParam("userId", "user-two")
-                        .queryParam("from", "2026-05-01")
-                        .queryParam("to", "2026-05-31")
-                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("OWNER")))
-                .andExpect(status().isOk());
-
-        verify(conversionRepository).findAllByWorkspaceIdAndUserIdAndStatusAndExpenseDateBetween(
-                eq("ws-admin"), eq("user-two"), eq(MileageConversionStatus.CONVERTED),
-                any(LocalDate.class), any(LocalDate.class), any(Pageable.class));
-    }
-
-    @Test
-    void memberCannotReadAnotherUsersReport() throws Exception {
-        when(conversionRepository.findAllByWorkspaceIdAndUserIdAndStatusAndExpenseDateBetween(
-                eq("ws-admin"), eq("user-claims"), eq(MileageConversionStatus.CONVERTED),
-                any(LocalDate.class), any(LocalDate.class), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of(row())));
-
-        mockMvc.perform(get("/iframe/report")
-                        .queryParam("userId", "user-two")
-                        .queryParam("from", "2026-05-01")
-                        .queryParam("to", "2026-05-31")
-                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("MEMBER")))
-                .andExpect(status().isOk());
-
-        // The foreign userId is ignored; the query is forced to the requester.
-        verify(conversionRepository).findAllByWorkspaceIdAndUserIdAndStatusAndExpenseDateBetween(
-                eq("ws-admin"), eq("user-claims"), eq(MileageConversionStatus.CONVERTED),
-                any(LocalDate.class), any(LocalDate.class), any(Pageable.class));
+                .andExpect(content().string(containsString("Live expense data is unavailable")))
+                .andExpect(content().string(containsString("14.5")));
     }
 
     @Test
@@ -114,14 +163,18 @@ class MileageReportControllerTest {
                 .andExpect(status().isBadRequest());
     }
 
-    private static MileageConversion row() {
+    private static ClockifyExpenseListItem native_(String id, String userId, String category, String amount) {
+        return new ClockifyExpenseListItem(id, userId, LocalDate.parse("2026-05-04"), "", "cat-" + id, category, new BigDecimal(amount));
+    }
+
+    private static MileageConversion conversion(String expenseId, String userId, String miles, String rate, String calc) {
         MileageConversion conversion = new MileageConversion();
-        conversion.setExpenseDate(LocalDate.parse("2026-05-24"));
-        conversion.setProjectId("p1");
-        conversion.setUserId("user-claims");
-        conversion.setMiles(new BigDecimal("12.5"));
-        conversion.setRate(new BigDecimal("0.725"));
-        conversion.setCalculatedAmount(new BigDecimal("9.0625"));
+        conversion.setExpenseId(expenseId);
+        conversion.setUserId(userId);
+        conversion.setMiles(new BigDecimal(miles));
+        conversion.setRate(new BigDecimal(rate));
+        conversion.setCalculatedAmount(new BigDecimal(calc));
+        conversion.setExpenseDate(LocalDate.parse("2026-05-03"));
         return conversion;
     }
 

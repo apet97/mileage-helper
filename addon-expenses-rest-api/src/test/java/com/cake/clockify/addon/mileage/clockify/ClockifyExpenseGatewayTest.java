@@ -25,6 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -324,6 +325,63 @@ class ClockifyExpenseGatewayTest {
         gateway.createFlatExpense("ws-gateway", command());
 
         verify(clientFactory).getClient("ws-gateway");
+    }
+
+    @Test
+    void listExpensesForReportMapsNestedNamesCentsAndFiltersByDate() throws Exception {
+        when(expensesClient.getExpenses(eq("ws-gateway"), isNull(), any(ClockifyPageRequest.class)))
+                .thenReturn(expensePage(
+                        expenseRow("exp-1", "user-1", "2026-05-24T12:00:00Z", 725.0, "cat-mileage", "Mileage", "North Route"),
+                        expenseRow("exp-old", "user-1", "2020-01-01T00:00:00Z", 1800.0, "cat-meals", "Meals", null),
+                        expenseRow("exp-2", "user-2", "2026-05-25T08:00:00Z", 1800.0, "cat-meals", "Meals", null)));
+
+        ClockifyExpenseListResult result = gateway.listExpensesForReport(
+                "ws-gateway", null, LocalDate.parse("2026-05-01"), LocalDate.parse("2026-05-31"));
+
+        assertThat(result.truncated()).isFalse();
+        assertThat(result.items()).extracting(ClockifyExpenseListItem::expenseId).containsExactly("exp-1", "exp-2");
+        ClockifyExpenseListItem mileage = result.items().get(0);
+        assertThat(mileage.amount()).isEqualByComparingTo("7.25"); // 725 cents -> major units
+        assertThat(mileage.categoryName()).isEqualTo("Mileage");
+        assertThat(mileage.projectName()).isEqualTo("North Route");
+        assertThat(mileage.date()).isEqualTo(LocalDate.parse("2026-05-24"));
+        assertThat(result.items().get(1).amount()).isEqualByComparingTo("18.00");
+        assertThat(result.items().get(1).projectName()).isNull();
+    }
+
+    @Test
+    void listExpensesForReportPassesTrimmedUserIdWhenPresent() throws Exception {
+        when(expensesClient.getExpenses(eq("ws-gateway"), eq("user-2"), any(ClockifyPageRequest.class)))
+                .thenReturn(expensePage());
+
+        gateway.listExpensesForReport("ws-gateway", "  user-2 ", LocalDate.parse("2026-05-01"), LocalDate.parse("2026-05-31"));
+
+        verify(expensesClient).getExpenses(eq("ws-gateway"), eq("user-2"), any(ClockifyPageRequest.class));
+    }
+
+    private ObjectNode expensePage(ObjectNode... rows) {
+        ObjectNode root = objectMapper.createObjectNode();
+        ObjectNode expenses = root.putObject("expenses");
+        var array = expenses.putArray("expenses");
+        for (ObjectNode row : rows) {
+            array.add(row);
+        }
+        expenses.put("count", rows.length);
+        return root;
+    }
+
+    private ObjectNode expenseRow(String id, String userId, String date, double totalCents,
+                                  String categoryId, String categoryName, String projectName) {
+        ObjectNode row = objectMapper.createObjectNode();
+        row.put("id", id);
+        row.put("userId", userId);
+        row.put("date", date);
+        row.put("total", totalCents);
+        row.putObject("category").put("id", categoryId).put("name", categoryName);
+        if (projectName != null) {
+            row.putObject("project").put("id", "p-" + id).put("name", projectName);
+        }
+        return row;
     }
 
     private static CreateFlatExpenseCommand command() {

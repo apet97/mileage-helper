@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -24,6 +25,10 @@ public class ClockifyExpenseGateway {
     private static final int PROJECT_PAGE_SIZE = 200;
     private static final int USER_PAGE_SIZE = 200;
     private static final int MAX_OPTION_PAGES = 100;
+    private static final int EXPENSE_PAGE_SIZE = 200;
+    /** The expense list endpoint has no working server-side date filter, so we page and filter client-side.
+        Bound the scan: 25 * 200 = 5000 expenses examined before signalling truncation (vs. throwing). */
+    private static final int EXPENSE_MAX_PAGES = 25;
     private static final String MILEAGE_CATEGORY_NAME = "Mileage";
     private static final String MILEAGE_UNIT = "mile";
 
@@ -157,6 +162,48 @@ public class ClockifyExpenseGateway {
         });
     }
 
+    /**
+     * Lists all workspace expenses (every category) in the inclusive {@code [from, to]} window, optionally
+     * filtered to one user. Clockify exposes no working date filter on the list endpoint, so we page and
+     * filter client-side. Category/project names come inline from the list response; {@code total} (cents)
+     * is converted to a major-unit {@code amount}. Stops at a short page or, defensively, the page budget
+     * (then {@link ClockifyExpenseListResult#truncated()} is true).
+     */
+    public ClockifyExpenseListResult listExpensesForReport(
+            String workspaceId, String userId, LocalDate from, LocalDate to)
+            throws IOException, InterruptedException {
+        ClockifyClient clockify = client(workspaceId);
+        String filterUser = blankToNull(userId);
+        List<ClockifyExpenseListItem> out = new ArrayList<>();
+        int page = 1;
+        while (page <= EXPENSE_MAX_PAGES) {
+            ArrayNode rows = expenseRows(
+                    clockify.expenses().getExpenses(workspaceId, filterUser, new ClockifyPageRequest(page, EXPENSE_PAGE_SIZE)));
+            int seen = sizeOf(rows);
+            if (rows != null) {
+                for (JsonNode item : rows) {
+                    LocalDate date = parseExpenseDate(text(item, "date"));
+                    if (date == null || date.isBefore(from) || date.isAfter(to)) {
+                        continue;
+                    }
+                    out.add(new ClockifyExpenseListItem(
+                            text(item, "id"),
+                            text(item, "userId"),
+                            date,
+                            nestedText(item, "project", "name"),
+                            nestedText(item, "category", "id"),
+                            nestedText(item, "category", "name"),
+                            centsToMajor(decimal(item.get("total")))));
+                }
+            }
+            if (seen < EXPENSE_PAGE_SIZE) {
+                return new ClockifyExpenseListResult(out, false);
+            }
+            page++;
+        }
+        return new ClockifyExpenseListResult(out, true);
+    }
+
     private ClockifyClient client(String workspaceId) {
         return clientFactory.getClient(workspaceId);
     }
@@ -238,6 +285,46 @@ public class ClockifyExpenseGateway {
         }
         JsonNode node = root.isArray() ? root : root.path(field);
         return node instanceof ArrayNode array ? array : null;
+    }
+
+    /** Clockify's expense list shape is {@code { "expenses": { "expenses": [...], "count": N }, ... }};
+        fall back to {@code { "expenses": [...] }} or a bare array for resilience to shape drift. */
+    private static ArrayNode expenseRows(JsonNode root) {
+        if (root == null) {
+            return null;
+        }
+        JsonNode nested = root.path("expenses").path("expenses");
+        if (nested instanceof ArrayNode array) {
+            return array;
+        }
+        return arrayNode(root, "expenses");
+    }
+
+    private static String nestedText(JsonNode item, String objectField, String key) {
+        if (item == null) {
+            return null;
+        }
+        JsonNode object = item.get(objectField);
+        return object == null || object.isNull() ? null : text(object, key);
+    }
+
+    private static LocalDate parseExpenseDate(String value) {
+        if (value == null || value.length() < 10) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(value.substring(0, 10));
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    private static BigDecimal centsToMajor(BigDecimal cents) {
+        return cents == null ? BigDecimal.ZERO : cents.movePointLeft(2).setScale(2, RoundingMode.HALF_UP);
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     private static int sizeOf(ArrayNode array) {

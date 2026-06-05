@@ -1,13 +1,15 @@
 package com.cake.clockify.addon.mileage.report;
 
-import com.cake.clockify.addon.mileage.audit.MileageConversion;
-
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Map;
 
-/** Pure HTML builder for the printable per-user mileage report. No Spring, no inline style/script (CSP-safe). */
+/**
+ * Pure HTML builder for the printable expense report. No Spring, no inline style/script (CSP-safe:
+ * external /assets/mileage/report.css + report.js only). Columns: Date | [User] | Project | Category |
+ * Miles | Rate | Amount. Mileage rows fill Miles/Rate; non-mileage rows leave them blank. The User
+ * column is only emitted in all-users mode ({@code includeUser}).
+ */
 public final class MileageReportRenderer {
 
     private MileageReportRenderer() {
@@ -17,41 +19,64 @@ public final class MileageReportRenderer {
             String userLabel,
             LocalDate from,
             LocalDate to,
-            List<MileageConversion> rows,
-            Map<String, String> projectNames,
-            boolean truncated) {
-        StringBuilder body = new StringBuilder();
-        BigDecimal totalMiles = BigDecimal.ZERO;
+            List<ReportRow> rows,
+            boolean includeUser,
+            boolean truncated,
+            boolean degraded) {
+        int leadColumns = includeUser ? 4 : 3;
         BigDecimal totalAmount = BigDecimal.ZERO;
-        for (MileageConversion row : rows) {
-            totalMiles = totalMiles.add(orZero(row.getMiles()));
-            totalAmount = totalAmount.add(orZero(row.getCalculatedAmount()));
+
+        StringBuilder head = new StringBuilder("<tr><th>Date</th>");
+        if (includeUser) {
+            head.append("<th>User</th>");
+        }
+        head.append("<th>Project</th><th>Category</th>")
+                .append("<th class=\"num\">Miles</th><th class=\"num\">Rate</th><th class=\"num\">Amount</th></tr>");
+
+        StringBuilder body = new StringBuilder();
+        for (ReportRow row : rows) {
+            totalAmount = totalAmount.add(orZero(row.amount()));
             body.append("<tr>")
-                    .append("<td>").append(escape(text(row.getExpenseDate()))).append("</td>")
-                    .append("<td>").append(escape(projectName(row.getProjectId(), projectNames))).append("</td>")
-                    .append("<td>").append(escape(decimal(row.getMiles()))).append("</td>")
-                    .append("<td>").append(escape(decimal(row.getRate()))).append("</td>")
-                    .append("<td>").append(escape(decimal(row.getCalculatedAmount()))).append("</td>")
+                    .append("<td>").append(escape(text(row.date()))).append("</td>");
+            if (includeUser) {
+                body.append("<td>").append(escape(row.userName())).append("</td>");
+            }
+            body.append("<td>").append(escape(row.projectName())).append("</td>")
+                    .append("<td>").append(escape(row.categoryName())).append("</td>")
+                    .append("<td class=\"num\">").append(row.mileage() ? escape(decimal(row.miles())) : "").append("</td>")
+                    .append("<td class=\"num\">").append(row.mileage() ? escape(decimal(row.rate())) : "").append("</td>")
+                    .append("<td class=\"num\">").append(escape(decimal(row.amount()))).append("</td>")
                     .append("</tr>\n");
         }
-        String truncatedNotice = truncated
-                ? "<p class=\"report-truncated\">Showing the first " + rows.size()
-                        + " rows. Totals reflect only the rows shown.</p>"
-                : "";
+
+        StringBuilder notices = new StringBuilder();
+        if (degraded) {
+            notices.append("<p class=\"report-truncated\">Live expense data is unavailable; "
+                    + "showing reconciled mileage rows only.</p>");
+        }
+        if (truncated) {
+            notices.append("<p class=\"report-truncated\">Showing the first ").append(rows.size())
+                    .append(" rows. Totals reflect only the rows shown.</p>");
+        }
+
+        String foot = "<tr><th colspan=\"" + leadColumns + "\">Total</th>"
+                + "<td class=\"num\"></td><td class=\"num\"></td>"
+                + "<td class=\"num\">" + escape(decimal(totalAmount)) + "</td></tr>";
+
         return """
                 <!DOCTYPE html>
                 <html lang="en">
                 <head>
                   <meta charset="UTF-8">
                   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                  <title>Mileage Reimbursement Report</title>
+                  <title>Expense Report</title>
                   <link rel="stylesheet" href="/assets/mileage/report.css">
                   <script src="/assets/mileage/report.js" defer></script>
                 </head>
                 <body>
                   <header class="report-header">
                     <div>
-                      <h1>Mileage Reimbursement Report</h1>
+                      <h1>Expense Report</h1>
                       <dl class="report-meta">
                         <div><dt>User</dt><dd>%s</dd></div>
                         <div><dt>Period</dt><dd>%s to %s</dd></div>
@@ -61,10 +86,10 @@ public final class MileageReportRenderer {
                   </header>
                   %s
                   <table class="report-table">
-                    <thead><tr><th>Date</th><th>Project</th><th>Miles</th><th>Rate</th><th>Amount</th></tr></thead>
+                    <thead>%s</thead>
                     <tbody>
                 %s</tbody>
-                    <tfoot><tr><th colspan="2">Total</th><td>%s</td><td></td><td>%s</td></tr></tfoot>
+                    <tfoot>%s</tfoot>
                   </table>
                 </body>
                 </html>
@@ -72,18 +97,10 @@ public final class MileageReportRenderer {
                 escape(userLabel),
                 escape(text(from)),
                 escape(text(to)),
-                truncatedNotice,
+                notices,
+                head,
                 body,
-                escape(decimal(totalMiles)),
-                escape(decimal(totalAmount)));
-    }
-
-    private static String projectName(String projectId, Map<String, String> projectNames) {
-        if (projectId == null || projectId.isBlank()) {
-            return "";
-        }
-        String name = projectNames.get(projectId);
-        return name == null || name.isBlank() ? "" : name;
+                foot);
     }
 
     private static BigDecimal orZero(BigDecimal value) {
