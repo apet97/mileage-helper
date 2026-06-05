@@ -398,6 +398,16 @@ class MileageSecurityTest {
         assertThat(javascript).contains("noteTemplate: formValue(\"settings-note-template\") || null");
     }
 
+    @Test
+    void reportJavascriptStripsAuthTokenAndWiresPrint() throws Exception {
+        String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/report.js"));
+
+        assertThat(javascript).contains("auth_token");
+        assertThat(javascript).contains("history.replaceState");
+        assertThat(javascript).contains("window.print()");
+        assertThat(javascript).contains("btn-print");
+    }
+
     private static MockHttpServletRequest requestWithRole(String role) {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setAttribute(com.cake.clockify.addon.core.auth.RequestAttributes.NORMALIZED_CLAIMS, claims(role));
