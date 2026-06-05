@@ -22,7 +22,7 @@ Users log mileage from a Clockify sidebar UI and have it created as a proper exp
 - **Loop-safe** — the add-on's own write fires another webhook, which the conversion guard correctly skips.
 - **Observable** — Prometheus counters/gauges for conversion outcomes, queue depth, and worker latency at `/actuator/prometheus` (low-cardinality tags only — no PII).
 - **Secure by default** — installation tokens stay server-side, CSP/HSTS/Permissions-Policy headers, OWASP dependency-check gate (fail on CVSS ≥ 7.0), and workspace isolation on every query.
-- **Printable reimbursement report** — `GET /iframe/report` renders a per-user, print-to-PDF mileage report (no PDF library); admins can filter Team/Conversions by user and open a report for anyone, while members always get their own.
+- **Printable expense report** — `GET /iframe/report` renders a print-to-PDF report of **all** Clockify expenses (no PDF library); mileage expenses show the add-on's reconciled miles/rate/amount, everything else shows native Clockify values. Admins get all users by default (or filter to one); members get their own. Falls back to reconciled-mileage-only with a banner if Clockify is unreachable.
 - **Sensible defaults** — fresh workspaces start at a `0.725` per-mile rate, and the converted-note template is admin-editable in Settings (a hidden loop-safe marker is always appended).
 
 ## How conversion works
