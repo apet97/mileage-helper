@@ -39,10 +39,18 @@ public class MileageNoteService {
                 unitLabel(calculation, unit),
                 marker(conversionId),
                 categoryChargeToken(calculation, categoryCharge));
+        generated = ensureLoopMarker(generated, conversionId);
         if (originalNote == null || originalNote.isBlank()) {
             return generated;
         }
         return originalNote.strip() + "\n\n" + generated;
+    }
+
+    private String ensureLoopMarker(String note, UUID conversionId) {
+        if (note.contains(MARKER_PREFIX) || note.contains(CONVERTED_SIGNATURE)) {
+            return note;
+        }
+        return note + " " + marker(conversionId);
     }
 
     private boolean isAlreadyConverted(String notes) {
