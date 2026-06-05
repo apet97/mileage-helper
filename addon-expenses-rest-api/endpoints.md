@@ -13,7 +13,7 @@ All API routes are scoped by the verified Clockify add-on JWT claims. There are 
 ## Admin Routes
 
 - `GET /api/mileage/settings`
-- `PUT /api/mileage/settings`
+- `PUT /api/mileage/settings` - body includes the admin-editable `noteTemplate` (converted-note template, capped at 500 chars; over-length returns 400). A fresh workspace with no saved row reports the default rate `0.725`.
 - `POST /api/mileage/settings/mileage-category`
 - `GET /api/mileage/options/categories`
 - `GET /api/mileage/options/projects`

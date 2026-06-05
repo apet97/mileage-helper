@@ -197,7 +197,7 @@ public class MileageIframeController {
                           <fieldset class="wide settings-group">
                             <legend>Expense note</legend>
                             <label class="wide"><span>Note template</span><textarea id="settings-note-template" name="noteTemplate" rows="3" placeholder="Mileage reimbursement: {{miles}} {{unit}} x {{rate}} = {{calculatedAmount}}{{categoryCharge}}. Created/converted by Mileage for Clockify."></textarea></label>
-                            <p class="hint">Tokens: {{miles}} {{unit}} {{rate}} {{calculatedAmount}} {{amount}} {{categoryCharge}}. Leave blank for the default note. A hidden marker is always appended to keep conversions loop-safe.</p>
+                            <p class="hint">Tokens: {{miles}} {{unit}} {{rate}} {{calculatedAmount}} {{amount}} {{categoryCharge}}. Leave blank for the default note. A hidden loop-safety marker is added automatically unless your template already includes the standard signature line, so conversions never re-convert.</p>
                           </fieldset>
                           <div class="actions wide"><button type="submit">Save Settings</button></div>
                         </form>
