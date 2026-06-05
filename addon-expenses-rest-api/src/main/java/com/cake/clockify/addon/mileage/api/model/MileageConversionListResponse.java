@@ -13,7 +13,16 @@ public record MileageConversionListResponse(
         int totalPages
 ) {
     public static MileageConversionListResponse from(Page<com.cake.clockify.addon.mileage.audit.MileageConversion> page) {
-        return from(page, Map.of());
+        // "/mine" own rows: the user is the requester and the Mine table has no User column, so leave
+        // userName null rather than echoing the raw userId.
+        return new MileageConversionListResponse(
+                page.getContent().stream()
+                        .map(conversion -> MileageConversionDetailResponse.from(conversion, null, false))
+                        .toList(),
+                page.getNumber(),
+                page.getSize(),
+                page.getTotalElements(),
+                page.getTotalPages());
     }
 
     public static MileageConversionListResponse from(

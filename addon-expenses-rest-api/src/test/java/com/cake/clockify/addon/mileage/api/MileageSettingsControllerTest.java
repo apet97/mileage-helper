@@ -17,6 +17,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
@@ -85,6 +86,40 @@ class MileageSettingsControllerTest {
                 .andExpect(jsonPath("$.rate").value("0.655"));
 
         verify(settingsService).saveSettings(eq("ws-admin"), any(), eq("user-claims"));
+    }
+
+    @Test
+    void savingSettingsSyncsClockifyMileageCategoryPriceToRate() throws Exception {
+        when(settingsService.getEffectiveSettings("ws-admin")).thenReturn(settingsResponse(List.of()));
+
+        mockMvc.perform(put("/api/mileage/settings")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("OWNER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"rate":"0.655","mileageCategoryId":"cat-mileage"}
+                                """))
+                .andExpect(status().isOk());
+
+        // The Clockify Mileage category's unit price must be kept in step with the saved rate so a unit
+        // category (total = miles × priceInCents) charges the intended amount.
+        verify(gateway).createOrRepairMileageCategory("ws-admin", new BigDecimal("0.655"));
+    }
+
+    @Test
+    void savingSettingsStillSucceedsWhenCategoryPriceSyncFails() throws Exception {
+        when(settingsService.getEffectiveSettings("ws-admin")).thenReturn(settingsResponse(List.of()));
+        when(gateway.createOrRepairMileageCategory("ws-admin", new BigDecimal("0.655")))
+                .thenThrow(new IOException("clockify unavailable"));
+
+        // A Clockify outage during the best-effort price sync must not fail the settings save.
+        mockMvc.perform(put("/api/mileage/settings")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("OWNER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"rate":"0.655","mileageCategoryId":"cat-mileage"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rate").value("0.655"));
     }
 
     @Test
@@ -167,6 +202,19 @@ class MileageSettingsControllerTest {
         mockMvc.perform(get("/api/mileage/options/users")
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("MEMBER")))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void userOptionsDegradeGracefullyWhenClockifyTimesOut() throws Exception {
+        // A Clockify cold-start timeout surfaces as an IOException; the user filter must degrade to an empty
+        // list + warning (HTTP 200) instead of 500-ing the Team/Conversions panels.
+        when(gateway.listUsers("ws-admin")).thenThrow(new IOException("request timed out"));
+
+        mockMvc.perform(get("/api/mileage/options/users")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("OWNER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.users").isEmpty())
+                .andExpect(jsonPath("$.warning").value(org.hamcrest.Matchers.containsString("temporarily unavailable")));
     }
 
     @Test

@@ -241,6 +241,44 @@ class MileageApiControllerTest {
     }
 
     @Test
+    void createAnnotatesNoteWithClockifyCategoryChargeWhenItDiffersFromRoundedAmount() throws Exception {
+        when(settingsService.validateForAddonCreate("ws-api")).thenReturn(settings(false));
+        // Clockify charges miles × the category's integer-cent unit price; here that lands at $89.90 while the
+        // add-on rate amount is $24.50, so the reconciled note must document the real category charge.
+        when(gateway.createFlatExpense(eq("ws-api"), any(CreateFlatExpenseCommand.class)))
+                .thenReturn(createdExpense("exp-1", 8990));
+
+        mockMvc.perform(post("/api/mileage/expenses")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createBody("37.4", null)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.expenseId").value("exp-1"))
+                .andExpect(jsonPath("$.roundedAmount").value("24.50"));
+
+        ArgumentCaptor<UpdateFlatExpenseCommand> update = ArgumentCaptor.forClass(UpdateFlatExpenseCommand.class);
+        verify(gateway).updateFlatExpense(eq("ws-api"), eq("exp-1"), update.capture());
+        assertThat(update.getValue().notes()).contains("(Clockify category charge: 89.90)");
+    }
+
+    @Test
+    void createDoesNotReissueUpdateWhenClockifyChargeMatchesRoundedAmount() throws Exception {
+        when(settingsService.validateForAddonCreate("ws-api")).thenReturn(settings(false));
+        // Clockify total (2450 cents = $24.50) matches the add-on rate amount, so no reconciling note is needed
+        // and no extra updateFlatExpense round-trip should fire.
+        when(gateway.createFlatExpense(eq("ws-api"), any(CreateFlatExpenseCommand.class)))
+                .thenReturn(createdExpense("exp-1", 2450));
+
+        mockMvc.perform(post("/api/mileage/expenses")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createBody("37.4", null)))
+                .andExpect(status().isOk());
+
+        verify(gateway, never()).updateFlatExpense(any(), any(), any());
+    }
+
+    @Test
     void createMileageExpenseIgnoresTamperedUserIdAndUsesVerifiedClaimsUser() throws Exception {
         when(settingsService.validateForAddonCreate("ws-api")).thenReturn(settings(false));
         when(gateway.createFlatExpense(eq("ws-api"), any(CreateFlatExpenseCommand.class))).thenReturn(createdExpense("exp-1"));
@@ -559,6 +597,10 @@ class MileageApiControllerTest {
     private static ObjectNode createdExpense(String id) {
         ObjectMapper mapper = new ObjectMapper();
         return mapper.createObjectNode().put("id", id);
+    }
+
+    private static ObjectNode createdExpense(String id, long totalCents) {
+        return createdExpense(id).put("total", totalCents);
     }
 
     private static MileageSettingsValidation settings(boolean allowOverride) {

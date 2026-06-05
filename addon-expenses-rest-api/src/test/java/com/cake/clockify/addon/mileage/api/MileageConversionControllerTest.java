@@ -117,6 +117,37 @@ class MileageConversionControllerTest {
     }
 
     @Test
+    void mineRowsDoNotEchoRawUserIdAsUserName() throws Exception {
+        // The Mine view is the requester's own rows (no User column), so userName must stay blank rather than
+        // echo the raw userId; the admin id-fallback is intentionally kept for Team/Conversions below.
+        when(conversionRepository.findAllByWorkspaceIdAndUserIdAndStatusNotAndExpenseDateBetween(
+                eq("ws-admin"), eq("user-claims"), eq(MileageConversionStatus.DELETED), any(LocalDate.class), any(LocalDate.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(conversion("ws-admin"))));
+
+        mockMvc.perform(get("/api/mileage/mine")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("MEMBER")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.conversions[0].expenseId").value("exp-1"))
+                .andExpect(jsonPath("$.conversions[0].userName").doesNotExist());
+
+        verify(gateway, never()).listUsers(any());
+    }
+
+    @Test
+    void teamRowsFallBackToUserIdWhenNameLookupDoesNotResolve() throws Exception {
+        // Admin Team/Conversions keep the raw-id fallback so an unresolved user still stays identifiable.
+        when(conversionRepository.findAllByWorkspaceIdAndStatusNotAndExpenseDateBetween(
+                eq("ws-admin"), eq(MileageConversionStatus.DELETED), any(LocalDate.class), any(LocalDate.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(conversion("ws-admin"))));
+        when(gateway.listUsers("ws-admin")).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/mileage/team")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.conversions[0].userName").value("user-claims"));
+    }
+
+    @Test
     void explicitMineDateRangeFiltersByExpenseDateAndSortsByExpenseDateThenUpdatedAt() throws Exception {
         when(conversionRepository.findAllByWorkspaceIdAndUserIdAndStatusNotAndExpenseDateBetween(
                 eq("ws-admin"), eq("user-claims"), eq(MileageConversionStatus.DELETED), eq(LocalDate.parse("2026-05-01")), eq(LocalDate.parse("2026-05-31")), any(Pageable.class)))

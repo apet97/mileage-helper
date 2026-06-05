@@ -42,6 +42,18 @@ class MileageReportRendererTest {
     }
 
     @Test
+    void declaresFaviconLinkToStopAutoFaviconRequest() {
+        String html = MileageReportRenderer.render(
+                "All users", FROM, TO,
+                List.of(mileage("e1", "2026-05-03", "Ada", "Route", "1", "7.25", "7.25")),
+                true, false, false, false);
+
+        assertThat(html).contains("<link rel=\"icon\" type=\"image/png\" href=\"/assets/mileage/icon.png\">");
+        // still CSP-safe
+        assertThat(html).doesNotContain("<style");
+    }
+
+    @Test
     void omitsUserColumnInSingleUserMode() {
         String html = MileageReportRenderer.render(
                 "Ada Lovelace", FROM, TO,

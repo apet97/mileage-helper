@@ -43,6 +43,19 @@ class MileageOptionsControllerTest {
                 .andExpect(jsonPath("$.projects[0].name").value("Client Visit"));
     }
 
+    @Test
+    void projectOptionsDegradeGracefullyWhenClockifyTimesOut() throws Exception {
+        // A Clockify cold-start timeout surfaces as an IOException; the panel must degrade to an empty list +
+        // warning (HTTP 200) instead of 500-ing the whole create form.
+        when(gateway.listProjects("ws-user")).thenThrow(new java.io.IOException("request timed out"));
+
+        mockMvc.perform(get("/api/mileage/options/projects")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.projects").isEmpty())
+                .andExpect(jsonPath("$.warning").value(org.hamcrest.Matchers.containsString("temporarily unavailable")));
+    }
+
     private static NormalizedClaims claims() {
         return new NormalizedClaims("ws-user", "mileage-for-clockify", "https://backend.example.test",
                 "https://reports.example.test", null, null, "user-claims", "MEMBER", "en", "DEFAULT", "UTC", Instant.now());
