@@ -834,6 +834,52 @@
     }
   }
 
+  function reportPath(scope, userId) {
+    const range = validSelectedDateRange(scope);
+    if (!range) {
+      return null;
+    }
+    let path = "/iframe/report?from=" + encodeURIComponent(range.from) + "&to=" + encodeURIComponent(range.to);
+    if (userId) {
+      path += "&userId=" + encodeURIComponent(userId);
+    }
+    if (authToken) {
+      path += "&auth_token=" + encodeURIComponent(authToken);
+    }
+    return path;
+  }
+
+  function handleReportClick(event) {
+    const button = event.target.closest("button");
+    if (!button) {
+      return;
+    }
+    const reports = {
+      "btn-report-mine": ["mine", null],
+      "btn-report-team": ["team", "team-user-filter"]
+    };
+    const config = reports[button.id];
+    if (!config) {
+      return;
+    }
+    event.preventDefault();
+    let userId = null;
+    if (config[1]) {
+      userId = formValue(config[1]);
+      if (!userId) {
+        toast("Select a user to generate a report.", "error");
+        return;
+      }
+    }
+    const path = reportPath(config[0], userId);
+    if (path) {
+      const reportWindow = window.open(path, "_blank");
+      if (reportWindow) {
+        reportWindow.opener = null;
+      }
+    }
+  }
+
   function handleCsvExport(event) {
     const button = event.target.closest("button");
     if (!button) {
@@ -856,6 +902,7 @@
     button.addEventListener("click", () => switchTab(button.dataset.tabTarget));
   });
   document.addEventListener("click", handleCsvExport);
+  document.addEventListener("click", handleReportClick);
   on("btn-preview", "click", previewMileage);
   on("mileage-form", "submit", createMileage);
   on("settings-form", "submit", saveSettings);

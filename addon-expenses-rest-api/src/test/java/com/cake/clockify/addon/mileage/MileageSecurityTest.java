@@ -408,6 +408,26 @@ class MileageSecurityTest {
         assertThat(javascript).contains("btn-print");
     }
 
+    @Test
+    void mineAndTeamPanelsExposeReportButtons() {
+        String html = new MileageIframeController().mileage(requestWithRole("OWNER")).getBody();
+
+        assertThat(html).contains("id=\"btn-report-mine\"");
+        assertThat(html).contains("id=\"btn-report-team\"");
+        assertThat(html).doesNotContain("onclick=");
+        assertThat(html).doesNotContain("auth_token=");
+    }
+
+    @Test
+    void mileageJavascriptOpensReportInNewTab() throws Exception {
+        String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
+
+        assertThat(javascript).contains("function handleReportClick");
+        assertThat(javascript).contains("/iframe/report?from=");
+        assertThat(javascript).contains("window.open");
+        assertThat(javascript).contains("document.addEventListener(\"click\", handleReportClick)");
+    }
+
     private static MockHttpServletRequest requestWithRole(String role) {
         MockHttpServletRequest request = new MockHttpServletRequest();
         request.setAttribute(com.cake.clockify.addon.core.auth.RequestAttributes.NORMALIZED_CLAIMS, claims(role));

@@ -135,6 +135,7 @@ public class MileageIframeController {
                               <div class="actions">
                                 <button type="button" id="btn-refresh-mine">Refresh</button>
                                 <button type="button" id="btn-export-mine">CSV</button>
+                                <button type="button" id="btn-report-mine">Report</button>
                               </div>
                             </div>
                           </div>
@@ -167,6 +168,7 @@ public class MileageIframeController {
                             <div class="actions">
                               <button type="button" id="btn-refresh-team">Refresh</button>
                               <button type="button" id="btn-export-team">CSV</button>
+                              <button type="button" id="btn-report-team">Report</button>
                             </div>
                           </div>
                         </header>
