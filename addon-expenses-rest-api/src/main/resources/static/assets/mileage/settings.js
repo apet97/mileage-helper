@@ -259,7 +259,7 @@
     if (query === null) {
       return null;
     }
-    return path + (query ? "?" + query.slice(1) : "");
+    return path + (query ? "?" + query.slice(1) : "") + userFilterQuery(scope);
   }
 
   function selectedDateRange(scope) {
@@ -475,7 +475,7 @@
     if (query === null) {
       return Promise.resolve();
     }
-    return apiFetch("/api/mileage/team?pageSize=50" + query)
+    return apiFetch("/api/mileage/team?pageSize=50" + query + userFilterQuery("team"))
       .then(data => renderMileageRows(rows, data.conversions || [], true, "No team mileage rows yet."))
       .catch(error => toast(error.message, "error"));
   }
@@ -577,6 +577,31 @@
     }).catch(error => toast(error.message, "error"));
   }
 
+  function loadUserOptions() {
+    const selects = [element("team-user-filter"), element("conversion-user-filter")].filter(Boolean);
+    if (!selects.length) {
+      return Promise.resolve();
+    }
+    return apiFetch("/api/mileage/options/users").then(data => {
+      selects.forEach(select => {
+        const current = select.value;
+        select.replaceChildren();
+        appendOption(select, "", "All users");
+        (data.users || []).forEach(user => appendOption(select, user.id, user.name || user.id));
+        select.value = current;
+      });
+    }).catch(error => toast(error.message, "error"));
+  }
+
+  function userFilterQuery(scope) {
+    const selectId = scope === "team" ? "team-user-filter" : scope === "conversion" ? "conversion-user-filter" : "";
+    if (!selectId) {
+      return "";
+    }
+    const userId = formValue(selectId);
+    return userId ? "&userId=" + encodeURIComponent(userId) : "";
+  }
+
   function loadSettings() {
     if (!element("settings-form")) {
       return Promise.resolve();
@@ -675,7 +700,7 @@
     if (query === null) {
       return Promise.resolve();
     }
-    return apiFetch("/api/mileage/conversions?pageSize=50" + query).then(data => {
+    return apiFetch("/api/mileage/conversions?pageSize=50" + query + userFilterQuery("conversion")).then(data => {
       rows.replaceChildren();
       const items = data.conversions || [];
       if (!items.length) {
@@ -839,6 +864,8 @@
   on("btn-refresh-team", "click", loadTeam);
   on("btn-refresh-conversions", "click", loadConversions);
   on("btn-refresh-diagnostics", "click", loadDiagnostics);
+  on("team-user-filter", "change", loadTeam);
+  on("conversion-user-filter", "change", loadConversions);
 
   tokenClaims = claimsFromToken();
   applyTheme();
@@ -847,5 +874,6 @@
   defaultDate();
   loadCreateContext();
   loadProjects();
+  loadUserOptions();
   switchTab(userIsAdmin && window.location.pathname.endsWith("/iframe/settings") ? "admin-settings" : "mine");
 })();

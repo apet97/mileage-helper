@@ -406,3 +406,12 @@ tbody tr:last-child td { border-bottom: 0; }
   font-size: 12px;
   color: var(--muted, #6b6b70);
 }
+
+.user-filter {
+  display: flex;
+  align-items: flex-end;
+}
+
+.user-filter select {
+  min-width: 160px;
+}

@@ -355,6 +355,31 @@ class MileageSecurityTest {
     }
 
     @Test
+    void teamAndConversionsPanelsExposeUserFilter() {
+        String html = new MileageIframeController().mileage(requestWithRole("OWNER")).getBody();
+
+        assertThat(html).contains("id=\"team-user-filter\"");
+        assertThat(html).contains("id=\"conversion-user-filter\"");
+        assertThat(html).doesNotContain("id=\"field-user\"");
+        assertThat(html).doesNotContain("User ID");
+    }
+
+    @Test
+    void mileageJavascriptWiresUserFilterWithoutSendingUserIdForCreate() throws Exception {
+        String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
+
+        assertThat(javascript).contains("/api/mileage/options/users");
+        assertThat(javascript).contains("function userFilterQuery(scope)");
+        assertThat(javascript).contains("\"&userId=\" + encodeURIComponent");
+        // CSV export lines must stay byte-identical:
+        assertThat(javascript).contains("downloadCsv(csvPath(exportConfig[0], exportConfig[1]), exportConfig[2])");
+        // create flow still must not send userId:
+        assertThat(javascript).doesNotContain("field-user");
+        assertThat(javascript).doesNotContain("userId:");
+        assertThat(javascript).doesNotContain("append(\"userId\"");
+    }
+
+    @Test
     void settingsIframeExposesEditableNoteTemplate() {
         String html = new MileageIframeController().settings(requestWithRole("OWNER")).getBody();
 

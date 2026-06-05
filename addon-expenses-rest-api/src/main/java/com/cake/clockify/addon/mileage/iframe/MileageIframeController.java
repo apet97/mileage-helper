@@ -161,6 +161,7 @@ public class MileageIframeController {
                           </div>
                           <div class="list-actions">
                 """
+                + userFilterControls("team")
                 + dateRangeControls("team")
                 + """
                             <div class="actions">
@@ -212,6 +213,7 @@ public class MileageIframeController {
                           </div>
                           <div class="list-actions">
                 """
+                + userFilterControls("conversion")
                 + dateRangeControls("conversion")
                 + """
                             <div class="actions">
@@ -223,6 +225,14 @@ public class MileageIframeController {
                         <div class="table-wrap"><table><thead><tr><th>Date</th><th>Expense</th><th>Source</th><th>User</th><th>Status</th><th>Miles</th><th>Rate</th><th>Amount</th><th>Updated</th></tr></thead><tbody id="conversion-rows"></tbody></table></div>
                       </section>
                 """;
+    }
+
+    private static String userFilterControls(String prefix) {
+        return """
+                              <div class="user-filter">
+                                <label><span>User</span><select id="%1$s-user-filter"><option value="">All users</option></select></label>
+                              </div>
+                """.formatted(prefix);
     }
 
     private static String dateRangeControls(String prefix) {
