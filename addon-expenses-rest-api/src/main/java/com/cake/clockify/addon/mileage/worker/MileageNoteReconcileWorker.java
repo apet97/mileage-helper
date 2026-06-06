@@ -103,7 +103,10 @@ public class MileageNoteReconcileWorker {
                     new UpdateFlatExpenseCommand(
                             conversion.getTargetCategoryId(),
                             conversion.getUserId(),
-                            conversion.getExpenseDate() == null ? snapshot.date() : conversion.getExpenseDate().toString(),
+                            // Clockify's expense-update endpoint rejects a date-only string (400); it requires the
+                            // full "yyyy-MM-ddThh:mm:ssZ" form. Use the live snapshot date (already in that form),
+                            // exactly like the native-conversion update path — NOT conversion.getExpenseDate().
+                            snapshot.date(),
                             conversion.getProjectId(),
                             conversion.getTaskId(),
                             snapshot.billable(),
