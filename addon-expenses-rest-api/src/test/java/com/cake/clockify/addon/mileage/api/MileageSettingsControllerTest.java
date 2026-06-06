@@ -8,7 +8,6 @@ import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseGateway;
 import com.cake.clockify.addon.mileage.clockify.ClockifyUserOption;
 import com.cake.clockify.addon.mileage.security.MileageAuthorizationService;
 import com.cake.clockify.addon.mileage.settings.MileageSettingsService;
-import com.cake.clockify.addon.mileage.settings.MileageSettingsValidation;
 import com.cake.clockify.client.ClockifyApiException;
 import com.cake.clockify.client.ClockifyTransportException;
 import com.fasterxml.jackson.databind.ObjectMapper;

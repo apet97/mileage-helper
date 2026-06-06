@@ -6,7 +6,6 @@ import com.cake.clockify.addon.mileage.api.model.MileageSettingsRequest;
 import com.cake.clockify.addon.mileage.audit.MileageConversionRepository;
 import com.cake.clockify.addon.mileage.settings.MileageSettingsRepository;
 import com.cake.clockify.addon.mileage.settings.MileageSettingsService;
-import com.cake.clockify.addon.mileage.settings.MileageWorkspaceSettings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
