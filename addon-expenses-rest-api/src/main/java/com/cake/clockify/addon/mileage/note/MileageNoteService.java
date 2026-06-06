@@ -20,6 +20,36 @@ public class MileageNoteService {
         return MARKER_PREFIX + " id=" + conversionId + "]";
     }
 
+    /**
+     * Inserts the "(Clockify category charge: X)" parenthetical into an already-written converted note,
+     * used by the deferred add-on-create reconcile sweeper. Returns the note UNCHANGED when:
+     *   - categoryCharge is null, or equals roundedAmount (no divergence to explain), or
+     *   - the note already contains the parenthetical (idempotent), or
+     *   - the note does not end with the standard signature line (custom template without the signature;
+     *     we cannot safely find an insertion point, so we leave it alone).
+     * The parenthetical is inserted directly before ". Created/converted by Mileage for Clockify.", matching
+     * the native-conversion format ("... = 8.99 (Clockify category charge: 9.05). Created/converted by ...").
+     */
+    public String insertCategoryCharge(String note, BigDecimal categoryCharge, BigDecimal roundedAmount) {
+        if (note == null || categoryCharge == null) {
+            return note;
+        }
+        if (roundedAmount != null && categoryCharge.compareTo(roundedAmount) == 0) {
+            return note;
+        }
+        if (note.contains("(Clockify category charge:")) {
+            return note;
+        }
+        String anchor = ". " + CONVERTED_SIGNATURE;
+        int idx = note.lastIndexOf(anchor);
+        if (idx < 0) {
+            return note;
+        }
+        String token = " (Clockify category charge: "
+                + categoryCharge.setScale(2, RoundingMode.HALF_UP).toPlainString() + ")";
+        return note.substring(0, idx) + token + note.substring(idx);
+    }
+
     public boolean hasMileageMarker(String notes) {
         return notes != null && notes.contains(MARKER_PREFIX);
     }

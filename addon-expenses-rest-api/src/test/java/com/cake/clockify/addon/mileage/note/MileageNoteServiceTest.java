@@ -139,4 +139,36 @@ class MileageNoteServiceTest {
         assertThat(service.hasMileageMarker("text [MileageAddon:converted:v1 id=abc]")).isTrue();
         assertThat(service.hasMileageMarker("ordinary note")).isFalse();
     }
+
+    @Test
+    void insertCategoryChargeAddsParentheticalWhenChargeDiffers() {
+        String note = "Mileage reimbursement: 12.4 miles x 0.725 = 8.99. Created/converted by Mileage for Clockify.";
+        String result = service.insertCategoryCharge(note, new BigDecimal("9.05"), new BigDecimal("8.99"));
+        assertThat(result).isEqualTo(
+                "Mileage reimbursement: 12.4 miles x 0.725 = 8.99 (Clockify category charge: 9.05). Created/converted by Mileage for Clockify.");
+    }
+
+    @Test
+    void insertCategoryChargePreservesUserPrefixAndIsIdempotent() {
+        String note = "Site visit\n\nMileage reimbursement: 12.4 miles x 0.725 = 8.99. Created/converted by Mileage for Clockify.";
+        String once = service.insertCategoryCharge(note, new BigDecimal("9.05"), new BigDecimal("8.99"));
+        assertThat(once).contains("Site visit\n\n");
+        assertThat(once).contains("8.99 (Clockify category charge: 9.05). Created/converted");
+        // running again must not stack a second parenthetical
+        String twice = service.insertCategoryCharge(once, new BigDecimal("9.05"), new BigDecimal("8.99"));
+        assertThat(twice).isEqualTo(once);
+    }
+
+    @Test
+    void insertCategoryChargeNoOpWhenChargeEqualsRoundedOrNull() {
+        String note = "Mileage reimbursement: 1 mile x 0.725 = 0.73. Created/converted by Mileage for Clockify.";
+        assertThat(service.insertCategoryCharge(note, new BigDecimal("0.73"), new BigDecimal("0.73"))).isEqualTo(note);
+        assertThat(service.insertCategoryCharge(note, null, new BigDecimal("0.73"))).isEqualTo(note);
+    }
+
+    @Test
+    void insertCategoryChargeNoOpWhenNoSignatureAnchor() {
+        String note = "Custom note with no standard signature line";
+        assertThat(service.insertCategoryCharge(note, new BigDecimal("9.05"), new BigDecimal("8.99"))).isEqualTo(note);
+    }
 }
