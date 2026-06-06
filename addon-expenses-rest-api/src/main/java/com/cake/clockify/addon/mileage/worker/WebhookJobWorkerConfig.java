@@ -4,7 +4,10 @@ import com.cake.clockify.addon.core.webhook.AddonWebhookHandler;
 import com.cake.clockify.addon.core.webhook.WebhookEventService;
 import com.cake.clockify.addon.db.config.AddonDbAutoConfiguration;
 import com.cake.clockify.addon.db.service.AddonWebhookJobClaimService;
+import com.cake.clockify.addon.mileage.audit.MileageConversionRepository;
+import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseGateway;
 import com.cake.clockify.addon.mileage.metrics.WebhookJobMetrics;
+import com.cake.clockify.addon.mileage.note.MileageNoteService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.ObjectProvider;
@@ -15,6 +18,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
+import java.time.Clock;
 import java.util.List;
 
 /**
@@ -60,5 +64,13 @@ public class WebhookJobWorkerConfig {
             MeterRegistry meterRegistry,
             AddonWebhookJobClaimService claimService) {
         return new WebhookJobMetrics(meterRegistry, claimService);
+    }
+
+    @Bean
+    public MileageNoteReconcileWorker mileageNoteReconcileWorker(
+            MileageConversionRepository conversionRepository,
+            ClockifyExpenseGateway gateway,
+            MileageNoteService noteService) {
+        return new MileageNoteReconcileWorker(conversionRepository, gateway, noteService, Clock.systemUTC());
     }
 }

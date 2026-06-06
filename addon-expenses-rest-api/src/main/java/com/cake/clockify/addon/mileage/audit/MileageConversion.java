@@ -95,6 +95,9 @@ public class MileageConversion implements Persistable<UUID> {
     @Column(name = "converted_at")
     private Instant convertedAt;
 
+    @Column(name = "note_charge_reconciled_at")
+    private Instant noteChargeReconciledAt;
+
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
@@ -166,6 +169,8 @@ public class MileageConversion implements Persistable<UUID> {
     public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
     public Instant getConvertedAt() { return convertedAt; }
     public void setConvertedAt(Instant convertedAt) { this.convertedAt = convertedAt; }
+    public Instant getNoteChargeReconciledAt() { return noteChargeReconciledAt; }
+    public void setNoteChargeReconciledAt(Instant noteChargeReconciledAt) { this.noteChargeReconciledAt = noteChargeReconciledAt; }
     public Instant getDeletedAt() { return deletedAt; }
     public void setDeletedAt(Instant deletedAt) { this.deletedAt = deletedAt; }
 }
