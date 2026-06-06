@@ -130,6 +130,8 @@ After static asset deploys, live-click Mine, Team, and Conversions CSV buttons i
 
 Product notes for this feature set: fresh workspaces default the rate to `0.725` (`MileageSettingsService.defaults()`); the converted-note template is admin-editable in Settings (`settings-note-template`, ≤500 chars) and `MileageNoteService` always appends the hidden loop-safe marker when a custom template omits both the marker and the human signature; Team/Conversions admin views and CSVs take an optional `userId` filter backed by `GET /api/mileage/options/users`.
 
+UI/UX uplift notes (2026-06-06): the printable report renders the **Amount/Total columns as money at 2 dp** (`HALF_UP`) — `MileageReportRendererTest`/`MileageReportControllerTest` lock `25.39`/`18.00`, not full precision; don't "fix" it back. The create-form **Project picker is a searchable `<input list="project-options">` + `<datalist>`** (not a `<select>`); `resolveProjectId` maps the typed name → `projectId`. The iframe shell is a CSP-safe ARIA `role="tablist"` (roving tabindex; `MileageSecurityTest` locks the panel/tab markup), error toasts are `role="alert"` + dismissible (no auto-vanish), and Mine/Team/Conversions tables paginate (`renderPager`, `&page=` after the locked `pageSize=50" + query` strings) + collapse to mobile cards via `data-label`. Dark-mode primary buttons use `--on-accent #07232a` ink (≈6.3:1) — never white-on-teal (2.42:1 WCAG fail). All styling stays in `settings.css`/`report.css`; do not introduce inline `<style>`/`style=`/`onclick=` (tests assert their absence). Static-asset deploy probes are unchanged (same filenames).
+
 ## Live Clockify E2E webhook smoke
 
 Requires:

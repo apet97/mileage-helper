@@ -1,8 +1,14 @@
+/* Printable expense report. Opens in its own browser tab (not the Clockify iframe), so it sets its
+   own type and colour. Screen viewing follows the OS colour scheme for comfort; print is always
+   forced to clean black-on-white. Shares the app's system font stack for brand continuity. */
+
 :root {
   color-scheme: light;
   --ink: #1d1d1f;
   --muted: #6b6b70;
   --line: #d8d8de;
+  --paper: #ffffff;
+  --accent: #216e7a;
 }
 
 * {
@@ -12,9 +18,11 @@
 body {
   margin: 0;
   padding: 32px;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif,
+    "Apple Color Emoji", "Segoe UI Emoji";
   color: var(--ink);
-  background: #ffffff;
+  background: var(--paper);
+  -webkit-font-smoothing: antialiased;
 }
 
 .report-header {
@@ -22,14 +30,30 @@ body {
   align-items: flex-start;
   justify-content: space-between;
   gap: 24px;
-  border-bottom: 2px solid var(--ink);
+  border-bottom: 2px solid var(--accent);
   padding-bottom: 16px;
   margin-bottom: 24px;
 }
 
+.report-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.report-logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
 .report-header h1 {
-  margin: 0 0 8px;
+  margin: 0;
   font-size: 22px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
 }
 
 .report-meta {
@@ -57,13 +81,19 @@ body {
 
 .report-print {
   flex: none;
-  border: 1px solid var(--ink);
-  background: var(--ink);
+  border: 1px solid var(--accent);
+  background: var(--accent);
   color: #ffffff;
   border-radius: 8px;
   padding: 10px 16px;
   font-size: 14px;
+  font-weight: 550;
   cursor: pointer;
+}
+
+.report-print:hover {
+  background: #1a5b65;
+  border-color: #1a5b65;
 }
 
 .report-table {
@@ -84,6 +114,7 @@ body {
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  color: var(--muted);
 }
 
 /* Numeric columns (Miles, Rate, Amount) are tagged class="num" by the renderer so alignment is
@@ -91,6 +122,11 @@ body {
    the numeric cells around, which a nth-child rule cannot track. */
 .report-table .num {
   text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.report-table tbody tr:nth-child(even) {
+  background: color-mix(in srgb, var(--ink) 3%, transparent);
 }
 
 .report-table tfoot th,
@@ -106,18 +142,46 @@ body {
 
 .report-truncated {
   margin: 0 0 16px;
-  padding: 8px 12px;
+  padding: 10px 12px;
   border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
   border-radius: 8px;
   font-size: 13px;
   color: var(--muted);
 }
 
+@media screen and (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --ink: #e5e7eb;
+    --muted: #a7b1c2;
+    --line: #334155;
+    --paper: #111827;
+    --accent: #5fb3bd;
+  }
+  .report-print { color: #07232a; }
+  .report-print:hover { background: #76c4cd; border-color: #76c4cd; }
+}
+
 @media print {
+  /* Print is always clean black-on-white regardless of the on-screen theme. */
+  :root {
+    color-scheme: light;
+    --ink: #1d1d1f;
+    --muted: #6b6b70;
+    --line: #d8d8de;
+    --paper: #ffffff;
+    --accent: #1d1d1f;
+  }
   body {
     padding: 0;
+    background: #ffffff;
+    color: #1d1d1f;
   }
   .report-print {
     display: none;
+  }
+  .report-table tbody tr:nth-child(even) {
+    background: transparent;
   }
 }

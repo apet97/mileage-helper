@@ -137,19 +137,31 @@ class MileageSecurityTest {
     void mileageIframeHidesInactiveTabPanelsOnInitialRender() {
         String html = new MileageIframeController().mileage(requestWithRole("OWNER")).getBody();
 
-        assertThat(html).contains("<section class=\"tab-panel active\" id=\"tab-mine\">");
-        assertThat(html).contains("<section class=\"tab-panel\" hidden id=\"tab-team\" data-admin-only=\"true\">");
-        assertThat(html).contains("<section class=\"tab-panel\" hidden id=\"tab-admin-settings\" data-admin-only=\"true\">");
-        assertThat(html).contains("<section class=\"tab-panel\" hidden id=\"tab-conversion-log\" data-admin-only=\"true\">");
-        assertThat(html).contains("<section class=\"tab-panel\" hidden id=\"tab-diagnostics\" data-admin-only=\"true\">");
+        assertThat(html).contains("<section class=\"tab-panel active\" id=\"tab-mine\" role=\"tabpanel\" aria-labelledby=\"tab-btn-mine\" tabindex=\"0\">");
+        assertThat(html).contains("<section class=\"tab-panel\" hidden id=\"tab-team\" role=\"tabpanel\" aria-labelledby=\"tab-btn-team\" tabindex=\"0\" data-admin-only=\"true\">");
+        assertThat(html).contains("<section class=\"tab-panel\" hidden id=\"tab-admin-settings\" role=\"tabpanel\" aria-labelledby=\"tab-btn-admin-settings\" tabindex=\"0\" data-admin-only=\"true\">");
+        assertThat(html).contains("<section class=\"tab-panel\" hidden id=\"tab-conversion-log\" role=\"tabpanel\" aria-labelledby=\"tab-btn-conversion-log\" tabindex=\"0\" data-admin-only=\"true\">");
+        assertThat(html).contains("<section class=\"tab-panel\" hidden id=\"tab-diagnostics\" role=\"tabpanel\" aria-labelledby=\"tab-btn-diagnostics\" tabindex=\"0\" data-admin-only=\"true\">");
     }
 
     @Test
     void settingsIframeHidesMineAndShowsSettingsOnInitialRender() {
         String html = new MileageIframeController().settings(requestWithRole("OWNER")).getBody();
 
-        assertThat(html).contains("<section class=\"tab-panel\" hidden id=\"tab-mine\">");
-        assertThat(html).contains("<section class=\"tab-panel active\" id=\"tab-admin-settings\" data-admin-only=\"true\">");
+        assertThat(html).contains("<section class=\"tab-panel\" hidden id=\"tab-mine\" role=\"tabpanel\" aria-labelledby=\"tab-btn-mine\" tabindex=\"0\">");
+        assertThat(html).contains("<section class=\"tab-panel active\" id=\"tab-admin-settings\" role=\"tabpanel\" aria-labelledby=\"tab-btn-admin-settings\" tabindex=\"0\" data-admin-only=\"true\">");
+    }
+
+    @Test
+    void mileageIframeMarksUpTabsWithAriaTablistSemantics() {
+        String html = new MileageIframeController().mileage(requestWithRole("OWNER")).getBody();
+
+        assertThat(html).contains("role=\"tablist\"");
+        assertThat(html).contains("<button class=\"nav-button active\" type=\"button\" role=\"tab\" id=\"tab-btn-mine\""
+                + " data-tab-target=\"mine\" aria-controls=\"tab-mine\" aria-selected=\"true\" tabindex=\"0\">");
+        // admin tab is rendered unselected and out of the tab order until activated (roving tabindex)
+        assertThat(html).contains("role=\"tab\" id=\"tab-btn-team\" data-tab-target=\"team\""
+                + " aria-controls=\"tab-team\" aria-selected=\"false\" tabindex=\"-1\" data-admin-only=\"true\">");
     }
 
     @Test

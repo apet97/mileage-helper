@@ -1,6 +1,7 @@
 package com.cake.clockify.addon.mileage.report;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -36,7 +37,12 @@ public final class MileageReportRenderer {
 
         StringBuilder body = new StringBuilder();
         for (ReportRow row : rows) {
-            totalAmount = totalAmount.add(orZero(row.amount()));
+            // The printable report is a reimbursement document: Amount/Total are money, rendered at a
+            // consistent 2 dp (the add-on's full-precision calculated amount lives in the Mine/Team/
+            // Conversions audit views). Miles/Rate keep their natural precision. Summing the rounded
+            // per-row amounts keeps the Total footing the visible rows exactly.
+            BigDecimal rowAmount = orZero(row.amount()).setScale(2, RoundingMode.HALF_UP);
+            totalAmount = totalAmount.add(rowAmount);
             body.append("<tr>")
                     .append("<td>").append(escape(text(row.date()))).append("</td>");
             if (includeUser) {
@@ -46,7 +52,7 @@ public final class MileageReportRenderer {
                     .append("<td>").append(escape(row.categoryName())).append("</td>")
                     .append("<td class=\"num\">").append(row.mileage() ? escape(decimal(row.miles())) : "").append("</td>")
                     .append("<td class=\"num\">").append(row.mileage() ? escape(decimal(row.rate())) : "").append("</td>")
-                    .append("<td class=\"num\">").append(escape(decimal(row.amount()))).append("</td>")
+                    .append("<td class=\"num\">").append(escape(money(rowAmount))).append("</td>")
                     .append("</tr>\n");
         }
 
@@ -66,7 +72,7 @@ public final class MileageReportRenderer {
 
         String foot = "<tr><th colspan=\"" + leadColumns + "\">Total</th>"
                 + "<td class=\"num\"></td><td class=\"num\"></td>"
-                + "<td class=\"num\">" + escape(decimal(totalAmount)) + "</td></tr>";
+                + "<td class=\"num\">" + escape(money(totalAmount)) + "</td></tr>";
 
         return """
                 <!DOCTYPE html>
@@ -82,7 +88,10 @@ public final class MileageReportRenderer {
                 <body>
                   <header class="report-header">
                     <div>
-                      <h1>Expense Report</h1>
+                      <div class="report-brand">
+                        <img class="report-logo" src="/assets/mileage/icon.png" alt="" width="28" height="28">
+                        <h1>Expense Report</h1>
+                      </div>
                       <dl class="report-meta">
                         <div><dt>User</dt><dd>%s</dd></div>
                         <div><dt>Period</dt><dd>%s to %s</dd></div>
@@ -115,6 +124,11 @@ public final class MileageReportRenderer {
 
     private static String decimal(BigDecimal value) {
         return value == null ? "" : value.stripTrailingZeros().toPlainString();
+    }
+
+    /** Money columns render at a fixed 2 dp so the report reads as a reimbursement total. */
+    private static String money(BigDecimal value) {
+        return orZero(value).setScale(2, RoundingMode.HALF_UP).toPlainString();
     }
 
     private static String text(Object value) {

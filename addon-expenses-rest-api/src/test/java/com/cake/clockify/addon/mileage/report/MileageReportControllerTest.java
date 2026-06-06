@@ -136,10 +136,10 @@ class MileageReportControllerTest {
                         .queryParam("from", "2026-05-01").queryParam("to", "2026-05-31")
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("OWNER")))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("25.38585")))  // our reconciled amount, not native 7.25
-                .andExpect(content().string(containsString("7.2531")))    // our rate
+                .andExpect(content().string(containsString("25.39")))     // our reconciled amount at 2 dp, not native 7.25
+                .andExpect(content().string(containsString("7.2531")))    // our rate (natural precision)
                 .andExpect(content().string(containsString("Meals")))     // native category
-                .andExpect(content().string(containsString(">18</td>"))); // native amount
+                .andExpect(content().string(containsString(">18.00</td>"))); // native amount at 2 dp
     }
 
     @Test
@@ -158,7 +158,7 @@ class MileageReportControllerTest {
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("MEMBER")))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("Live expense data is unavailable")))
-                .andExpect(content().string(containsString("14.5")))
+                .andExpect(content().string(containsString("14.50")))     // amount at 2 dp
                 .andExpect(content().string(containsString("North Route"))); // project attribution survives the outage
     }
 

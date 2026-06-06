@@ -28,11 +28,12 @@ class MileageReportRendererTest {
         assertThat(html).contains("<th>User</th>");
         assertThat(html).contains("Ada &lt;Lovelace&gt;");
         assertThat(html).contains("North &lt;b&gt;Route&lt;/b&gt;");
-        // mileage row carries miles/rate; native row leaves them blank
-        assertThat(html).contains("<td class=\"num\">3.5</td><td class=\"num\">7.2531</td><td class=\"num\">25.38585</td>");
-        assertThat(html).contains("<td>Meals</td><td class=\"num\"></td><td class=\"num\"></td><td class=\"num\">18</td>");
-        // totals sum the displayed amounts (25.38585 + 18.00) under a 4-column "Total" (Date|User|Project|Category)
-        assertThat(html).contains("<th colspan=\"4\">Total</th><td class=\"num\"></td><td class=\"num\"></td><td class=\"num\">43.38585</td>");
+        // mileage row carries miles/rate at natural precision; the Amount column is money at 2 dp
+        // (25.38585 -> 25.39); the native row leaves miles/rate blank
+        assertThat(html).contains("<td class=\"num\">3.5</td><td class=\"num\">7.2531</td><td class=\"num\">25.39</td>");
+        assertThat(html).contains("<td>Meals</td><td class=\"num\"></td><td class=\"num\"></td><td class=\"num\">18.00</td>");
+        // totals sum the displayed 2 dp amounts (25.39 + 18.00) under a 4-column "Total" (Date|User|Project|Category)
+        assertThat(html).contains("<th colspan=\"4\">Total</th><td class=\"num\"></td><td class=\"num\"></td><td class=\"num\">43.39</td>");
         // CSP-safe
         assertThat(html).contains("<link rel=\"stylesheet\" href=\"/assets/mileage/report.css\">");
         assertThat(html).contains("src=\"/assets/mileage/report.js\" defer");

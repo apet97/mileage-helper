@@ -10,6 +10,14 @@
   let defaultMileageCategory = null;
   let userIsAdmin = false;
   let tokenClaims = {};
+  let projectIdByName = {};
+  const pageState = { mine: 0, team: 0, conversion: 0 };
+  const MINE_LABELS = ["Date", "Expense", "Source", "Status", "Miles", "Rate", "Amount", "Updated"];
+  const TEAM_LABELS = ["Date", "Expense", "User", "Source", "Status", "Miles", "Rate", "Amount", "Updated"];
+  const CONVERSION_LABELS = ["Date", "Expense", "Source", "User", "Status", "Miles", "Rate", "Amount", "Updated"];
+  const DEFAULT_NOTE_TEMPLATE =
+    "Mileage reimbursement: {{miles}} {{unit}} x {{rate}} = {{calculatedAmount}}{{categoryCharge}}. "
+    + "Created/converted by Mileage for Clockify.";
   const rangePresets = {
     this_week: "This week",
     custom: "Custom",
@@ -153,7 +161,10 @@
       panel.hidden = !active;
     });
     document.querySelectorAll(".nav-button").forEach(button => {
-      button.classList.toggle("active", button.dataset.tabTarget === tab);
+      const active = button.dataset.tabTarget === tab;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-selected", active ? "true" : "false");
+      button.tabIndex = active ? 0 : -1;
     });
     if (tab === "mine") {
       loadMine();
@@ -168,6 +179,34 @@
     }
   }
 
+  // Roving-tabindex keyboard support for the ARIA tablist (Arrow keys + Home/End).
+  function onTabKeydown(event) {
+    const step = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 };
+    if (!(event.key in step) && event.key !== "Home" && event.key !== "End") {
+      return;
+    }
+    const tabs = Array.from(document.querySelectorAll(".nav-button")).filter(button => !button.hidden);
+    if (!tabs.length) {
+      return;
+    }
+    event.preventDefault();
+    const activeTarget = document.querySelector(".nav-button.active")?.dataset.tabTarget;
+    const current = Math.max(0, tabs.findIndex(button => button.dataset.tabTarget === activeTarget));
+    let nextIndex;
+    if (event.key === "Home") {
+      nextIndex = 0;
+    } else if (event.key === "End") {
+      nextIndex = tabs.length - 1;
+    } else {
+      nextIndex = (current + step[event.key] + tabs.length) % tabs.length;
+    }
+    const next = tabs[nextIndex];
+    if (next) {
+      switchTab(next.dataset.tabTarget);
+      next.focus();
+    }
+  }
+
   function toast(message, type) {
     const container = element("toast-container");
     if (!container) {
@@ -175,9 +214,90 @@
     }
     const node = document.createElement("div");
     node.className = "toast " + (type || "");
-    node.textContent = message;
+    // Errors are assertive and stay until dismissed; success is polite and auto-clears.
+    node.setAttribute("role", type === "error" ? "alert" : "status");
+    const messageNode = document.createElement("span");
+    messageNode.className = "toast-message";
+    messageNode.textContent = message;
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "toast-close";
+    close.setAttribute("aria-label", "Dismiss");
+    close.textContent = "×";
+    close.addEventListener("click", () => node.remove());
+    node.append(messageNode, close);
     container.appendChild(node);
-    setTimeout(() => node.remove(), 3500);
+    if (type !== "error") {
+      setTimeout(() => node.remove(), 3500);
+    }
+  }
+
+  function setFieldError(id, message) {
+    const node = element(id);
+    if (!node) {
+      return;
+    }
+    node.setAttribute("aria-invalid", "true");
+    let error = element(id + "-error");
+    if (!error) {
+      error = document.createElement("span");
+      error.id = id + "-error";
+      error.className = "field-error";
+      error.setAttribute("role", "alert");
+      node.insertAdjacentElement("afterend", error);
+      node.setAttribute("aria-describedby", id + "-error");
+    }
+    error.textContent = message;
+  }
+
+  function clearFieldError(id) {
+    const node = element(id);
+    if (node) {
+      node.removeAttribute("aria-invalid");
+      node.removeAttribute("aria-describedby");
+    }
+    const error = element(id + "-error");
+    if (error) {
+      error.remove();
+    }
+  }
+
+  function focusField(id) {
+    const node = element(id);
+    if (node && typeof node.focus === "function") {
+      node.focus();
+    }
+  }
+
+  function setBusy(node, busy, label) {
+    if (!node) {
+      return;
+    }
+    if (busy) {
+      if (!node.dataset.idleLabel) {
+        node.dataset.idleLabel = node.textContent;
+      }
+      node.setAttribute("aria-busy", "true");
+      node.disabled = true;
+      if (label) {
+        node.textContent = label;
+      }
+    } else {
+      node.removeAttribute("aria-busy");
+      node.disabled = false;
+      if (node.dataset.idleLabel) {
+        node.textContent = node.dataset.idleLabel;
+        delete node.dataset.idleLabel;
+      }
+    }
+  }
+
+  function refreshHandler(loader) {
+    return function (event) {
+      const button = event.currentTarget;
+      setBusy(button, true, "Refreshing...");
+      Promise.resolve(loader()).finally(() => setBusy(button, false));
+    };
   }
 
   function formValue(id) {
@@ -237,6 +357,17 @@
   }
 
   function reloadRangeScope(scope) {
+    pageState[scope] = 0;
+    if (scope === "mine") {
+      loadMine();
+    } else if (scope === "team" && userIsAdmin) {
+      loadTeam();
+    } else if (scope === "conversion" && userIsAdmin) {
+      loadConversions();
+    }
+  }
+
+  function reloadScope(scope) {
     if (scope === "mine") {
       loadMine();
     } else if (scope === "team" && userIsAdmin) {
@@ -252,6 +383,10 @@
       return null;
     }
     return "&from=" + encodeURIComponent(range.from) + "&to=" + encodeURIComponent(range.to);
+  }
+
+  function pageParam(scope) {
+    return "&page=" + (pageState[scope] || 0);
   }
 
   function csvPath(scope, path) {
@@ -279,14 +414,21 @@
 
   function validSelectedDateRange(scope) {
     const range = selectedDateRange(scope);
+    clearFieldError(scope + "-range-from");
+    clearFieldError(scope + "-range-to");
     if (!range) {
       return null;
     }
     if (!range.from || !range.to) {
+      const missing = !range.from ? scope + "-range-from" : scope + "-range-to";
+      setFieldError(missing, "Choose both From and To dates.");
+      focusField(missing);
       toast("Choose both From and To dates.", "error");
       return null;
     }
     if (range.from > range.to) {
+      setFieldError(scope + "-range-from", "From date must be on or before To date.");
+      focusField(scope + "-range-from");
       toast("From date must be on or before To date.", "error");
       return null;
     }
@@ -315,7 +457,7 @@
     const rateAllowed = Boolean(createContext.allowUserRateOverride);
     return {
       date: formValue("field-date"),
-      projectId: formValue("field-project") || null,
+      projectId: resolveProjectId(formValue("field-project")),
       miles: formValue("field-miles"),
       rate: rateAllowed ? (formValue("field-rate") || null) : null,
       billable: element("field-billable").checked,
@@ -336,6 +478,7 @@
       context.textContent = createContext.complete
         ? "Workspace rate: " + rateText
         : "Mileage settings need a rate and Mileage category before users can create expenses.";
+      context.classList.toggle("context-warn", !createContext.complete);
     }
     if (rate) {
       rate.disabled = !createContext.allowUserRateOverride;
@@ -362,12 +505,15 @@
       .then(applyCreateContext)
       .catch(error => {
         element("create-context").textContent = "Mileage settings could not be loaded.";
+        element("create-context").classList.add("context-warn");
         toast(error.message, "error");
       });
   }
 
   function previewMileage() {
+    const button = element("btn-preview");
     const payload = mileagePayload();
+    setBusy(button, true, "Previewing...");
     apiFetch("/api/mileage/preview", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -383,7 +529,7 @@
       secondary.className = "amount-secondary";
       secondary.textContent = "Expense amount: " + result.roundedAmount;
       target.append(primary, secondary);
-    }).catch(error => toast(error.message, "error"));
+    }).catch(error => toast(error.message, "error")).finally(() => setBusy(button, false));
   }
 
   function setCreateBusy(busy) {
@@ -392,6 +538,11 @@
       return;
     }
     submit.disabled = busy || !createContext.complete;
+    if (busy) {
+      submit.setAttribute("aria-busy", "true");
+    } else {
+      submit.removeAttribute("aria-busy");
+    }
     submit.textContent = busy ? "Creating..." : "Create Expense";
   }
 
@@ -412,6 +563,13 @@
 
   function createMileage(event) {
     event.preventDefault();
+    clearFieldError("field-miles");
+    const miles = formValue("field-miles");
+    if (!miles || Number.isNaN(Number(miles)) || Number(miles) <= 0) {
+      setFieldError("field-miles", "Enter the miles driven as a positive number.");
+      focusField("field-miles");
+      return;
+    }
     const file = element("field-receipt").files[0];
     if (!validateReceipt(file)) {
       return;
@@ -439,7 +597,17 @@
   }
 
   function recordSubmission(result) {
-    element("create-status").textContent = "Created " + result.expenseId;
+    const status = element("create-status");
+    if (status) {
+      const unit = createContext.unit || "mile";
+      const miles = trimDecimal(result.miles);
+      status.textContent = miles && result.roundedAmount
+        ? "Created " + miles + " " + unitLabel(result.miles, unit) + " → " + result.roundedAmount
+        : "Mileage expense created";
+      if (result.expenseId) {
+        status.title = "Clockify expense " + result.expenseId;
+      }
+    }
     element("field-miles").value = "";
     element("field-rate").value = "";
     element("field-notes").value = "";
@@ -461,9 +629,16 @@
     if (query === null) {
       return Promise.resolve();
     }
-    return apiFetch("/api/mileage/mine?pageSize=50" + query)
-      .then(data => renderMileageRows(rows, data.conversions || [], false, "No mileage rows yet."))
-      .catch(error => toast(error.message, "error"));
+    renderLoadingRow(rows, MINE_LABELS.length);
+    return apiFetch("/api/mileage/mine?pageSize=50" + query + pageParam("mine"))
+      .then(data => {
+        renderMileageRows(rows, data.conversions || [], false, "No mileage rows yet.");
+        renderPager("mine", data);
+      })
+      .catch(error => {
+        renderErrorRow(rows, MINE_LABELS.length);
+        toast(error.message, "error");
+      });
   }
 
   function loadTeam() {
@@ -475,15 +650,23 @@
     if (query === null) {
       return Promise.resolve();
     }
-    return apiFetch("/api/mileage/team?pageSize=50" + query + userFilterQuery("team"))
-      .then(data => renderMileageRows(rows, data.conversions || [], true, "No team mileage rows yet."))
-      .catch(error => toast(error.message, "error"));
+    renderLoadingRow(rows, TEAM_LABELS.length);
+    return apiFetch("/api/mileage/team?pageSize=50" + query + userFilterQuery("team") + pageParam("team"))
+      .then(data => {
+        renderMileageRows(rows, data.conversions || [], true, "No team mileage rows yet.");
+        renderPager("team", data);
+      })
+      .catch(error => {
+        renderErrorRow(rows, TEAM_LABELS.length);
+        toast(error.message, "error");
+      });
   }
 
   function renderMileageRows(rows, items, includeUser, emptyText) {
     rows.replaceChildren();
+    const labels = includeUser ? TEAM_LABELS : MINE_LABELS;
     if (!items.length) {
-      renderEmptyRow(rows, includeUser ? 9 : 8, emptyText);
+      renderEmptyRow(rows, labels.length, emptyText, "Adjust the date range or create a new mileage expense.");
       return;
     }
     items.forEach(item => {
@@ -499,6 +682,7 @@
       appendTextCell(row, trimDecimal(item.rate));
       appendAmountCell(row, item.calculatedAmount, item.roundedAmount);
       appendTextCell(row, formatDate(item.updatedAt));
+      labelRow(row, labels);
     });
   }
 
@@ -566,18 +750,36 @@
   }
 
   function loadProjects() {
-    const project = element("field-project");
-    if (!project) {
+    const datalist = element("project-options");
+    if (!datalist) {
       return Promise.resolve();
     }
     return apiFetch("/api/mileage/options/projects").then(data => {
-      project.replaceChildren();
-      appendOption(project, "", "No project");
-      (data.projects || []).forEach(item => appendOption(project, item.id, item.name));
+      datalist.replaceChildren();
+      projectIdByName = {};
+      (data.projects || [])
+        .slice()
+        .sort((left, right) => String(left.name || "").localeCompare(String(right.name || "")))
+        .forEach(item => {
+          if (!item || !item.id) {
+            return;
+          }
+          const name = item.name || item.id;
+          projectIdByName[name.toLowerCase()] = item.id;
+          datalist.appendChild(new Option(name));
+        });
       if (data.warning) {
         toast(data.warning, "error");
       }
     }).catch(error => toast(error.message, "error"));
+  }
+
+  function resolveProjectId(value) {
+    const name = (value || "").trim();
+    if (!name) {
+      return null;
+    }
+    return projectIdByName[name.toLowerCase()] || null;
   }
 
   function loadUserOptions() {
@@ -638,13 +840,90 @@
           element("settings-status").textContent = settings.completeForNativeConversion
             ? "Ready"
             : defaultMileageCategory ? "Default Mileage found" : "Needs configuration";
+          applyRateDefaultHint();
+          renderNotePreview();
         });
       })
       .catch(error => toast(error.message, "error"));
   }
 
+  // S-1: when no rate is saved (and none derived from a default category), pre-fill the visible default
+  // rate the rest of the app already uses (create-context's effective 0.725) so Settings never reads as
+  // "my rate vanished" while Mine shows a workspace rate.
+  function applyRateDefaultHint() {
+    const rateInput = element("settings-rate");
+    const rateHint = element("settings-rate-hint");
+    if (!rateInput) {
+      return;
+    }
+    if (rateInput.value) {
+      if (rateHint) {
+        rateHint.hidden = true;
+      }
+      return;
+    }
+    const apply = rate => {
+      if (rate && !rateInput.value) {
+        rateInput.value = rate;
+        if (rateHint) {
+          rateHint.textContent = "Showing the workspace default " + rate + " — Save to store it.";
+          rateHint.hidden = false;
+        }
+        renderNotePreview();
+      }
+    };
+    if (createContext.rate) {
+      apply(createContext.rate);
+      return;
+    }
+    apiFetch("/api/mileage/create-context")
+      .then(data => {
+        applyCreateContext(data);
+        apply(createContext.rate);
+      })
+      .catch(() => {});
+  }
+
+  function renderNotePreview() {
+    const textarea = element("settings-note-template");
+    const box = element("settings-note-preview");
+    const target = element("settings-note-preview-text");
+    if (!textarea || !box || !target) {
+      return;
+    }
+    const rate = formValue("settings-rate") || createContext.rate || "0.725";
+    const miles = "10";
+    const amount = sampleAmount(miles, rate);
+    const values = {
+      miles: miles,
+      unit: "miles",
+      rate: trimDecimal(rate),
+      calculatedAmount: amount,
+      amount: amount,
+      categoryCharge: ""
+    };
+    const template = textarea.value.trim() || DEFAULT_NOTE_TEMPLATE;
+    target.textContent = renderTemplate(template, values);
+    box.hidden = false;
+  }
+
+  function renderTemplate(template, values) {
+    return template.replace(/\{\{(\w+)\}\}/g, (match, key) =>
+      Object.prototype.hasOwnProperty.call(values, key) ? values[key] : "");
+  }
+
+  function sampleAmount(miles, rate) {
+    const product = Number(miles) * Number(rate);
+    if (!Number.isFinite(product)) {
+      return "";
+    }
+    return trimDecimal(String(Math.round(product * 1e6) / 1e6));
+  }
+
   function saveSettings(event) {
     event.preventDefault();
+    const button = document.querySelector("#settings-form button[type='submit']");
+    setBusy(button, true, "Saving...");
     const payload = {
       enabled: element("settings-enabled").checked,
       rate: formValue("settings-rate"),
@@ -662,7 +941,7 @@
       toast("Settings saved.");
       loadCreateContext();
       loadDiagnostics();
-    }).catch(error => toast(error.message, "error"));
+    }).catch(error => toast(error.message, "error")).finally(() => setBusy(button, false));
   }
 
   function setupMileageCategory() {
@@ -672,6 +951,7 @@
     }
     if (button) {
       button.disabled = true;
+      button.setAttribute("aria-busy", "true");
       button.textContent = "Repairing...";
     }
     apiFetch("/api/mileage/settings/mileage-category", { method: "POST" })
@@ -692,6 +972,7 @@
       .finally(() => {
         if (button) {
           button.disabled = false;
+          button.removeAttribute("aria-busy");
           button.textContent = "Use or Repair Mileage Category";
         }
       });
@@ -706,11 +987,13 @@
     if (query === null) {
       return Promise.resolve();
     }
-    return apiFetch("/api/mileage/conversions?pageSize=50" + query + userFilterQuery("conversion")).then(data => {
+    renderLoadingRow(rows, CONVERSION_LABELS.length);
+    return apiFetch("/api/mileage/conversions?pageSize=50" + query + userFilterQuery("conversion") + pageParam("conversion")).then(data => {
       rows.replaceChildren();
       const items = data.conversions || [];
       if (!items.length) {
-        renderEmptyRow(rows, 9, "No conversion rows yet.");
+        renderEmptyRow(rows, CONVERSION_LABELS.length, "No conversion rows yet.", "Conversions appear here as native and add-on expenses are processed.");
+        renderPager("conversion", data);
         return;
       }
       items.forEach(item => {
@@ -724,8 +1007,56 @@
         appendTextCell(row, trimDecimal(item.rate));
         appendAmountCell(row, item.calculatedAmount, item.roundedAmount);
         appendTextCell(row, formatDate(item.updatedAt));
+        labelRow(row, CONVERSION_LABELS);
       });
-    }).catch(error => toast(error.message, "error"));
+      renderPager("conversion", data);
+    }).catch(error => {
+      renderErrorRow(rows, CONVERSION_LABELS.length);
+      toast(error.message, "error");
+    });
+  }
+
+  function renderPager(scope, data) {
+    const pager = element(scope + "-pager");
+    if (!pager) {
+      return;
+    }
+    const total = Number(data.totalElements || 0);
+    const page = Number(data.page || 0);
+    const pageSize = Number(data.pageSize || 50);
+    const shown = (data.conversions || []).length;
+    const totalPages = Number(data.totalPages || (total ? Math.ceil(total / pageSize) : 1));
+    if (total <= shown && page === 0) {
+      pager.hidden = true;
+      pager.replaceChildren();
+      return;
+    }
+    pager.hidden = false;
+    pager.replaceChildren();
+    const start = total === 0 ? 0 : page * pageSize + 1;
+    const end = page * pageSize + shown;
+    const label = document.createElement("span");
+    label.textContent = "Showing " + start + "–" + end + " of " + total;
+    const buttons = document.createElement("div");
+    buttons.className = "pager-buttons";
+    const prev = document.createElement("button");
+    prev.type = "button";
+    prev.textContent = "Previous";
+    prev.disabled = page <= 0;
+    prev.addEventListener("click", () => {
+      pageState[scope] = Math.max(0, page - 1);
+      reloadScope(scope);
+    });
+    const next = document.createElement("button");
+    next.type = "button";
+    next.textContent = "Next";
+    next.disabled = page + 1 >= totalPages;
+    next.addEventListener("click", () => {
+      pageState[scope] = page + 1;
+      reloadScope(scope);
+    });
+    buttons.append(prev, next);
+    pager.append(label, buttons);
   }
 
   function appendTextCell(row, value) {
@@ -745,6 +1076,14 @@
     secondary.textContent = roundedAmount == null ? "Expense amount: " : "Expense amount: " + roundedAmount;
     stack.append(primary, secondary);
     cell.appendChild(stack);
+  }
+
+  function labelRow(row, labels) {
+    Array.from(row.cells).forEach((cell, index) => {
+      if (labels[index]) {
+        cell.setAttribute("data-label", labels[index]);
+      }
+    });
   }
 
   function trimDecimal(value) {
@@ -801,26 +1140,49 @@
       .format(new Date(parts[0], parts[1] - 1, parts[2]));
   }
 
-  function renderEmptyRow(rows, colspan, text) {
+  function renderEmptyRow(rows, colspan, text, hint) {
     const row = rows.insertRow();
     const cell = row.insertCell();
     cell.colSpan = colspan;
     cell.className = "empty-table";
-    cell.textContent = text;
+    const title = document.createElement("strong");
+    title.textContent = text;
+    cell.appendChild(title);
+    if (hint) {
+      cell.appendChild(document.createTextNode(hint));
+    }
+  }
+
+  function renderLoadingRow(rows, colspan) {
+    rows.replaceChildren();
+    const row = rows.insertRow();
+    row.className = "loading-row";
+    const cell = row.insertCell();
+    cell.colSpan = colspan;
+    const skeleton = document.createElement("span");
+    skeleton.className = "skeleton";
+    cell.appendChild(skeleton);
+  }
+
+  function renderErrorRow(rows, colspan) {
+    rows.replaceChildren();
+    renderEmptyRow(rows, colspan, "Could not load rows.", "Check your connection and press Refresh.");
   }
 
   function loadDiagnostics() {
-    if (!element("diagnostics-list")) {
+    const list = element("diagnostics-list");
+    if (!list) {
       return Promise.resolve();
     }
+    renderDiagnosticsStatus(list, "Status", "Checking…", "");
     return apiFetch("/api/mileage/diagnostics").then(data => {
-      const list = element("diagnostics-list");
       list.replaceChildren();
       [["Installation", data.installationAvailable], ["Settings", data.settingsComplete], ["Native conversion", data.nativeConversionReady]].forEach(([label, value]) => {
         const dt = document.createElement("dt");
         const dd = document.createElement("dd");
         dt.textContent = label;
         dd.textContent = value ? "OK" : "Needs attention";
+        dd.className = value ? "ok" : "warn";
         list.append(dt, dd);
       });
       const warnings = element("diagnostics-warnings");
@@ -830,7 +1192,22 @@
         item.textContent = text;
         warnings.appendChild(item);
       });
-    }).catch(error => toast(error.message, "error"));
+    }).catch(error => {
+      renderDiagnosticsStatus(list, "Status", "Could not load diagnostics", "warn");
+      toast(error.message, "error");
+    });
+  }
+
+  function renderDiagnosticsStatus(list, label, value, className) {
+    list.replaceChildren();
+    const dt = document.createElement("dt");
+    const dd = document.createElement("dd");
+    dt.textContent = label;
+    dd.textContent = value;
+    if (className) {
+      dd.className = className;
+    }
+    list.append(dt, dd);
   }
 
   function on(id, event, handler) {
@@ -898,24 +1275,31 @@
       return;
     }
     event.preventDefault();
-    downloadCsv(csvPath(exportConfig[0], exportConfig[1]), exportConfig[2]);
+    setBusy(button, true, "Exporting...");
+    Promise.resolve(downloadCsv(csvPath(exportConfig[0], exportConfig[1]), exportConfig[2])).finally(() => setBusy(button, false));
   }
 
   document.querySelectorAll("[data-tab-target]").forEach(button => {
     button.addEventListener("click", () => switchTab(button.dataset.tabTarget));
   });
+  const tablist = document.querySelector("[role=\"tablist\"]");
+  if (tablist) {
+    tablist.addEventListener("keydown", onTabKeydown);
+  }
   document.addEventListener("click", handleCsvExport);
   document.addEventListener("click", handleReportClick);
   on("btn-preview", "click", previewMileage);
   on("mileage-form", "submit", createMileage);
   on("settings-form", "submit", saveSettings);
   on("btn-setup-mileage-category", "click", setupMileageCategory);
-  on("btn-refresh-mine", "click", loadMine);
-  on("btn-refresh-team", "click", loadTeam);
-  on("btn-refresh-conversions", "click", loadConversions);
-  on("btn-refresh-diagnostics", "click", loadDiagnostics);
-  on("team-user-filter", "change", loadTeam);
-  on("conversion-user-filter", "change", loadConversions);
+  on("btn-refresh-mine", "click", refreshHandler(loadMine));
+  on("btn-refresh-team", "click", refreshHandler(loadTeam));
+  on("btn-refresh-conversions", "click", refreshHandler(loadConversions));
+  on("btn-refresh-diagnostics", "click", refreshHandler(loadDiagnostics));
+  on("team-user-filter", "change", () => { pageState.team = 0; loadTeam(); });
+  on("conversion-user-filter", "change", () => { pageState.conversion = 0; loadConversions(); });
+  on("settings-note-template", "input", renderNotePreview);
+  on("settings-rate", "input", renderNotePreview);
 
   tokenClaims = claimsFromToken();
   applyTheme();
