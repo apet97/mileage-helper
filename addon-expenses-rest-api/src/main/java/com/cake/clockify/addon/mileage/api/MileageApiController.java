@@ -15,7 +15,6 @@ import com.cake.clockify.addon.mileage.audit.MileageConversionStatus;
 import com.cake.clockify.addon.mileage.calculation.MileageCalculation;
 import com.cake.clockify.addon.mileage.calculation.MileageCalculator;
 import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseGateway;
-import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseSnapshot;
 import com.cake.clockify.addon.mileage.clockify.CreateFlatExpenseCommand;
 import com.cake.clockify.addon.mileage.clockify.UpdateFlatExpenseCommand;
 import com.cake.clockify.addon.mileage.note.MileageNoteService;
@@ -160,18 +159,22 @@ public class MileageApiController {
         MileageConversion conversion = conversionRepository.findByIdAndWorkspaceId(persistedId, workspaceId)
                 .orElseThrow(() -> new IllegalStateException("Reserved mileage conversion was not found"));
         String persistedMarker = noteService.marker(persistedId);
-        // Reconcile the note with the actual Clockify category charge. The add-on rate may differ from the
-        // category's integer-cent unit price (a unit category charges miles × priceInCents), so the note shows
-        // "(Clockify category charge: X)" exactly like native conversions. This also re-marks the note if the
-        // reservation returned a different conversion id than the create note used.
-        BigDecimal categoryCharge = resolveClockifyCategoryCharge(workspaceId, expenseId, response);
-        String finalNote = noteService.buildConvertedNote(
-                request.notes(),
-                calculation,
-                settings.unit(),
-                persistedId,
-                settings.noteTemplate(),
-                categoryCharge);
+        // Re-mark the note only if the reservation returned a different conversion id than the create note used
+        // (the webhook-reserved-first race). We intentionally do NOT stamp the Clockify category charge here:
+        // reconciling the note requires a second synchronous write to the just-created expense, which races
+        // Clockify's own EXPENSE_CREATED webhook and proved unreliable in production (live QA 2026-06-05). The
+        // settings-save category-price sync keeps the divergence to integer-cent rounding; native conversions
+        // (a single worker-thread update, post-webhook) still carry the (Clockify category charge: X) note.
+        String persistedNote = note;
+        if (!persistedId.equals(conversionId)) {
+            persistedNote = noteService.buildConvertedNote(
+                    request.notes(),
+                    calculation,
+                    settings.unit(),
+                    persistedId,
+                    settings.noteTemplate(),
+                    null);
+        }
         applyAddonFormConversion(
                 conversion,
                 workspaceId,
@@ -183,7 +186,7 @@ public class MileageApiController {
                 calculation,
                 persistedMarker);
         conversionRepository.saveAndFlush(conversion);
-        if (!Objects.equals(finalNote, note)) {
+        if (!Objects.equals(persistedNote, note)) {
             gateway.updateFlatExpense(workspaceId, expenseId, new UpdateFlatExpenseCommand(
                     settings.outputCategoryId(),
                     userId,
@@ -192,7 +195,7 @@ public class MileageApiController {
                     null,
                     billableOrDefault(request.billable()),
                     clockifyExpenseAmount(settings, calculation),
-                    finalNote,
+                    persistedNote,
                     settings.roundingMode(),
                     singleMileageCategory(settings)));
         }
@@ -250,44 +253,6 @@ public class MileageApiController {
             return calculation.miles();
         }
         return calculation.roundedAmount();
-    }
-
-    /**
-     * The Clockify-computed category charge (major units) for a freshly created expense. Prefers the `total`
-     * in the create response, but the addon-API expense-create response can omit it — so when it is absent we
-     * read the authoritative `total` from a {@code getExpense} snapshot, exactly as the native-conversion path
-     * does. Best-effort: a snapshot lookup failure yields no annotation rather than failing the create.
-     */
-    private BigDecimal resolveClockifyCategoryCharge(String workspaceId, String expenseId, JsonNode createResponse) {
-        BigDecimal fromResponse = clockifyCategoryCharge(createResponse);
-        if (fromResponse != null) {
-            return fromResponse;
-        }
-        try {
-            ClockifyExpenseSnapshot snapshot = gateway.getExpense(workspaceId, expenseId);
-            BigDecimal total = snapshot == null ? null : snapshot.total();
-            return total == null ? null : total.movePointLeft(2);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return null;
-        } catch (IOException | RuntimeException e) {
-            return null;
-        }
-    }
-
-    /** The Clockify-computed expense total (cents) from a create response, as major units, or null if absent. */
-    private static BigDecimal clockifyCategoryCharge(JsonNode response) {
-        JsonNode total = response == null ? null : response.get("total");
-        if (total == null || total.isNull()) {
-            return null;
-        }
-        if (total.isNumber()) {
-            return total.decimalValue().movePointLeft(2);
-        }
-        if (total.isTextual() && !total.asText().isBlank()) {
-            return new BigDecimal(total.asText()).movePointLeft(2);
-        }
-        return null;
     }
 
     private static boolean singleMileageCategory(MileageSettingsValidation settings) {

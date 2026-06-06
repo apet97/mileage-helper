@@ -10,7 +10,6 @@ import com.cake.clockify.addon.mileage.audit.MileageConversionSource;
 import com.cake.clockify.addon.mileage.audit.MileageConversionStatus;
 import com.cake.clockify.addon.mileage.calculation.MileageCalculator;
 import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseGateway;
-import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseSnapshot;
 import com.cake.clockify.addon.mileage.clockify.CreateFlatExpenseCommand;
 import com.cake.clockify.addon.mileage.clockify.UpdateFlatExpenseCommand;
 import com.cake.clockify.addon.mileage.note.MileageNoteService;
@@ -242,12 +241,14 @@ class MileageApiControllerTest {
     }
 
     @Test
-    void createAnnotatesNoteWithClockifyCategoryChargeWhenItDiffersFromRoundedAmount() throws Exception {
+    void createDoesNotReissueUpdateInNormalPath() throws Exception {
         when(settingsService.validateForAddonCreate("ws-api")).thenReturn(settings(false));
-        // Clockify charges miles × the category's integer-cent unit price; here that lands at $89.90 while the
-        // add-on rate amount is $24.50, so the reconciled note must document the real category charge.
+        // A normal add-on create (no webhook-reserved-first race) must NOT fire a second Clockify write. The
+        // category-charge annotation was removed because that second synchronous write to the just-created
+        // expense races Clockify's own EXPENSE_CREATED webhook and proved unreliable in production; the note
+        // stays as the create note and is reconciled only by Fix 1A's category-price sync.
         when(gateway.createFlatExpense(eq("ws-api"), any(CreateFlatExpenseCommand.class)))
-                .thenReturn(createdExpense("exp-1", 8990));
+                .thenReturn(createdExpense("exp-1"));
 
         mockMvc.perform(post("/api/mileage/expenses")
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims())
@@ -257,48 +258,8 @@ class MileageApiControllerTest {
                 .andExpect(jsonPath("$.expenseId").value("exp-1"))
                 .andExpect(jsonPath("$.roundedAmount").value("24.50"));
 
-        ArgumentCaptor<UpdateFlatExpenseCommand> update = ArgumentCaptor.forClass(UpdateFlatExpenseCommand.class);
-        verify(gateway).updateFlatExpense(eq("ws-api"), eq("exp-1"), update.capture());
-        assertThat(update.getValue().notes()).contains("(Clockify category charge: 89.90)");
-        // Fast path: when the create response carries `total`, no extra getExpense round-trip is needed.
-        verify(gateway, never()).getExpense(any(), any());
-    }
-
-    @Test
-    void createAnnotatesNoteFromExpenseSnapshotWhenCreateResponseOmitsTotal() throws Exception {
-        when(settingsService.validateForAddonCreate("ws-api")).thenReturn(settings(false));
-        // Live prod: the addon-API expense-create response omits the computed `total`, so the charge must be
-        // read from the authoritative getExpense snapshot (the native-conversion path). 37.4 mi rounds to
-        // 24.50; snapshot total 8990 cents = 89.90 diverges, so the note must carry the reconciling annotation.
-        when(gateway.createFlatExpense(eq("ws-api"), any(CreateFlatExpenseCommand.class))).thenReturn(createdExpense("exp-1"));
-        when(gateway.getExpense("ws-api", "exp-1")).thenReturn(snapshot("exp-1", new BigDecimal("8990")));
-
-        mockMvc.perform(post("/api/mileage/expenses")
-                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(createBody("37.4", null)))
-                .andExpect(status().isOk());
-
-        ArgumentCaptor<UpdateFlatExpenseCommand> update = ArgumentCaptor.forClass(UpdateFlatExpenseCommand.class);
-        verify(gateway).updateFlatExpense(eq("ws-api"), eq("exp-1"), update.capture());
-        assertThat(update.getValue().notes()).contains("(Clockify category charge: 89.90)");
-    }
-
-    @Test
-    void createDoesNotReissueUpdateWhenClockifyChargeMatchesRoundedAmount() throws Exception {
-        when(settingsService.validateForAddonCreate("ws-api")).thenReturn(settings(false));
-        // Clockify total (2450 cents = $24.50) matches the add-on rate amount, so no reconciling note is needed
-        // and no extra updateFlatExpense round-trip should fire.
-        when(gateway.createFlatExpense(eq("ws-api"), any(CreateFlatExpenseCommand.class)))
-                .thenReturn(createdExpense("exp-1", 2450));
-
-        mockMvc.perform(post("/api/mileage/expenses")
-                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims())
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(createBody("37.4", null)))
-                .andExpect(status().isOk());
-
         verify(gateway, never()).updateFlatExpense(any(), any(), any());
+        verify(gateway, never()).getExpense(any(), any());
     }
 
     @Test
@@ -622,14 +583,6 @@ class MileageApiControllerTest {
         return mapper.createObjectNode().put("id", id);
     }
 
-    private static ObjectNode createdExpense(String id, long totalCents) {
-        return createdExpense(id).put("total", totalCents);
-    }
-
-    private static ClockifyExpenseSnapshot snapshot(String id, BigDecimal totalCents) {
-        return new ClockifyExpenseSnapshot(id, "ws-api", "user-claims", "2026-05-24", null, null,
-                "cat-output", "", new BigDecimal("37.4"), Boolean.TRUE, "", totalCents, Boolean.FALSE);
-    }
 
     private static MileageSettingsValidation settings(boolean allowOverride) {
         return new MileageSettingsValidation("ws-api", true, true, new BigDecimal("0.655"), "mi",
