@@ -12,6 +12,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.KeyPairGenerator;
 import java.security.interfaces.RSAPublicKey;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -34,9 +35,13 @@ class MileageSecurityTest {
         String html = new MileageIframeController().mileage(requestWithRole("ADMIN")).getBody();
 
         assertThat(html).contains("href=\"/assets/mileage/settings.css\"");
-        assertThat(html).contains("src=\"/assets/mileage/settings-date.js\" defer");
-        assertThat(html).contains("src=\"/assets/mileage/settings.js\" defer");
-        assertThat(html.indexOf("settings-date.js")).isLessThan(html.indexOf("settings.js"));
+        int previous = -1;
+        for (String script : settingsScripts()) {
+            String src = "src=\"/assets/mileage/" + script + "\" defer";
+            assertThat(html).contains(src);
+            assertThat(html.indexOf(script)).isGreaterThan(previous);
+            previous = html.indexOf(script);
+        }
     }
 
     @Test
@@ -69,7 +74,7 @@ class MileageSecurityTest {
 
     @Test
     void mileageJavascriptRemovesAuthTokenFromLocation() throws Exception {
-        String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
+        String javascript = settingsJavascript();
 
         assertThat(javascript).contains("url.searchParams.delete(\"auth_token\")");
         assertThat(javascript).contains("history.replaceState");
@@ -77,7 +82,7 @@ class MileageSecurityTest {
 
     @Test
     void mileageJavascriptUsesAuthorizationHeaderForBackendCalls() throws Exception {
-        String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
+        String javascript = settingsJavascript();
 
         assertThat(javascript).contains("Authorization");
         assertThat(javascript).contains("\"Bearer \" + authToken");
@@ -85,11 +90,11 @@ class MileageSecurityTest {
 
     @Test
     void nonAdminUserDoesNotSeeAdminControlsAfterClaimsLoad() throws Exception {
-        String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
+        String javascript = settingsJavascript();
 
         assertThat(javascript).contains("workspaceRole");
         assertThat(javascript).contains("data-admin-only");
-        assertThat(javascript).contains("element.hidden = !isAdmin");
+        assertThat(javascript).contains("node.hidden = !isAdmin");
     }
 
     @Test
@@ -166,10 +171,10 @@ class MileageSecurityTest {
 
     @Test
     void mileageJavascriptKeepsOnlyActiveTabPanelVisible() throws Exception {
-        String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
+        String javascript = settingsJavascript();
 
         assertThat(javascript).contains("panel.hidden = !active");
-        assertThat(javascript).contains("element.classList.contains(\"tab-panel\") && !element.classList.contains(\"active\")");
+        assertThat(javascript).contains("node.classList.contains(\"tab-panel\") && !node.classList.contains(\"active\")");
     }
 
     @Test
@@ -210,7 +215,7 @@ class MileageSecurityTest {
 
     @Test
     void mileageJavascriptDoesNotSendUserId() throws Exception {
-        String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
+        String javascript = settingsJavascript();
 
         assertThat(javascript).doesNotContain("field-user");
         assertThat(javascript).doesNotContain("currentUserIdFromClaims");
@@ -220,7 +225,7 @@ class MileageSecurityTest {
 
     @Test
     void mileageJavascriptDoesNotFetchTaskOptionsOrSendTaskId() throws Exception {
-        String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
+        String javascript = settingsJavascript();
 
         assertThat(javascript).doesNotContain("options/tasks");
         assertThat(javascript).doesNotContain("field-task");
@@ -229,7 +234,7 @@ class MileageSecurityTest {
 
     @Test
     void mileageJavascriptLoadsCreateContextBeforeAllowingRateOverride() throws Exception {
-        String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
+        String javascript = settingsJavascript();
 
         assertThat(javascript).contains("/api/mileage/create-context");
         assertThat(javascript).contains("allowUserRateOverride");
@@ -238,11 +243,11 @@ class MileageSecurityTest {
 
     @Test
     void mileageJavascriptDownloadsCsvWithBearerHeaderAndNoAuthTokenQuery() throws Exception {
-        String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
+        String javascript = settingsJavascript();
 
         assertThat(javascript).contains("downloadCsv");
         assertThat(javascript).contains("handleCsvExport");
-        assertThat(javascript).contains("csvPath(exportConfig[0], exportConfig[1])");
+        assertThat(javascript).contains("app.csvPath(exportConfig[0], exportConfig[1])");
         assertThat(javascript).contains("\"btn-export-mine\": [\"mine\", \"/api/mileage/mine.csv\", \"mileage-mine.csv\"]");
         assertThat(javascript).contains("\"btn-export-team\": [\"team\", \"/api/mileage/team.csv\", \"mileage-team.csv\"]");
         assertThat(javascript).contains("\"btn-export-conversions\": [\"conversion\", \"/api/mileage/conversions.csv\", \"mileage-conversions.csv\"]");
@@ -258,7 +263,7 @@ class MileageSecurityTest {
 
     @Test
     void mileageJavascriptDisplaysCalculatedAmountAsPrimaryAmount() throws Exception {
-        String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
+        String javascript = settingsJavascript();
 
         assertThat(javascript).contains("result.calculatedAmount");
         assertThat(javascript).contains("item.calculatedAmount");
@@ -281,7 +286,7 @@ class MileageSecurityTest {
 
     @Test
     void mileageJavascriptUsesReadableNamesDatesSourcesAndSingleCategorySettings() throws Exception {
-        String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
+        String javascript = settingsJavascript();
 
         assertThat(javascript).contains("userName");
         assertThat(javascript).contains("sourceLabel");
@@ -294,46 +299,46 @@ class MileageSecurityTest {
 
     @Test
     void mileageJavascriptHonorsClockifyUserTimeZoneClaimAlias() throws Exception {
-        String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
+        String javascript = settingsJavascript();
         String dateJavascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings-date.js"));
 
-        assertThat(javascript).contains("tokenClaims.userTimeZone");
-        assertThat(javascript).contains("dateRangeForPreset(preset, timezoneFromClaims())");
+        assertThat(javascript).contains("claims.userTimeZone");
+        assertThat(javascript).contains("dateRangeForPreset(preset, app.timezoneFromClaims())");
         assertThat(dateJavascript).contains("Intl.DateTimeFormat(\"en-CA\"");
     }
 
     @Test
     void mileageJavascriptWiresDateRangePresetsToListsAndCsvExports() throws Exception {
-        String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
+        String javascript = settingsJavascript();
 
         assertThat(javascript).contains("initDateRanges");
         assertThat(javascript).contains("rangePresets");
         assertThat(javascript).contains("dateRangeForPreset");
         assertThat(javascript).contains("loadMine");
-        assertThat(javascript).contains("const query = rangeQuery(\"mine\")");
+        assertThat(javascript).contains("const query = app.rangeQuery(\"mine\")");
         assertThat(javascript).contains("/api/mileage/mine?pageSize=50\" + query");
-        assertThat(javascript).contains("const query = rangeQuery(\"team\")");
+        assertThat(javascript).contains("const query = app.rangeQuery(\"team\")");
         assertThat(javascript).contains("/api/mileage/team?pageSize=50\" + query");
-        assertThat(javascript).contains("const query = rangeQuery(\"conversion\")");
+        assertThat(javascript).contains("const query = app.rangeQuery(\"conversion\")");
         assertThat(javascript).contains("/api/mileage/conversions?pageSize=50\" + query");
-        assertThat(javascript).contains("document.addEventListener(\"click\", handleCsvExport)");
-        assertThat(javascript).contains("downloadCsv(csvPath(exportConfig[0], exportConfig[1]), exportConfig[2])");
+        assertThat(javascript).contains("document.addEventListener(\"click\", app.handleCsvExport)");
+        assertThat(javascript).contains("app.downloadCsv(app.csvPath(exportConfig[0], exportConfig[1]), exportConfig[2])");
     }
 
     @Test
     void mileageJavascriptDefaultsCreateDateFromClaimsTimezoneHelper() throws Exception {
-        String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
+        String javascript = settingsJavascript();
 
         assertThat(javascript).contains("date.value = window.MileageDateHelpers.isoDate(");
-        assertThat(javascript).contains("window.MileageDateHelpers.todayForTimeZone(timezoneFromClaims())");
+        assertThat(javascript).contains("window.MileageDateHelpers.todayForTimeZone(app.timezoneFromClaims())");
         assertThat(javascript).doesNotContain("date.value = new Date().toISOString().slice(0, 10)");
     }
 
     @Test
     void mileageJavascriptHardensSettingsDateReceiptAndRepairFailureStates() throws Exception {
-        String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
+        String javascript = settingsJavascript();
 
-        assertThat(javascript).contains("const settingsPromise = apiFetch(\"/api/mileage/settings\")");
+        assertThat(javascript).contains("const settingsPromise = app.apiFetch(\"/api/mileage/settings\")");
         assertThat(javascript).contains("const categoriesPromise = loadCategories().catch");
         assertThat(javascript).contains("Mileage categories could not be loaded: ");
         assertThat(javascript).contains("function validSelectedDateRange(scope)");
@@ -351,7 +356,7 @@ class MileageSecurityTest {
 
     @Test
     void mileageJavascriptAppliesTokenThemeWithoutExposingToken() throws Exception {
-        String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
+        String javascript = settingsJavascript();
 
         assertThat(javascript).contains("function applyTheme()");
         assertThat(javascript).contains("themeFromClaims");
@@ -387,13 +392,13 @@ class MileageSecurityTest {
 
     @Test
     void mileageJavascriptWiresUserFilterWithoutSendingUserIdForCreate() throws Exception {
-        String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
+        String javascript = settingsJavascript();
 
         assertThat(javascript).contains("/api/mileage/options/users");
         assertThat(javascript).contains("function userFilterQuery(scope)");
         assertThat(javascript).contains("\"&userId=\" + encodeURIComponent");
         // CSV export lines must stay byte-identical:
-        assertThat(javascript).contains("downloadCsv(csvPath(exportConfig[0], exportConfig[1]), exportConfig[2])");
+        assertThat(javascript).contains("app.downloadCsv(app.csvPath(exportConfig[0], exportConfig[1]), exportConfig[2])");
         // create flow still must not send userId:
         assertThat(javascript).doesNotContain("field-user");
         assertThat(javascript).doesNotContain("userId:");
@@ -412,14 +417,14 @@ class MileageSecurityTest {
 
     @Test
     void mileageJavascriptLoadsAndSavesNoteTemplate() throws Exception {
-        String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
+        String javascript = settingsJavascript();
 
         assertThat(javascript).contains("settings-note-template");
         assertThat(javascript).contains("settings.noteTemplate");
         // Empty textarea must send "" (not null) so the admin can clear a saved template back to default;
         // the backend normalizeNoteTemplate() converts blank to null and clears the column.
-        assertThat(javascript).contains("noteTemplate: formValue(\"settings-note-template\")");
-        assertThat(javascript).doesNotContain("noteTemplate: formValue(\"settings-note-template\") || null");
+        assertThat(javascript).contains("noteTemplate: app.formValue(\"settings-note-template\")");
+        assertThat(javascript).doesNotContain("noteTemplate: app.formValue(\"settings-note-template\") || null");
     }
 
     @Test
@@ -444,12 +449,31 @@ class MileageSecurityTest {
 
     @Test
     void mileageJavascriptOpensReportInNewTab() throws Exception {
-        String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/settings.js"));
+        String javascript = settingsJavascript();
 
         assertThat(javascript).contains("function handleReportClick");
         assertThat(javascript).contains("/iframe/report?from=");
         assertThat(javascript).contains("window.open");
-        assertThat(javascript).contains("document.addEventListener(\"click\", handleReportClick)");
+        assertThat(javascript).contains("document.addEventListener(\"click\", app.handleReportClick)");
+    }
+
+    private static String settingsJavascript() throws Exception {
+        StringBuilder builder = new StringBuilder();
+        for (String script : settingsScripts()) {
+            builder.append(Files.readString(Path.of("src/main/resources/static/assets/mileage/" + script))).append('\n');
+        }
+        return builder.toString();
+    }
+
+    private static List<String> settingsScripts() {
+        return List.of(
+                "settings-date.js",
+                "settings-core.js",
+                "settings-ranges.js",
+                "settings-create.js",
+                "settings-admin.js",
+                "settings-tables.js",
+                "settings.js");
     }
 
     private static MockHttpServletRequest requestWithRole(String role) {

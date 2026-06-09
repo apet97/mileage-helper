@@ -59,12 +59,15 @@ class MileageConversionControllerTest {
         conversionRepository = mock(MileageConversionRepository.class);
         conversionService = mock(MileageConversionService.class);
         gateway = mock(ClockifyExpenseGateway.class);
+        MileageConversionQueryService queryService = new MileageConversionQueryService(conversionRepository);
         MileageConversionController controller = new MileageConversionController(
                 conversionRepository,
                 conversionService,
                 new MileageAuthorizationService(),
-                gateway,
-                Clock.fixed(Instant.parse("2026-05-27T12:00:00Z"), ZoneOffset.UTC));
+                new MileageDateRangeResolver(Clock.fixed(Instant.parse("2026-05-27T12:00:00Z"), ZoneOffset.UTC)),
+                queryService,
+                new MileageConversionCsvExporter(queryService),
+                new ClockifyOptionNameResolver(gateway));
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new MileageExceptionHandler(new ObjectMapper().findAndRegisterModules()))
                 .build();

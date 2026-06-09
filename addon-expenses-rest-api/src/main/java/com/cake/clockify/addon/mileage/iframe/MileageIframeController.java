@@ -49,6 +49,11 @@ public class MileageIframeController {
                   <link rel="icon" type="image/png" href="/assets/mileage/icon.png">
                   <link rel="stylesheet" href="/assets/mileage/settings.css">
                   <script src="/assets/mileage/settings-date.js" defer></script>
+                  <script src="/assets/mileage/settings-core.js" defer></script>
+                  <script src="/assets/mileage/settings-ranges.js" defer></script>
+                  <script src="/assets/mileage/settings-create.js" defer></script>
+                  <script src="/assets/mileage/settings-admin.js" defer></script>
+                  <script src="/assets/mileage/settings-tables.js" defer></script>
                   <script src="/assets/mileage/settings.js" defer></script>
                 </head>
                 <body>

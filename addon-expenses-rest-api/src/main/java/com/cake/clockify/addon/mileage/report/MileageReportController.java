@@ -2,19 +2,17 @@ package com.cake.clockify.addon.mileage.report;
 
 import com.cake.clockify.addon.core.auth.NormalizedClaims;
 import com.cake.clockify.addon.core.auth.RequestAttributes;
+import com.cake.clockify.addon.mileage.api.ClockifyOptionNameResolver;
+import com.cake.clockify.addon.mileage.api.MileageConversionQueryService;
+import com.cake.clockify.addon.mileage.api.MileageDateRange;
+import com.cake.clockify.addon.mileage.api.MileageDateRangeResolver;
 import com.cake.clockify.addon.mileage.audit.MileageConversion;
-import com.cake.clockify.addon.mileage.audit.MileageConversionRepository;
-import com.cake.clockify.addon.mileage.audit.MileageConversionStatus;
 import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseGateway;
 import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseListItem;
 import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseListResult;
-import com.cake.clockify.addon.mileage.clockify.ClockifyProjectOption;
-import com.cake.clockify.addon.mileage.clockify.ClockifyUserOption;
 import com.cake.clockify.addon.mileage.security.MileageAuthorizationService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -25,11 +23,9 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
 import java.time.LocalDate;
-import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * Server-rendered, print-friendly expense report. Lists ALL Clockify expenses in the range; expenses
@@ -44,19 +40,24 @@ import java.util.stream.Collectors;
 @RestController
 public class MileageReportController {
     private static final int MAX_REPORT_ROWS = 1000;
-    private static final Sort REPORT_SORT = Sort.by(Sort.Order.asc("expenseDate"), Sort.Order.asc("updatedAt"));
 
-    private final MileageConversionRepository conversionRepository;
     private final MileageAuthorizationService authorizationService;
     private final ClockifyExpenseGateway gateway;
+    private final MileageDateRangeResolver dateRangeResolver;
+    private final MileageConversionQueryService queryService;
+    private final ClockifyOptionNameResolver nameResolver;
 
     public MileageReportController(
-            MileageConversionRepository conversionRepository,
             MileageAuthorizationService authorizationService,
-            ClockifyExpenseGateway gateway) {
-        this.conversionRepository = conversionRepository;
+            ClockifyExpenseGateway gateway,
+            MileageDateRangeResolver dateRangeResolver,
+            MileageConversionQueryService queryService,
+            ClockifyOptionNameResolver nameResolver) {
         this.authorizationService = authorizationService;
         this.gateway = gateway;
+        this.dateRangeResolver = dateRangeResolver;
+        this.queryService = queryService;
+        this.nameResolver = nameResolver;
     }
 
     @GetMapping(value = "/iframe/report", produces = MediaType.TEXT_HTML_VALUE)
@@ -78,29 +79,25 @@ public class MileageReportController {
                 ? requesterId
                 : (hasText(userId) ? userId.trim() : null);
         boolean includeUser = (targetUserId == null);
-        LocalDate fromDate = parseRequired("from", from);
-        LocalDate toDate = parseRequired("to", to);
-        if (fromDate.isAfter(toDate)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "from must be on or before to");
-        }
+        MileageDateRange range = dateRangeResolver.required(from, to);
         String workspaceId = claims.workspaceId();
-        Map<String, String> userNames = userNames(workspaceId);
+        Map<String, String> userNames = nameResolver.allUserNamesById(workspaceId);
         String label = includeUser ? "All users" : userLabel(userNames, targetUserId);
 
         try {
-            ClockifyExpenseListResult scan = gateway.listExpensesForReport(workspaceId, targetUserId, fromDate, toDate);
+            ClockifyExpenseListResult scan = gateway.listExpensesForReport(workspaceId, targetUserId, range.from(), range.to());
             // Load CONVERTED conversions for exactly the scanned expense ids so every displayed expense
             // finds its override (no cap/sort mismatch between the conversion query and the merged display).
             Map<String, MileageConversion> conversions = conversionsByExpenseId(workspaceId, scan.items());
             List<ReportRow> merged = ReportMerger.merge(scan.items(), conversions, userNames);
             boolean rowCapHit = merged.size() > MAX_REPORT_ROWS;
             return ResponseEntity.ok(MileageReportRenderer.render(
-                    label, fromDate, toDate, cap(merged), includeUser, scan.truncated(), rowCapHit, false));
+                    label, range.from(), range.to(), cap(merged), includeUser, scan.truncated(), rowCapHit, false));
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return degraded(workspaceId, label, fromDate, toDate, targetUserId, userNames, includeUser);
+            return degraded(workspaceId, label, range, targetUserId, userNames, includeUser);
         } catch (IOException | RuntimeException e) {
-            return degraded(workspaceId, label, fromDate, toDate, targetUserId, userNames, includeUser);
+            return degraded(workspaceId, label, range, targetUserId, userNames, includeUser);
         }
     }
 
@@ -114,8 +111,7 @@ public class MileageReportController {
             return Map.of();
         }
         Map<String, MileageConversion> byExpenseId = new LinkedHashMap<>();
-        for (MileageConversion conversion : conversionRepository.findByWorkspaceIdAndStatusAndExpenseIdIn(
-                workspaceId, MileageConversionStatus.CONVERTED, expenseIds)) {
+        for (MileageConversion conversion : queryService.convertedByExpenseIds(workspaceId, expenseIds)) {
             if (conversion.getExpenseId() != null) {
                 byExpenseId.put(conversion.getExpenseId(), conversion);
             }
@@ -124,64 +120,25 @@ public class MileageReportController {
     }
 
     private ResponseEntity<String> degraded(
-            String workspaceId, String label, LocalDate from, LocalDate to,
+            String workspaceId, String label, MileageDateRange range,
             String targetUserId, Map<String, String> userNames, boolean includeUser) {
-        PageRequest pageRequest = PageRequest.of(0, MAX_REPORT_ROWS, REPORT_SORT);
-        Page<MileageConversion> page = targetUserId == null
-                ? conversionRepository.findAllByWorkspaceIdAndStatusAndExpenseDateBetween(
-                        workspaceId, MileageConversionStatus.CONVERTED, from, to, pageRequest)
-                : conversionRepository.findAllByWorkspaceIdAndUserIdAndStatusAndExpenseDateBetween(
-                        workspaceId, targetUserId, MileageConversionStatus.CONVERTED, from, to, pageRequest);
-        List<ReportRow> rows = ReportMerger.mileageOnly(page.getContent(), userNames, projectNames(workspaceId));
+        Page<MileageConversion> page = queryService.convertedForReport(workspaceId, targetUserId, range, MAX_REPORT_ROWS);
+        List<ReportRow> rows = ReportMerger.mileageOnly(
+                page.getContent(),
+                userNames,
+                nameResolver.allProjectNamesById(workspaceId));
         boolean rowCapHit = page.getTotalElements() > MAX_REPORT_ROWS;
         return ResponseEntity.ok(MileageReportRenderer.render(
-                label, from, to, cap(rows), includeUser, false, rowCapHit, true));
+                label, range.from(), range.to(), cap(rows), includeUser, false, rowCapHit, true));
     }
 
     private static List<ReportRow> cap(List<ReportRow> rows) {
         return rows.size() > MAX_REPORT_ROWS ? rows.subList(0, MAX_REPORT_ROWS) : rows;
     }
 
-    private Map<String, String> userNames(String workspaceId) {
-        try {
-            return gateway.listUsers(workspaceId).stream()
-                    .filter(user -> user.id() != null && !user.id().isBlank() && user.name() != null)
-                    .collect(Collectors.toMap(ClockifyUserOption::id, ClockifyUserOption::name, (left, right) -> left));
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return Map.of();
-        } catch (IOException | RuntimeException e) {
-            return Map.of();
-        }
-    }
-
-    private Map<String, String> projectNames(String workspaceId) {
-        try {
-            return gateway.listProjects(workspaceId).stream()
-                    .filter(project -> project.id() != null && !project.id().isBlank() && project.name() != null)
-                    .collect(Collectors.toMap(ClockifyProjectOption::id, ClockifyProjectOption::name, (left, right) -> left));
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return Map.of();
-        } catch (IOException | RuntimeException e) {
-            return Map.of();
-        }
-    }
-
     private static String userLabel(Map<String, String> userNames, String userId) {
         String name = userNames.get(userId);
         return name == null || name.isBlank() ? userId : name;
-    }
-
-    private static LocalDate parseRequired(String field, String value) {
-        if (value == null || value.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, field + " is required (YYYY-MM-DD)");
-        }
-        try {
-            return LocalDate.parse(value.trim());
-        } catch (DateTimeParseException e) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, field + " must use YYYY-MM-DD");
-        }
     }
 
     private static boolean hasText(String value) {

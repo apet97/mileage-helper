@@ -32,8 +32,9 @@ section "Git whitespace check"
 git diff --check
 
 section "Settings JavaScript syntax check"
-node --check addon-expenses-rest-api/src/main/resources/static/assets/mileage/settings-date.js
-node --check addon-expenses-rest-api/src/main/resources/static/assets/mileage/settings.js
+for file in addon-expenses-rest-api/src/main/resources/static/assets/mileage/settings*.js; do
+  node --check "$file"
+done
 
 section "Mileage date helper behavior"
 node scripts/test-mileage-date-helpers.mjs

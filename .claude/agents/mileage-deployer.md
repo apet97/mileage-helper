@@ -31,6 +31,11 @@ You are a focused deployment agent for Mileage for Clockify. Your job is to take
    /actuator/health                       → expect 200 status=UP
    /manifest                              → expect 200 schema=1.5 key=mileage-for-clockify
    /assets/mileage/settings-date.js       → expect 200 text/javascript
+   /assets/mileage/settings-core.js       → expect 200 text/javascript
+   /assets/mileage/settings-ranges.js     → expect 200 text/javascript
+   /assets/mileage/settings-create.js     → expect 200 text/javascript
+   /assets/mileage/settings-admin.js      → expect 200 text/javascript
+   /assets/mileage/settings-tables.js     → expect 200 text/javascript
    /assets/mileage/settings.js            → expect 200 text/javascript
    /assets/mileage/icon.png               → expect 200 image/png
    /iframe/mileage (unauthenticated)      → expect 401 with CSP + HSTS + Cache-Control: no-store + Permissions-Policy + Referrer-Policy + X-Content-Type-Options

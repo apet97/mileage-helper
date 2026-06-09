@@ -20,7 +20,9 @@ evidence for `addon-expenses-rest-api/docs/PRE_PUBLISH_CHECKLIST.md`.
 4. Manifest probe: build/run the compose stack and `curl -fsS .../manifest`;
    confirm schema `1.5`, key `mileage-for-clockify`, the 5 scopes, the 4 webhooks.
 5. If a deploy happened: probe `/actuator/health`, `/manifest`,
-   BOTH `/assets/mileage/settings-date.js` and `/assets/mileage/settings.js`,
+   every current `/assets/mileage/settings*.js` file (`settings-date.js`,
+   `settings-core.js`, `settings-ranges.js`, `settings-create.js`,
+   `settings-admin.js`, `settings-tables.js`, and boot `settings.js`),
    `/assets/mileage/icon.png`, and unauthenticated `/iframe/mileage` (expect 401 + no-store/CSP/HSTS).
    For OCI, capture the systemd restart time and fresh `journalctl` error scan. For Railway, use `railway deployment list` for the CURRENT deployment id — never reuse an old id.
 6. Write a dated evidence block (today's date, git sha, deployment id) and
@@ -30,4 +32,4 @@ evidence for `addon-expenses-rest-api/docs/PRE_PUBLISH_CHECKLIST.md`.
 ## Hard rules
 - Never weaken a test to make the gate pass.
 - Never print secrets / tokens / receipt bytes.
-- Do not claim a deploy is live without a post-deploy probe of BOTH settings JS assets.
+- Do not claim a deploy is live without post-deploy probes for every current settings JS asset.

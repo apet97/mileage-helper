@@ -2,6 +2,9 @@ package com.cake.clockify.addon.mileage.report;
 
 import com.cake.clockify.addon.core.auth.NormalizedClaims;
 import com.cake.clockify.addon.core.auth.RequestAttributes;
+import com.cake.clockify.addon.mileage.api.ClockifyOptionNameResolver;
+import com.cake.clockify.addon.mileage.api.MileageConversionQueryService;
+import com.cake.clockify.addon.mileage.api.MileageDateRangeResolver;
 import com.cake.clockify.addon.mileage.api.MileageExceptionHandler;
 import com.cake.clockify.addon.mileage.audit.MileageConversion;
 import com.cake.clockify.addon.mileage.audit.MileageConversionRepository;
@@ -22,8 +25,10 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 
 import static org.hamcrest.Matchers.containsString;
@@ -46,8 +51,13 @@ class MileageReportControllerTest {
     void setUp() {
         conversionRepository = mock(MileageConversionRepository.class);
         gateway = mock(ClockifyExpenseGateway.class);
+        MileageConversionQueryService queryService = new MileageConversionQueryService(conversionRepository);
         MileageReportController controller = new MileageReportController(
-                conversionRepository, new MileageAuthorizationService(), gateway);
+                new MileageAuthorizationService(),
+                gateway,
+                new MileageDateRangeResolver(Clock.fixed(Instant.parse("2026-05-27T12:00:00Z"), ZoneOffset.UTC)),
+                queryService,
+                new ClockifyOptionNameResolver(gateway));
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new MileageExceptionHandler(new ObjectMapper().findAndRegisterModules()))
                 .build();

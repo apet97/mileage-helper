@@ -8,7 +8,7 @@ import com.cake.clockify.client.models.User;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
@@ -30,36 +30,27 @@ public class ClockifyExpenseGateway {
         Bound the scan: 25 * 200 = 5000 expenses examined before signalling truncation (vs. throwing). */
     private static final int EXPENSE_MAX_PAGES = 25;
     private static final String MILEAGE_CATEGORY_NAME = "Mileage";
-    private static final String MILEAGE_UNIT = "mile";
 
     private final ClockifyClientFactory clientFactory;
-    private final ObjectMapper objectMapper;
+    private final ClockifyExpenseJsonMapper mapper;
 
+    @Autowired
     public ClockifyExpenseGateway(ClockifyClientFactory clientFactory, ObjectMapper objectMapper) {
+        this(clientFactory, new ClockifyExpenseJsonMapper(objectMapper));
+    }
+
+    ClockifyExpenseGateway(ClockifyClientFactory clientFactory, ClockifyExpenseJsonMapper mapper) {
         this.clientFactory = clientFactory;
-        this.objectMapper = objectMapper;
+        this.mapper = mapper;
     }
 
     public ClockifyExpenseSnapshot getExpense(String workspaceId, String expenseId) throws IOException, InterruptedException {
         JsonNode node = client(workspaceId).expenses().getExpense(workspaceId, expenseId);
-        return new ClockifyExpenseSnapshot(
-                text(node, "id"),
-                text(node, "workspaceId"),
-                text(node, "userId"),
-                text(node, "date"),
-                text(node, "projectId"),
-                text(node, "taskId"),
-                text(node, "categoryId"),
-                text(node, "notes"),
-                decimal(node.get("quantity")),
-                node.has("billable") && !node.get("billable").isNull() ? node.get("billable").asBoolean() : null,
-                text(node, "fileId"),
-                decimal(node.get("total")),
-                node.has("locked") && !node.get("locked").isNull() ? node.get("locked").asBoolean() : null);
+        return mapper.expenseSnapshot(node);
     }
 
     public JsonNode createFlatExpense(String workspaceId, CreateFlatExpenseCommand command) throws IOException, InterruptedException {
-        return client(workspaceId).expenses().createExpense(workspaceId, createBody(command));
+        return client(workspaceId).expenses().createExpense(workspaceId, mapper.createBody(command));
     }
 
     public JsonNode createFlatExpenseWithReceipt(
@@ -68,38 +59,26 @@ public class ClockifyExpenseGateway {
             String fileName,
             String contentType,
             byte[] fileBytes) throws IOException, InterruptedException {
-        return client(workspaceId).expenses().createExpense(workspaceId, createBody(command), fileName, contentType, fileBytes);
+        return client(workspaceId).expenses().createExpense(workspaceId, mapper.createBody(command), fileName, contentType, fileBytes);
     }
 
     public JsonNode updateFlatExpense(String workspaceId, String expenseId, UpdateFlatExpenseCommand command)
             throws IOException, InterruptedException {
-        ObjectNode body = objectMapper.createObjectNode();
-        body.put("categoryId", command.categoryId());
-        putIfPresent(body, "userId", command.userId());
-        putIfPresent(body, "date", command.date());
-        putIfPresent(body, "projectId", command.projectId());
-        putIfPresent(body, "taskId", command.taskId());
-        if (command.billable() != null) {
-            body.put("billable", command.billable());
-        }
-        body.put("amount", amountText(command.amount(), command.roundingMode(), command.amountIsQuantity()));
-        body.put("notes", command.notes() == null ? "" : command.notes());
-        body.put("changeFields", "CATEGORY,AMOUNT,NOTES");
-        return client(workspaceId).expenses().updateExpense(workspaceId, expenseId, body);
+        return client(workspaceId).expenses().updateExpense(workspaceId, expenseId, mapper.updateBody(command));
     }
 
     public List<ClockifyCategoryOption> listCategories(String workspaceId) throws IOException, InterruptedException {
         ClockifyClient clockify = client(workspaceId);
         return listAllPages(CATEGORY_PAGE_SIZE, (page, out) -> {
-            ArrayNode array = arrayNode(
+            ArrayNode array = mapper.arrayNode(
                     clockify.expenses().getCategories(workspaceId, new ClockifyPageRequest(page, CATEGORY_PAGE_SIZE)),
                     "categories");
             if (array != null) {
                 for (JsonNode item : array) {
-                    out.add(categoryOption(item));
+                    out.add(mapper.categoryOption(item));
                 }
             }
-            return sizeOf(array);
+            return mapper.sizeOf(array);
         });
     }
 
@@ -108,7 +87,6 @@ public class ClockifyExpenseGateway {
         BigDecimal priceInCents = rate == null
                 ? BigDecimal.ZERO
                 : rate.movePointRight(2).setScale(0, RoundingMode.HALF_UP);
-        ObjectNode body = mileageCategoryBody(priceInCents);
         ClockifyCategoryOption existing = null;
         try {
             existing = findMileageCategory(workspaceId).orElse(null);
@@ -118,9 +96,9 @@ public class ClockifyExpenseGateway {
             }
         }
         JsonNode response = existing == null
-                ? client(workspaceId).expenses().createCategory(workspaceId, body)
-                : client(workspaceId).expenses().updateCategory(workspaceId, existing.id(), body);
-        ClockifyCategoryOption option = categoryOption(response);
+                ? client(workspaceId).expenses().createCategory(workspaceId, mapper.mileageCategoryBody(priceInCents))
+                : client(workspaceId).expenses().updateCategory(workspaceId, existing.id(), mapper.mileageCategoryBody(priceInCents));
+        ClockifyCategoryOption option = mapper.categoryOption(response);
         if (option.id() == null && existing != null) {
             return existing;
         }
@@ -137,17 +115,17 @@ public class ClockifyExpenseGateway {
     public List<ClockifyProjectOption> listProjects(String workspaceId) throws IOException, InterruptedException {
         ClockifyClient clockify = client(workspaceId);
         return listAllPages(PROJECT_PAGE_SIZE, (page, out) -> {
-            ArrayNode array = arrayNode(
+            ArrayNode array = mapper.arrayNode(
                     clockify.projects().getProjects(workspaceId, new ClockifyPageRequest(page, PROJECT_PAGE_SIZE)),
                     "projects");
             if (array != null) {
                 for (JsonNode item : array) {
                     if (!item.path("archived").asBoolean(false)) {
-                        out.add(new ClockifyProjectOption(text(item, "id"), text(item, "name")));
+                        out.add(mapper.projectOption(item));
                     }
                 }
             }
-            return sizeOf(array);
+            return mapper.sizeOf(array);
         });
     }
 
@@ -177,23 +155,17 @@ public class ClockifyExpenseGateway {
         List<ClockifyExpenseListItem> out = new ArrayList<>();
         int page = 1;
         while (page <= EXPENSE_MAX_PAGES) {
-            ArrayNode rows = expenseRows(
+            ArrayNode rows = mapper.expenseRows(
                     clockify.expenses().getExpenses(workspaceId, filterUser, new ClockifyPageRequest(page, EXPENSE_PAGE_SIZE)));
-            int seen = sizeOf(rows);
+            int seen = mapper.sizeOf(rows);
             if (rows != null) {
                 for (JsonNode item : rows) {
-                    LocalDate date = parseExpenseDate(text(item, "date"));
+                    ClockifyExpenseListItem mapped = mapper.expenseListItem(item);
+                    LocalDate date = mapped.date();
                     if (date == null || date.isBefore(from) || date.isAfter(to)) {
                         continue;
                     }
-                    out.add(new ClockifyExpenseListItem(
-                            text(item, "id"),
-                            text(item, "userId"),
-                            date,
-                            nestedText(item, "project", "name"),
-                            nestedText(item, "category", "id"),
-                            nestedText(item, "category", "name"),
-                            centsToMajor(decimal(item.get("total")))));
+                    out.add(mapped);
                 }
             }
             if (seen < EXPENSE_PAGE_SIZE) {
@@ -206,63 +178,6 @@ public class ClockifyExpenseGateway {
 
     private ClockifyClient client(String workspaceId) {
         return clientFactory.getClient(workspaceId);
-    }
-
-    private ObjectNode createBody(CreateFlatExpenseCommand command) {
-        ObjectNode body = objectMapper.createObjectNode();
-        body.put("categoryId", command.categoryId());
-        body.put("userId", command.userId());
-        if (command.date() != null) {
-            body.put("date", command.date() + "T12:00:00Z");
-        }
-        putIfPresent(body, "projectId", command.projectId());
-        putIfPresent(body, "taskId", command.taskId());
-        body.put("amount", amountText(command.amount(), command.roundingMode(), command.amountIsQuantity()));
-        if (command.billable() != null) {
-            body.put("billable", command.billable());
-        }
-        putIfPresent(body, "notes", command.notes());
-        return body;
-    }
-
-    private ObjectNode mileageCategoryBody(BigDecimal priceInCents) {
-        ObjectNode body = objectMapper.createObjectNode();
-        body.put("name", MILEAGE_CATEGORY_NAME);
-        body.put("hasUnitPrice", true);
-        body.put("priceInCents", priceInCents.toBigIntegerExact());
-        body.put("unit", MILEAGE_UNIT);
-        return body;
-    }
-
-    private static String amountText(BigDecimal amount, RoundingMode roundingMode, boolean amountIsQuantity) {
-        if (amountIsQuantity) {
-            return amount.stripTrailingZeros().toPlainString();
-        }
-        RoundingMode mode = roundingMode == null ? RoundingMode.HALF_UP : roundingMode;
-        return amount.setScale(2, mode).toPlainString();
-    }
-
-    private static void putIfPresent(ObjectNode body, String key, String value) {
-        if (value != null && !value.isBlank()) {
-            body.put(key, value);
-        }
-    }
-
-    private static String text(JsonNode node, String field) {
-        if (node == null || node.get(field) == null || node.get(field).isNull()) {
-            return null;
-        }
-        return node.get(field).asText();
-    }
-
-    private static ClockifyCategoryOption categoryOption(JsonNode item) {
-        boolean hasUnitPrice = item != null && item.path("hasUnitPrice").asBoolean(false);
-        return new ClockifyCategoryOption(
-                text(item, "id"),
-                text(item, "name"),
-                hasUnitPrice ? "UNIT" : "FLAT",
-                text(item, "unit"),
-                decimal(item == null ? null : item.get("priceInCents")));
     }
 
     private static <T> List<T> listAllPages(int pageSize, PageAppender<T> appender)
@@ -279,56 +194,8 @@ public class ClockifyExpenseGateway {
         throw new IllegalStateException("Clockify pagination exceeded " + MAX_OPTION_PAGES + " pages");
     }
 
-    private static ArrayNode arrayNode(JsonNode root, String field) {
-        if (root == null) {
-            return null;
-        }
-        JsonNode node = root.isArray() ? root : root.path(field);
-        return node instanceof ArrayNode array ? array : null;
-    }
-
-    /** Clockify's expense list shape is {@code { "expenses": { "expenses": [...], "count": N }, ... }};
-        fall back to {@code { "expenses": [...] }} or a bare array for resilience to shape drift. */
-    private static ArrayNode expenseRows(JsonNode root) {
-        if (root == null) {
-            return null;
-        }
-        JsonNode nested = root.path("expenses").path("expenses");
-        if (nested instanceof ArrayNode array) {
-            return array;
-        }
-        return arrayNode(root, "expenses");
-    }
-
-    private static String nestedText(JsonNode item, String objectField, String key) {
-        if (item == null) {
-            return null;
-        }
-        JsonNode object = item.get(objectField);
-        return object == null || object.isNull() ? null : text(object, key);
-    }
-
-    private static LocalDate parseExpenseDate(String value) {
-        if (value == null || value.length() < 10) {
-            return null;
-        }
-        try {
-            return LocalDate.parse(value.substring(0, 10));
-        } catch (RuntimeException e) {
-            return null;
-        }
-    }
-
-    private static BigDecimal centsToMajor(BigDecimal cents) {
-        return cents == null ? BigDecimal.ZERO : cents.movePointLeft(2).setScale(2, RoundingMode.HALF_UP);
-    }
-
     private static String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.trim();
-    }
-
-    private static int sizeOf(ArrayNode array) {
-        return array == null ? 0 : array.size();
     }
 
     private static boolean isAuthzFailure(ClockifyApiException e) {
@@ -347,19 +214,6 @@ public class ClockifyExpenseGateway {
             return user.email();
         }
         return user.id();
-    }
-
-    private static BigDecimal decimal(JsonNode node) {
-        if (node == null || node.isNull()) {
-            return null;
-        }
-        if (node.isNumber()) {
-            return node.decimalValue();
-        }
-        if (node.isTextual() && !node.asText().isBlank()) {
-            return new BigDecimal(node.asText());
-        }
-        return null;
     }
 
     @FunctionalInterface

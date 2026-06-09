@@ -7,7 +7,7 @@ Run from the repository root before claiming publish readiness:
 - [ ] `git status --short --branch` reviewed.
 - [ ] `./scripts/verify-publish.sh` passes.
 - [ ] If a new OCI deploy was made, the systemd restart time and fresh `journalctl` error scan were captured.
-- [ ] If a new hosted deploy was made, hosted `/actuator/health`, `/manifest`, `/assets/mileage/settings-date.js`, `/assets/mileage/settings.js`, and icon probes passed and the dated evidence was added below.
+- [ ] If a new hosted deploy was made, hosted `/actuator/health`, `/manifest`, every `/assets/mileage/settings*.js` asset, and icon probes passed and the dated evidence was added below.
 - [ ] If Railway was explicitly used, `railway deployment list` was used for that run's deployment ID.
 
 `./scripts/verify-publish.sh` runs these local publish-safety checks:
@@ -17,8 +17,7 @@ Run from the repository root before claiming publish readiness:
 - `mvn -pl addon-expenses-rest-api -am -Dtest=MileageSecurityTest -Dsurefire.failIfNoSpecifiedTests=false test`
 - Docker Desktop-backed `mvn -pl addon-expenses-rest-api -am test`
 - `git diff --check`
-- `node --check addon-expenses-rest-api/src/main/resources/static/assets/mileage/settings-date.js`
-- `node --check addon-expenses-rest-api/src/main/resources/static/assets/mileage/settings.js`
+- `node --check` for every `addon-expenses-rest-api/src/main/resources/static/assets/mileage/settings*.js` asset
 - `node scripts/test-mileage-date-helpers.mjs`
 - `gitleaks detect --source . --no-git --redact --verbose`
 - `docker compose -f addon-expenses-rest-api/docker-compose.yml build`
@@ -93,8 +92,8 @@ Last local/live stabilization pass: 2026-06-05.
 - Pre-deploy hosted split-asset recheck on 2026-05-27: `/actuator/health` and
   `/manifest` returned `200`, but `/assets/mileage/settings-date.js` returned
   `404`, proving production was still serving an older deployment. Do not claim
-  the split date-helper hardening is live until a post-deploy probe passes for
-  both settings JS assets.
+  the current split settings bundle is live until a post-deploy probe passes for
+  every `settings*.js` asset.
 - Post-deploy hosted split-asset recheck on 2026-05-27: a Railway deployment
   reached `SUCCESS`; use `railway deployment list` for the current deployment
   ID instead of treating this dated evidence as current truth. Public probes
@@ -187,8 +186,7 @@ Last local/live stabilization pass: 2026-06-05.
 ## Required Manual Product Gates
 
 - [ ] Runtime `/manifest` probe passes.
-- [ ] Runtime `/assets/mileage/settings-date.js` probe passes after deploys containing the split date helper.
-- [ ] Runtime `/assets/mileage/settings.js` probe passes.
+- [ ] Runtime probes pass for every `/assets/mileage/settings*.js` asset.
 - [ ] Runtime `/assets/mileage/icon.png` probe passes.
 - [ ] Static secret scan passes.
 - [ ] Manifest uses the production `ADDON_BASE_URL`.
