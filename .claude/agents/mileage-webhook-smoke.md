@@ -30,6 +30,8 @@ Probe `$BASE_PROD/actuator/prometheus` (production URL) and snapshot the current
 - `http_server_requests_seconds_count{uri="/webhook/**", method="POST", status="200"}`
 - `tasks_scheduled_execution_seconds_count{code_function="pollAndProcess", outcome="SUCCESS"}`
 
+Interpret scheduler liveness against the deployment's configured `MILEAGE_WORKER_POLL_DELAY_MS` when it is known; do not assume a fixed 4 Hz rate across OCI, local Docker, Cloudflared, or any restored Railway run.
+
 ## Create the sacrificial expense
 
 `POST $BASE/workspaces/{wsId}/expenses` (multipart) with:

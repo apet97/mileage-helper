@@ -20,7 +20,10 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpHeaders;
+import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.RequestBuilder;
+import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import java.math.BigDecimal;
@@ -40,11 +43,13 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.hamcrest.Matchers.containsString;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 class MileageConversionControllerTest {
@@ -279,7 +284,7 @@ class MileageConversionControllerTest {
                 eq("ws-admin"), eq("user-two"), eq(MileageConversionStatus.DELETED), any(LocalDate.class), any(LocalDate.class), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(conversion("ws-admin"))));
 
-        mockMvc.perform(get("/api/mileage/team.csv")
+        performCsv(get("/api/mileage/team.csv")
                         .queryParam("userId", "user-two")
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("OWNER")))
                 .andExpect(status().isOk());
@@ -335,7 +340,7 @@ class MileageConversionControllerTest {
                 eq("ws-admin"), eq("user-claims"), eq(MileageConversionStatus.DELETED), eq(LocalDate.parse("2026-05-01")), eq(LocalDate.parse("2026-05-31")), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(conversionWithCsvCharacters("ws-admin"))));
 
-        mockMvc.perform(get("/api/mileage/mine.csv")
+        performCsv(get("/api/mileage/mine.csv")
                         .queryParam("from", "2026-05-01")
                         .queryParam("to", "2026-05-31")
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("MEMBER")))
@@ -356,7 +361,7 @@ class MileageConversionControllerTest {
                 eq("ws-admin"), eq(MileageConversionStatus.DELETED), any(LocalDate.class), any(LocalDate.class), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(conversion)));
 
-        mockMvc.perform(get("/api/mileage/team.csv")
+        performCsv(get("/api/mileage/team.csv")
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("OWNER")))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("\"'\r=HYPERLINK")));
@@ -368,7 +373,7 @@ class MileageConversionControllerTest {
                 eq("ws-admin"), eq(MileageConversionStatus.DELETED), any(LocalDate.class), any(LocalDate.class), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(conversionWithoutUser("ws-admin"))));
 
-        mockMvc.perform(get("/api/mileage/team.csv")
+        performCsv(get("/api/mileage/team.csv")
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("OWNER")))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("CONVERTED,,,")));
@@ -393,7 +398,7 @@ class MileageConversionControllerTest {
                     return new PageImpl<>(List.of(second), pageable, 1001);
                 });
 
-        mockMvc.perform(get("/api/mileage/team.csv")
+        performCsv(get("/api/mileage/team.csv")
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("OWNER")))
                 .andExpect(status().isOk())
                 .andExpect(header().string("X-Mileage-Export-Truncated", "false"))
@@ -422,14 +427,14 @@ class MileageConversionControllerTest {
         when(gateway.listUsers("ws-admin")).thenReturn(List.of(new ClockifyUserOption("user-claims", "Ada Lovelace", "ada@example.test")));
         when(gateway.listProjects("ws-admin")).thenReturn(List.of(new ClockifyProjectOption("project-1", "Northern Route")));
 
-        mockMvc.perform(get("/api/mileage/team.csv")
+        performCsv(get("/api/mileage/team.csv")
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("OWNER")))
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION, containsString("mileage-team.csv")))
                 .andExpect(content().string(containsString("WEBHOOK_CREATED,Created through Expenses,CONVERTED,user-claims,Ada Lovelace,project-1,Northern Route,")))
                 .andExpect(content().string(containsString("24.497,24.50")));
 
-        mockMvc.perform(get("/api/mileage/conversions.csv")
+        performCsv(get("/api/mileage/conversions.csv")
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("OWNER")))
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION, containsString("mileage-conversions.csv")))
@@ -444,7 +449,7 @@ class MileageConversionControllerTest {
                 .thenReturn(new PageImpl<>(List.of(conversion("ws-admin"))));
         when(gateway.listProjects("ws-admin")).thenReturn(List.of(new ClockifyProjectOption("project-1", "Northern Route")));
 
-        mockMvc.perform(get("/api/mileage/mine.csv")
+        performCsv(get("/api/mileage/mine.csv")
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("MEMBER")))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString(",project-1,Northern Route,")));
@@ -523,6 +528,14 @@ class MileageConversionControllerTest {
         MileageConversion conversion = conversion(workspaceId);
         conversion.setUserId(null);
         return conversion;
+    }
+
+    private ResultActions performCsv(RequestBuilder requestBuilder) throws Exception {
+        MvcResult started = mockMvc.perform(requestBuilder)
+                .andExpect(status().isOk())
+                .andExpect(request().asyncStarted())
+                .andReturn();
+        return mockMvc.perform(asyncDispatch(started));
     }
 
     private static NormalizedClaims claims(String role) {

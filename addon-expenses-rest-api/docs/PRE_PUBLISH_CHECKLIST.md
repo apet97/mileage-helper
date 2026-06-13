@@ -7,7 +7,7 @@ Run from the repository root before claiming publish readiness:
 - [ ] `git status --short --branch` reviewed.
 - [ ] `./scripts/verify-publish.sh` passes.
 - [ ] If a new OCI deploy was made, the systemd restart time and fresh `journalctl` error scan were captured.
-- [ ] If a new hosted deploy was made, hosted `/actuator/health`, `/manifest`, every `/assets/mileage/settings*.js` asset, and icon probes passed and the dated evidence was added below.
+- [ ] If a new hosted deploy was made, hosted `/actuator/health`, `/manifest`, every `/assets/mileage/settings*.js` asset, `/assets/mileage/report.css`, `/assets/mileage/report.js`, `/assets/mileage/icon.png`, unauthenticated `/iframe/mileage`, unauthenticated `/iframe/report`, prometheus metric families, and scheduler liveness probes passed and the dated evidence was added below.
 - [ ] If Railway was explicitly used, `railway deployment list` was used for that run's deployment ID.
 
 `./scripts/verify-publish.sh` runs these local publish-safety checks:
@@ -15,10 +15,12 @@ Run from the repository root before claiming publish readiness:
 - `mvn -pl clockify-rest-client -Dtest=ExpensesClientTest,FilesClientTest test`
 - `mvn -pl addon-core -Dtest=ClaimsNormalizerTest test`
 - `mvn -pl addon-expenses-rest-api -am -Dtest=MileageSecurityTest -Dsurefire.failIfNoSpecifiedTests=false test`
-- Docker Desktop-backed `mvn -pl addon-expenses-rest-api -am test`
+- Docker auto-detection, then `mvn -pl addon-expenses-rest-api -am test`
 - `git diff --check`
-- `node --check` for every `addon-expenses-rest-api/src/main/resources/static/assets/mileage/settings*.js` asset
+- `./scripts/check-mileage-settings-js.sh`
+- `./scripts/check-static-guardrails.sh`
 - `node scripts/test-mileage-date-helpers.mjs`
+- `node scripts/test-mileage-settings-behavior.mjs`
 - `gitleaks detect --source . --no-git --redact --verbose`
 - `docker compose -f addon-expenses-rest-api/docker-compose.yml build`
 

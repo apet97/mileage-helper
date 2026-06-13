@@ -17,6 +17,7 @@ import com.cake.clockify.addon.mileage.note.MileageNoteService;
 import com.cake.clockify.addon.mileage.settings.MileageSettingsService;
 import com.cake.clockify.addon.mileage.settings.MileageSettingsValidation;
 import com.cake.clockify.client.ClockifyApiException;
+import com.cake.clockify.client.ClockifyTransportException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -168,6 +169,8 @@ public class MileageConversionService {
         } catch (ClockifyApiException e) {
             return fail(conversion, "clockify_api_error",
                     "Clockify API request failed with status " + e.statusCode());
+        } catch (ClockifyTransportException e) {
+            return fail(conversion, "clockify_transport_error", "Clockify API request could not be completed");
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return fail(conversion, "interrupted", "Mileage conversion was interrupted");

@@ -37,8 +37,11 @@ You are a focused deployment agent for Mileage for Clockify. Your job is to take
    /assets/mileage/settings-admin.js      → expect 200 text/javascript
    /assets/mileage/settings-tables.js     → expect 200 text/javascript
    /assets/mileage/settings.js            → expect 200 text/javascript
+   /assets/mileage/report.css             → expect 200 text/css
+   /assets/mileage/report.js              → expect 200 text/javascript
    /assets/mileage/icon.png               → expect 200 image/png
    /iframe/mileage (unauthenticated)      → expect 401 with CSP + HSTS + Cache-Control: no-store + Permissions-Policy + Referrer-Policy + X-Content-Type-Options
+   /iframe/report (unauthenticated)       → expect 401 with CSP + HSTS + Cache-Control: no-store + Permissions-Policy + Referrer-Policy + X-Content-Type-Options
    /actuator/prometheus                   → expect mileage_conversion_outcome_total (8 active outcomes),
                                                    mileage_webhook_queue_depth{status="PENDING"},
                                                    mileage_webhook_job_process_seconds_*,
@@ -78,6 +81,6 @@ Report in this shape (concise, no decoration):
 publish gate: PASS (205 tests)
 deploy id: <id>
 deploy status: SUCCESS
-hosted probes: 6/6 baseline green, 3/3 metric families present, worker polling at ~4 Hz with zero exception tags
+hosted probes: baseline green, 3/3 metric families present, worker polling rate matches MILEAGE_WORKER_POLL_DELAY_MS-derived expectation with zero exception tags
 evidence block: <paste-ready text>
 ```

@@ -81,7 +81,9 @@ public class MileageReportController {
         boolean includeUser = (targetUserId == null);
         MileageDateRange range = dateRangeResolver.required(from, to);
         String workspaceId = claims.workspaceId();
-        Map<String, String> userNames = nameResolver.allUserNamesById(workspaceId);
+        Map<String, String> userNames = includeUser
+                ? nameResolver.allUserNamesById(workspaceId)
+                : Map.of();
         String label = includeUser ? "All users" : userLabel(userNames, targetUserId);
 
         try {

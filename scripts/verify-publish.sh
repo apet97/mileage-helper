@@ -10,6 +10,28 @@ section() {
   printf '\n== %s ==\n' "$1"
 }
 
+select_docker_env() {
+  if [ -n "${DOCKER_HOST:-}" ]; then
+    echo "Using existing DOCKER_HOST=${DOCKER_HOST}" >&2
+    return 0
+  fi
+  if [ -S /Users/15x/.docker/run/docker.sock ]; then
+    export DOCKER_HOST=unix:///Users/15x/.docker/run/docker.sock
+    export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock
+    echo "Using Docker Desktop socket ${DOCKER_HOST}" >&2
+    return 0
+  fi
+  if [ -S /Users/15x/.colima/default/docker.sock ]; then
+    export DOCKER_HOST=unix:///Users/15x/.colima/default/docker.sock
+    export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock
+    export DOCKER_API_VERSION="${DOCKER_API_VERSION:-1.44}"
+    echo "Using Colima socket ${DOCKER_HOST}" >&2
+    return 0
+  fi
+  echo "FAIL: no Docker Desktop or Colima socket found for Testcontainers" >&2
+  return 1
+}
+
 section "Clockify REST client multipart tests"
 mvn -pl clockify-rest-client -Dtest=ExpensesClientTest,FilesClientTest test
 
@@ -19,25 +41,26 @@ mvn -pl addon-core -Dtest=ClaimsNormalizerTest test
 section "Mileage security tests"
 mvn -pl addon-expenses-rest-api -am -Dtest=MileageSecurityTest -Dsurefire.failIfNoSpecifiedTests=false test
 
-section "Full add-on reactor tests with Colima Testcontainers"
-DOCKER_HOST=unix:///Users/15x/.colima/default/docker.sock \
-TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock \
-DOCKER_API_VERSION=1.44 \
-mvn -pl addon-expenses-rest-api -am test \
-  -Ddocker.client.strategy=org.testcontainers.dockerclient.EnvironmentAndSystemPropertyClientProviderStrategy \
-  -Ddocker.host=unix:///Users/15x/.colima/default/docker.sock \
-  -Dapi.version=1.44
+section "Docker Testcontainers environment"
+select_docker_env
+
+section "Full add-on reactor tests with Testcontainers"
+mvn -pl addon-expenses-rest-api -am test
 
 section "Git whitespace check"
 git diff --check
 
 section "Settings JavaScript syntax check"
-for file in addon-expenses-rest-api/src/main/resources/static/assets/mileage/settings*.js; do
-  node --check "$file"
-done
+./scripts/check-mileage-settings-js.sh
+
+section "Static guardrails"
+./scripts/check-static-guardrails.sh
 
 section "Mileage date helper behavior"
 node scripts/test-mileage-date-helpers.mjs
+
+section "Mileage settings behavior"
+node scripts/test-mileage-settings-behavior.mjs
 
 section "Secret scan"
 gitleaks detect --source . --no-git --redact --verbose

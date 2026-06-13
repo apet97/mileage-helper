@@ -24,7 +24,9 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -104,6 +106,32 @@ class AsyncWebhookEnqueueTest {
         verifyNoInteractions(queue);
         verifyNoInteractions(conversionService);
         verify(eventService, never()).recordEvent(anyString(), anyString(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void enqueueFailureMarksEventFailedSoDuplicateRetryCanProceed() throws Exception {
+        MileageConversionService conversionService = mock(MileageConversionService.class);
+        ExpenseCreatedWebhookHandler handler = new ExpenseCreatedWebhookHandler(objectMapper, conversionService);
+        WebhookJobQueue queue = mock(WebhookJobQueue.class);
+        WebhookEventService eventService = mock(WebhookEventService.class);
+        when(eventService.isDuplicate(anyString(), anyString(), anyString())).thenReturn(false);
+        when(eventService.recordEvent(anyString(), anyString(), anyString(), anyString(), anyString()))
+                .thenReturn(EVENT_ID);
+        doThrow(new IllegalStateException("queue down")).when(queue).enqueue(any());
+
+        WebhookController controller = new WebhookController(
+                List.of(handler),
+                properties(),
+                objectMapper,
+                eventService,
+                queue);
+
+        ResponseEntity<Void> response = controller.handleWebhook(
+                request("EXPENSE_CREATED"), createdPayload("exp-queue-down"));
+
+        assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
+        verify(eventService).markFailed(eq(EVENT_ID), contains("queue down"));
+        verifyNoInteractions(conversionService);
     }
 
     private static byte[] createdPayload(String expenseId) {

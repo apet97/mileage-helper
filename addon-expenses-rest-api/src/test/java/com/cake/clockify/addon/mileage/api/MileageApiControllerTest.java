@@ -46,6 +46,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -104,6 +105,20 @@ class MileageApiControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.calculatedAmount").value("24.497"))
                 .andExpect(jsonPath("$.roundedAmount").value("24.50"));
+    }
+
+    @Test
+    void previewRejectsUnboundedMileageInputBeforeCallingClockify() throws Exception {
+        when(settingsService.validateForAddonCreate("ws-api")).thenReturn(settings(false));
+
+        mockMvc.perform(post("/api/mileage/preview")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"miles\":\"1E+1000000\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("miles must be a plain decimal number"));
+
+        verifyNoInteractions(gateway);
     }
 
     @Test
@@ -384,6 +399,20 @@ class MileageApiControllerTest {
                 .andExpect(jsonPath("$.message").value("date must use YYYY-MM-DD"));
 
         verify(gateway, never()).createFlatExpense(any(), any());
+    }
+
+    @Test
+    void createRejectsInvalidMileageBeforeCallingClockify() throws Exception {
+        when(settingsService.validateForAddonCreate("ws-api")).thenReturn(settings(false));
+
+        mockMvc.perform(post("/api/mileage/expenses")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createBody("12.3456", null)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("miles supports at most 3 decimal places"));
+
+        verifyNoInteractions(gateway);
     }
 
     @Test

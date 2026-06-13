@@ -36,11 +36,11 @@ jobs:
       - name: Reactor tests
         run: mvn -pl addon-expenses-rest-api -am clean test
       - name: JS syntax check
-        run: |
-          node --check addon-expenses-rest-api/src/main/resources/static/assets/mileage/settings-date.js
-          node --check addon-expenses-rest-api/src/main/resources/static/assets/mileage/settings.js
+        run: ./scripts/check-mileage-settings-js.sh
       - name: Date helper tests
         run: node scripts/test-mileage-date-helpers.mjs
+      - name: Settings behavior tests
+        run: node scripts/test-mileage-settings-behavior.mjs
       - name: Whitespace check
         run: git diff --check HEAD^ HEAD
 
@@ -65,18 +65,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: No float/double in money domain
-        run: |
-          if rg -n "\b(double|Double|float|Float)\b" addon-expenses-rest-api/src/main/java; then
-            echo "FAIL: float/double found in production source"
-            exit 1
-          fi
-      - name: No hardcoded Clockify API hosts
-        run: |
-          if rg -n "api\.clockify\.me|global\.api\.clockify" addon-expenses-rest-api/src/main clockify-rest-client/src/main; then
-            echo "FAIL: hardcoded Clockify host found"
-            exit 1
-          fi
+      - name: Static guardrails
+        run: ./scripts/check-static-guardrails.sh
 
   dep-check:
     # G4 HIGH/CRITICAL gate. dependency-check-maven 12.x requires an NVD API key —

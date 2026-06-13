@@ -16,6 +16,7 @@ import com.cake.clockify.addon.mileage.note.MileageNoteService;
 import com.cake.clockify.addon.mileage.settings.MileageSettingsService;
 import com.cake.clockify.addon.mileage.settings.MileageSettingsValidation;
 import com.cake.clockify.client.ClockifyApiException;
+import com.cake.clockify.client.ClockifyTransportException;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -329,6 +330,46 @@ class MileageConversionServiceTest {
         MileageConversion failed = saved.getAllValues().getLast();
         assertThat(failed.getErrorCode()).isEqualTo("clockify_api_error");
         assertThat(failed.getErrorMessage()).contains("status 409");
+        assertThat(failed.getErrorMessage()).doesNotContain("super-secret");
+    }
+
+    @Test
+    void transportFailureFetchingExpenseRecordsFailedWithGenericMessage() throws Exception {
+        reservedConversion("exp-1", MileageConversionSource.WEBHOOK_CREATED, "EXPENSE_CREATED");
+        when(settingsService.validateForNativeConversion("ws-native")).thenReturn(settings(false));
+        when(gateway.getExpense("ws-native", "exp-1"))
+                .thenThrow(new ClockifyTransportException("timeout talking to token=super-secret", null));
+
+        ConversionResult result = service.convertIfEligible(
+                claims(), "exp-1", MileageConversionSource.WEBHOOK_CREATED, "EXPENSE_CREATED");
+
+        assertThat(result.status()).isEqualTo(MileageConversionStatus.FAILED);
+        ArgumentCaptor<MileageConversion> saved = ArgumentCaptor.forClass(MileageConversion.class);
+        verify(conversionRepository, org.mockito.Mockito.atLeastOnce()).saveAndFlush(saved.capture());
+        MileageConversion failed = saved.getAllValues().getLast();
+        assertThat(failed.getErrorCode()).isEqualTo("clockify_transport_error");
+        assertThat(failed.getErrorMessage()).isEqualTo("Clockify API request could not be completed");
+        assertThat(failed.getErrorMessage()).doesNotContain("super-secret");
+        verify(gateway, never()).updateFlatExpense(any(), any(), any());
+    }
+
+    @Test
+    void transportFailureUpdatingExpenseRecordsFailedWithGenericMessage() throws Exception {
+        reservedConversion("exp-1", MileageConversionSource.WEBHOOK_UPDATED, "EXPENSE_UPDATED");
+        when(settingsService.validateForNativeConversion("ws-native")).thenReturn(settings(false));
+        when(gateway.getExpense("ws-native", "exp-1")).thenReturn(inputExpense("exp-1"));
+        when(gateway.updateFlatExpense(eq("ws-native"), eq("exp-1"), any(UpdateFlatExpenseCommand.class)))
+                .thenThrow(new ClockifyTransportException("connection failed for token=super-secret", null));
+
+        ConversionResult result = service.convertIfEligible(
+                claims(), "exp-1", MileageConversionSource.WEBHOOK_UPDATED, "EXPENSE_UPDATED");
+
+        assertThat(result.status()).isEqualTo(MileageConversionStatus.FAILED);
+        ArgumentCaptor<MileageConversion> saved = ArgumentCaptor.forClass(MileageConversion.class);
+        verify(conversionRepository, org.mockito.Mockito.atLeastOnce()).saveAndFlush(saved.capture());
+        MileageConversion failed = saved.getAllValues().getLast();
+        assertThat(failed.getErrorCode()).isEqualTo("clockify_transport_error");
+        assertThat(failed.getErrorMessage()).isEqualTo("Clockify API request could not be completed");
         assertThat(failed.getErrorMessage()).doesNotContain("super-secret");
     }
 

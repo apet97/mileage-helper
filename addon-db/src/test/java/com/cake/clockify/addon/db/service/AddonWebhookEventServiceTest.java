@@ -69,6 +69,20 @@ class AddonWebhookEventServiceTest extends AbstractDbTest {
     }
 
     @Test
+    void failedReceiptIsNotDuplicateAndCanBeRecordedAgain() {
+        AddonWebhookEvent event = service.recordReceived(
+                "my-addon", "ws-queue", "TIME_ENTRY_CREATED", "dedupe-queue", "hash-1");
+        service.markFailed(event.getId(), "queue down");
+
+        assertThat(service.isDuplicate("my-addon", "ws-queue", "dedupe-queue")).isFalse();
+
+        AddonWebhookEvent retry = service.recordReceived(
+                "my-addon", "ws-queue", "TIME_ENTRY_CREATED", "dedupe-queue", "hash-1");
+        assertThat(retry.getId()).isEqualTo(event.getId());
+        assertThat(retry.getStatus()).isEqualTo("RECEIVED");
+    }
+
+    @Test
     void recordEventHandlesConcurrentDuplicateReceiptWithoutLeakingConstraintFailure() throws Exception {
         int attempts = 8;
         ExecutorService executor = Executors.newFixedThreadPool(attempts);

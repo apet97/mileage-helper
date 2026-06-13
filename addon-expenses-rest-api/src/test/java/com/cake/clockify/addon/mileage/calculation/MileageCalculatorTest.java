@@ -55,10 +55,59 @@ class MileageCalculatorTest {
     }
 
     @Test
+    void rejectsMilesAboveDomainMaximum() {
+        assertThatThrownBy(() -> calculator.calculate("1000000.001", "0.655", RoundingMode.HALF_UP))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("miles must be at most 1000000");
+    }
+
+    @Test
+    void rejectsTooManyMileageFractionDigits() {
+        assertThatThrownBy(() -> calculator.calculate("12.3456", "0.655", RoundingMode.HALF_UP))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("miles supports at most 3 decimal places");
+    }
+
+    @Test
+    void rejectsTooLongMileageInput() {
+        assertThatThrownBy(() -> calculator.calculate("123456789012345678901234567890123", "0.655", RoundingMode.HALF_UP))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("miles must be 32 characters or fewer");
+    }
+
+    @Test
+    void rejectsExponentMileageNotation() {
+        assertThatThrownBy(() -> calculator.calculate("1E+9", "0.655", RoundingMode.HALF_UP))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("miles must be a plain decimal number");
+    }
+
+    @Test
     void rejectsZeroRate() {
         assertThatThrownBy(() -> calculator.calculate("1", "0", RoundingMode.HALF_UP))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("rate must be greater than zero");
+    }
+
+    @Test
+    void rejectsRateAboveDomainMaximum() {
+        assertThatThrownBy(() -> calculator.calculate("1", "10000.000001", RoundingMode.HALF_UP))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("rate must be at most 10000");
+    }
+
+    @Test
+    void rejectsTooManyRateFractionDigits() {
+        assertThatThrownBy(() -> calculator.calculate("1", "0.1234567", RoundingMode.HALF_UP))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("rate supports at most 6 decimal places");
+    }
+
+    @Test
+    void rejectsTooLongRateInput() {
+        assertThatThrownBy(() -> calculator.calculate("1", "123456789012345678901234567890123", RoundingMode.HALF_UP))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("rate must be 32 characters or fewer");
     }
 
     @Test

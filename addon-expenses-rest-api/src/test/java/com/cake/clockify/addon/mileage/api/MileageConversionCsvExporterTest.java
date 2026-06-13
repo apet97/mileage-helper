@@ -1,12 +1,12 @@
 package com.cake.clockify.addon.mileage.api;
 
-import com.cake.clockify.addon.mileage.api.MileageConversionCsvExporter.CsvRows;
 import com.cake.clockify.addon.mileage.audit.MileageConversion;
 import com.cake.clockify.addon.mileage.audit.MileageConversionRepository;
 import com.cake.clockify.addon.mileage.audit.MileageConversionSource;
 import com.cake.clockify.addon.mileage.audit.MileageConversionStatus;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpHeaders;
 
 import java.math.BigDecimal;
@@ -41,25 +41,46 @@ class MileageConversionCsvExporterTest {
     }
 
     @Test
+    void writesCsvRowsToAppendableWithoutChangingFormat() throws Exception {
+        StringBuilder builder = new StringBuilder();
+
+        exporter.writeCsv(
+                builder,
+                List.of(conversion()),
+                Map.of("user-1", "Ada Lovelace"),
+                Map.of("project-1", "Northern Route"));
+
+        assertThat(builder.toString()).startsWith(MileageConversionCsvExporter.CSV_HEADER + "\n");
+        assertThat(builder.toString()).contains("Ada Lovelace");
+        assertThat(builder.toString()).contains("Northern Route");
+    }
+
+    @Test
     void responseExposesTruncationHeader() {
-        var response = exporter.response("mileage.csv", new CsvRows(List.of(conversion()), true), Map.of(), Map.of());
+        MileageConversionCsvExporter cappedExporter = new MileageConversionCsvExporter(
+                new MileageConversionQueryService(mock(MileageConversionRepository.class)), 5, 1);
+        var stream = cappedExporter.stream(pageRequest -> new PageImpl<>(
+                List.of(conversion(), conversion()),
+                pageRequest,
+                2));
+
+        var response = cappedExporter.response("mileage.csv", stream, rows -> Map.of(), rows -> Map.of());
 
         assertThat(response.getHeaders().getFirst(MileageConversionCsvExporter.HEADER_EXPORT_TRUNCATED)).isEqualTo("true");
         assertThat(response.getHeaders().getFirst(HttpHeaders.CONTENT_DISPOSITION)).contains("mileage.csv");
     }
 
     @Test
-    void collectCapsRowsAndMarksTruncated() {
+    void streamMarksTruncatedFromFirstPageTotal() {
         MileageConversionCsvExporter cappedExporter = new MileageConversionCsvExporter(
                 new MileageConversionQueryService(mock(MileageConversionRepository.class)), 5, 1);
 
-        CsvRows rows = cappedExporter.collect(pageRequest -> new PageImpl<>(
+        var stream = cappedExporter.stream(pageRequest -> new PageImpl<>(
                 List.of(conversion(), conversion()),
-                pageRequest,
+                PageRequest.of(pageRequest.getPageNumber(), pageRequest.getPageSize()),
                 2));
 
-        assertThat(rows.rows()).hasSize(1);
-        assertThat(rows.truncated()).isTrue();
+        assertThat(stream.truncated()).isTrue();
     }
 
     private static MileageConversion conversion() {

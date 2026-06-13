@@ -36,6 +36,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -85,7 +86,6 @@ class MileageReportControllerTest {
 
     @Test
     void adminWithUserIdReportsSingleUser() throws Exception {
-        when(gateway.listUsers("ws-admin")).thenReturn(List.of());
         when(gateway.listExpensesForReport(eq("ws-admin"), eq("user-two"), any(LocalDate.class), any(LocalDate.class)))
                 .thenReturn(new ClockifyExpenseListResult(List.of(), false));
 
@@ -97,11 +97,11 @@ class MileageReportControllerTest {
                 .andExpect(content().string(containsString("Expense Report")));
 
         verify(gateway).listExpensesForReport(eq("ws-admin"), eq("user-two"), any(LocalDate.class), any(LocalDate.class));
+        verify(gateway, never()).listUsers(any());
     }
 
     @Test
     void adminMineScopeReportsOwnNotAllUsers() throws Exception {
-        when(gateway.listUsers("ws-admin")).thenReturn(List.of());
         when(gateway.listExpensesForReport(eq("ws-admin"), eq("user-claims"), any(LocalDate.class), any(LocalDate.class)))
                 .thenReturn(new ClockifyExpenseListResult(List.of(), false));
 
@@ -114,11 +114,11 @@ class MileageReportControllerTest {
 
         // Mine pins an admin to their own rows, NOT all users.
         verify(gateway).listExpensesForReport(eq("ws-admin"), eq("user-claims"), any(LocalDate.class), any(LocalDate.class));
+        verify(gateway, never()).listUsers(any());
     }
 
     @Test
     void memberReportsOwnEvenWithForeignUserId() throws Exception {
-        when(gateway.listUsers("ws-admin")).thenReturn(List.of());
         when(gateway.listExpensesForReport(eq("ws-admin"), eq("user-claims"), any(LocalDate.class), any(LocalDate.class)))
                 .thenReturn(new ClockifyExpenseListResult(List.of(), false));
 
@@ -129,6 +129,7 @@ class MileageReportControllerTest {
                 .andExpect(status().isOk());
 
         verify(gateway).listExpensesForReport(eq("ws-admin"), eq("user-claims"), any(LocalDate.class), any(LocalDate.class));
+        verify(gateway, never()).listUsers(any());
     }
 
     @Test

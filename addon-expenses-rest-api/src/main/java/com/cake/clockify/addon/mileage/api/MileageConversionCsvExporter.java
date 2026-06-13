@@ -9,12 +9,14 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
+import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
@@ -41,36 +43,27 @@ public class MileageConversionCsvExporter {
         this.csvMaxRows = csvMaxRows;
     }
 
-    public CsvRows collect(Function<org.springframework.data.domain.PageRequest, Page<MileageConversion>> fetchPage) {
-        List<MileageConversion> rows = new ArrayList<>();
-        int page = 0;
-        while (rows.size() < csvMaxRows) {
-            Page<MileageConversion> batch = fetchPage.apply(queryService.exportPageRequest(page, csvPageSize));
-            List<MileageConversion> content = batch.getContent();
-            int remaining = csvMaxRows - rows.size();
-            if (content.size() > remaining) {
-                rows.addAll(content.subList(0, remaining));
-                return new CsvRows(rows, true);
-            }
-            rows.addAll(content);
-            if (!batch.hasNext()) {
-                return new CsvRows(rows, false);
-            }
-            page++;
-        }
-        return new CsvRows(rows, true);
+    public CsvStream stream(Function<org.springframework.data.domain.PageRequest, Page<MileageConversion>> fetchPage) {
+        Page<MileageConversion> firstPage = fetchPage.apply(queryService.exportPageRequest(0, csvPageSize));
+        boolean truncated = firstPage.getTotalElements() > csvMaxRows || firstPage.getContent().size() > csvMaxRows;
+        return new CsvStream(firstPage, fetchPage, truncated);
     }
 
-    public ResponseEntity<String> response(
+    public ResponseEntity<StreamingResponseBody> response(
             String filename,
-            CsvRows conversions,
-            Map<String, String> userNamesById,
-            Map<String, String> projectNamesById) {
+            CsvStream conversions,
+            Function<Collection<MileageConversion>, Map<String, String>> userNamesByPage,
+            Function<Collection<MileageConversion>, Map<String, String>> projectNamesByPage) {
+        StreamingResponseBody body = outputStream -> {
+            OutputStreamWriter writer = new OutputStreamWriter(outputStream, StandardCharsets.UTF_8);
+            writeCsv(writer, conversions, userNamesByPage, projectNamesByPage);
+            writer.flush();
+        };
         return ResponseEntity.ok()
                 .contentType(CSV_MEDIA_TYPE)
                 .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment().filename(filename).build().toString())
                 .header(HEADER_EXPORT_TRUNCATED, Boolean.toString(conversions.truncated()))
-                .body(csv(conversions.rows(), userNamesById, projectNamesById));
+                .body(body);
     }
 
     String csv(
@@ -78,8 +71,64 @@ public class MileageConversionCsvExporter {
             Map<String, String> userNamesById,
             Map<String, String> projectNamesById) {
         StringBuilder builder = new StringBuilder(CSV_HEADER).append('\n');
+        try {
+            appendCsvRows(builder, conversions, conversions.size(), userNamesById, projectNamesById);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        return builder.toString();
+    }
+
+    void writeCsv(
+            Appendable writer,
+            Iterable<MileageConversion> conversions,
+            Map<String, String> userNamesById,
+            Map<String, String> projectNamesById) throws IOException {
+        writer.append(CSV_HEADER).append('\n');
+        appendCsvRows(writer, conversions, Integer.MAX_VALUE, userNamesById, projectNamesById);
+    }
+
+    private void writeCsv(
+            Appendable writer,
+            CsvStream conversions,
+            Function<Collection<MileageConversion>, Map<String, String>> userNamesByPage,
+            Function<Collection<MileageConversion>, Map<String, String>> projectNamesByPage) throws IOException {
+        writer.append(CSV_HEADER).append('\n');
+        Page<MileageConversion> batch = conversions.firstPage();
+        int page = 0;
+        int written = 0;
+        while (true) {
+            Collection<MileageConversion> rows = batch.getContent();
+            int remaining = csvMaxRows - written;
+            if (remaining <= 0) {
+                return;
+            }
+            written += appendCsvRows(
+                    writer,
+                    rows,
+                    remaining,
+                    userNamesByPage.apply(rows),
+                    projectNamesByPage.apply(rows));
+            if (written >= csvMaxRows || !batch.hasNext()) {
+                return;
+            }
+            page++;
+            batch = conversions.fetchPage().apply(queryService.exportPageRequest(page, csvPageSize));
+        }
+    }
+
+    private static int appendCsvRows(
+            Appendable writer,
+            Iterable<MileageConversion> conversions,
+            int limit,
+            Map<String, String> userNamesById,
+            Map<String, String> projectNamesById) throws IOException {
+        int written = 0;
         for (MileageConversion conversion : conversions) {
-            appendCsvRow(builder,
+            if (written >= limit) {
+                return written;
+            }
+            appendCsvRow(writer,
                     conversion.getExpenseId(),
                     conversion.getSource(),
                     MileageConversionDetailResponse.sourceLabel(conversion.getSource()),
@@ -97,11 +146,12 @@ public class MileageConversionCsvExporter {
                     conversion.getUpdatedAt(),
                     conversion.getConvertedAt(),
                     conversion.getNoteMarker());
+            written++;
         }
-        return builder.toString();
+        return written;
     }
 
-    private static void appendCsvRow(StringBuilder builder, Object... values) {
+    private static void appendCsvRow(Appendable builder, Object... values) throws IOException {
         for (int i = 0; i < values.length; i++) {
             if (i > 0) {
                 builder.append(',');
@@ -164,6 +214,9 @@ public class MileageConversionCsvExporter {
         return value;
     }
 
-    public record CsvRows(List<MileageConversion> rows, boolean truncated) {
+    public record CsvStream(
+            Page<MileageConversion> firstPage,
+            Function<org.springframework.data.domain.PageRequest, Page<MileageConversion>> fetchPage,
+            boolean truncated) {
     }
 }

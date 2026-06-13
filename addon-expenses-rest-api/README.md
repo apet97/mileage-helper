@@ -32,7 +32,7 @@ This module is the implemented product module inside the standalone repository. 
 - Runtime: OCI VM with `mileage-for-clockify.service` behind Caddy.
 - Railway deployment ID: historical only unless Railway is explicitly restored; use `railway deployment list` only for Railway runs.
 - Dated deployment evidence belongs in the pre-publish checklist after each deploy; old deployment IDs are historical evidence, not current truth.
-- Hosted rechecks, dated 2026-05-27: a pre-deploy check showed health and manifest passing while `/assets/mileage/settings-date.js` returned `404`, proving production was still serving an older deployment; after deploying latest `main`, health, manifest, both settings JS assets, icon, and unauthenticated iframe probes passed. New deploys that include static asset changes must probe both `/assets/mileage/settings-date.js` and `/assets/mileage/settings.js`. Clockify reinstall, settings load, mileage create/use, and delete-list behavior were last user-tested on 2026-05-26.
+- Hosted rechecks, dated 2026-05-27: a pre-deploy check showed health and manifest passing while `/assets/mileage/settings-date.js` returned `404`, proving production was still serving an older deployment; after deploying latest `main`, health, manifest, settings assets, icon, and unauthenticated iframe probes passed. New deploys that include static asset or report changes must probe every current `/assets/mileage/settings*.js` asset, `/assets/mileage/report.css`, `/assets/mileage/report.js`, `/assets/mileage/icon.png`, unauthenticated `/iframe/mileage`, and unauthenticated `/iframe/report`. Clockify reinstall, settings load, mileage create/use, and delete-list behavior were last user-tested on 2026-05-26.
 - Expanded live Clockify API smoke on 2026-05-27 used local secrets only and proved workspace/user/category reads plus sacrificial Mileage receipt expense create, fetch, full update, delete, and post-delete non-success (`400`). Follow-up receipt probes created sacrificial PNG and valid generated PDF receipts, observed `fileId`, downloaded nonzero binary content through the expense file endpoint, then deleted both expenses. A malformed hand-written PDF fixture returned zero bytes and should not be used as product evidence.
 - Local hardening review on 2026-05-27 covered multipart receipt/header sanitization, timezone claim alias parity, focused client/security tests, date-helper static asset checks, and `gitleaks` proof.
 - Live Clockify smoke is optional and requires local secrets. Never commit or echo API keys/tokens. If not run, final output must say it was skipped.
@@ -67,7 +67,7 @@ docker compose -f addon-expenses-rest-api/docker-compose.yml up --build
 
 The app serves `/manifest`, `/iframe/mileage`, `/iframe/settings`, `/healthz`, and `/actuator/health`.
 
-For local tunnel testing, set `ADDON_BASE_URL` to the current ngrok origin before starting the app. Default CORS includes Clockify origins and the `ADDON_BASE_URL` origin so iframe API calls can post back to the same tunnel.
+For local tunnel testing, prefer `scripts/dev-tunnel.sh --build`. It starts the local stack, exposes it through a Cloudflare quick tunnel, sets `ADDON_BASE_URL` to the printed tunnel origin, and prints the `/manifest` URL to install in Clockify. Quick-tunnel URLs are ephemeral, so reinstall the manifest after every restart. Default CORS includes Clockify origins and the `ADDON_BASE_URL` origin so iframe API calls can post back to the same tunnel.
 
 If local Postgres already uses `5432`, keep the compose database internal:
 

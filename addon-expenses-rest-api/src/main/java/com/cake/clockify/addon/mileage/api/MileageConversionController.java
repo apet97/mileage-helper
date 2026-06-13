@@ -2,7 +2,7 @@ package com.cake.clockify.addon.mileage.api;
 
 import com.cake.clockify.addon.core.auth.NormalizedClaims;
 import com.cake.clockify.addon.core.auth.RequestAttributes;
-import com.cake.clockify.addon.mileage.api.MileageConversionCsvExporter.CsvRows;
+import com.cake.clockify.addon.mileage.api.MileageConversionCsvExporter.CsvStream;
 import com.cake.clockify.addon.mileage.api.model.MileageConversionDetailResponse;
 import com.cake.clockify.addon.mileage.api.model.MileageConversionListResponse;
 import com.cake.clockify.addon.mileage.api.model.MileageConversionRetryResponse;
@@ -13,6 +13,7 @@ import com.cake.clockify.addon.mileage.conversion.MileageConversionService;
 import com.cake.clockify.addon.mileage.security.MileageAuthorizationService;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,10 +22,13 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
-import java.util.List;
+import java.util.Collection;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 
 @RestController
 public class MileageConversionController {
@@ -103,23 +107,21 @@ public class MileageConversionController {
     }
 
     @GetMapping(value = "/api/mileage/mine.csv", produces = "text/csv;charset=UTF-8")
-    public ResponseEntity<String> mineCsv(
+    public ResponseEntity<StreamingResponseBody> mineCsv(
             HttpServletRequest request,
             @RequestParam(required = false) String from,
             @RequestParam(required = false) String to) {
         NormalizedClaims claims = userClaims(request);
         MileageDateRange range = dateRangeResolver.optionalOrDefault(claims, from, to);
-        CsvRows conversions = csvExporter.collect(pageRequest -> queryService.mine(
-                claims.workspaceId(), claims.userId(), range, pageRequest));
-        return csvExporter.response(
+        return csvResponse(
                 "mileage-mine.csv",
-                conversions,
-                Map.of(),
-                nameResolver.projectNamesById(claims.workspaceId(), conversions.rows()));
+                pageRequest -> queryService.mine(claims.workspaceId(), claims.userId(), range, pageRequest),
+                rows -> Map.of(),
+                cachedProjectNames(claims.workspaceId()));
     }
 
     @GetMapping(value = "/api/mileage/team.csv", produces = "text/csv;charset=UTF-8")
-    public ResponseEntity<String> teamCsv(
+    public ResponseEntity<StreamingResponseBody> teamCsv(
             HttpServletRequest request,
             @RequestParam(required = false) String userId,
             @RequestParam(required = false) String from,
@@ -127,18 +129,15 @@ public class MileageConversionController {
         NormalizedClaims claims = adminClaims(request);
         MileageDateRange range = dateRangeResolver.optionalOrDefault(claims, from, to);
         String filterUser = userParam(userId);
-        CsvRows conversions = csvExporter.collect(pageRequest -> queryService.team(
-                claims.workspaceId(), filterUser, range, pageRequest));
-        List<MileageConversion> teamRows = conversions.rows();
-        return csvExporter.response(
+        return csvResponse(
                 "mileage-team.csv",
-                conversions,
-                nameResolver.userNamesById(claims.workspaceId(), teamRows),
-                nameResolver.projectNamesById(claims.workspaceId(), teamRows));
+                pageRequest -> queryService.team(claims.workspaceId(), filterUser, range, pageRequest),
+                cachedUserNames(claims.workspaceId()),
+                cachedProjectNames(claims.workspaceId()));
     }
 
     @GetMapping(value = "/api/mileage/conversions.csv", produces = "text/csv;charset=UTF-8")
-    public ResponseEntity<String> conversionsCsv(
+    public ResponseEntity<StreamingResponseBody> conversionsCsv(
             HttpServletRequest request,
             @RequestParam(required = false) String userId,
             @RequestParam(required = false) String from,
@@ -146,14 +145,11 @@ public class MileageConversionController {
         NormalizedClaims claims = adminClaims(request);
         MileageDateRange range = dateRangeResolver.optionalOrDefault(claims, from, to);
         String filterUser = userParam(userId);
-        CsvRows conversions = csvExporter.collect(pageRequest -> queryService.conversions(
-                claims.workspaceId(), filterUser, null, range, pageRequest));
-        List<MileageConversion> conversionRows = conversions.rows();
-        return csvExporter.response(
+        return csvResponse(
                 "mileage-conversions.csv",
-                conversions,
-                nameResolver.userNamesById(claims.workspaceId(), conversionRows),
-                nameResolver.projectNamesById(claims.workspaceId(), conversionRows));
+                pageRequest -> queryService.conversions(claims.workspaceId(), filterUser, null, range, pageRequest),
+                cachedUserNames(claims.workspaceId()),
+                cachedProjectNames(claims.workspaceId()));
     }
 
     @GetMapping("/api/mileage/conversions/{id}")
@@ -194,5 +190,45 @@ public class MileageConversionController {
 
     private static String userParam(String userId) {
         return userId != null && !userId.isBlank() ? userId.trim() : null;
+    }
+
+    private ResponseEntity<StreamingResponseBody> csvResponse(
+            String filename,
+            Function<PageRequest, Page<MileageConversion>> fetchPage,
+            Function<Collection<MileageConversion>, Map<String, String>> userNamesByPage,
+            Function<Collection<MileageConversion>, Map<String, String>> projectNamesByPage) {
+        CsvStream stream = csvExporter.stream(fetchPage);
+        return csvExporter.response(filename, stream, userNamesByPage, projectNamesByPage);
+    }
+
+    private Function<Collection<MileageConversion>, Map<String, String>> cachedUserNames(String workspaceId) {
+        AtomicReference<Map<String, String>> cache = new AtomicReference<>();
+        return rows -> cachedNames(cache, rows, MileageConversion::getUserId, () -> nameResolver.allUserNamesById(workspaceId));
+    }
+
+    private Function<Collection<MileageConversion>, Map<String, String>> cachedProjectNames(String workspaceId) {
+        AtomicReference<Map<String, String>> cache = new AtomicReference<>();
+        return rows -> cachedNames(cache, rows, MileageConversion::getProjectId, () -> nameResolver.allProjectNamesById(workspaceId));
+    }
+
+    private static Map<String, String> cachedNames(
+            AtomicReference<Map<String, String>> cache,
+            Collection<MileageConversion> rows,
+            Function<MileageConversion, String> idExtractor,
+            java.util.function.Supplier<Map<String, String>> resolver) {
+        if (rows.stream().map(idExtractor).noneMatch(MileageConversionController::hasText)) {
+            return Map.of();
+        }
+        Map<String, String> cached = cache.get();
+        if (cached != null) {
+            return cached;
+        }
+        Map<String, String> resolved = resolver.get();
+        cache.compareAndSet(null, resolved);
+        return cache.get();
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 }

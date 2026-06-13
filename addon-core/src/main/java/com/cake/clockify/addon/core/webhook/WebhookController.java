@@ -140,9 +140,11 @@ public class WebhookController {
         } catch (JsonProcessingException e) {
             log.error("webhook.queue.claims-serialize-failed: workspace={} event={}",
                     claims.workspaceId(), rawEventType, e);
+            markFailed(eventId, e);
         } catch (Exception e) {
             log.error("webhook.queue.enqueue-failed: workspace={} event={}",
                     claims.workspaceId(), rawEventType, e);
+            markFailed(eventId, e);
         }
         return ResponseEntity.ok().build();
     }
