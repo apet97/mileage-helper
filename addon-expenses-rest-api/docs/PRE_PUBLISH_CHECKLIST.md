@@ -184,6 +184,43 @@ Last local/live stabilization pass: 2026-06-05.
   after the deleted-expense webhook fix. Production audit rows for stale test
   deletes were marked `DELETED` with `deleted_at`, while the then-current live
   expense remained `CONVERTED`.
+- 2026-06-13 OCI deploy at git `785408b` (main pushed through
+  `beca069` plan implementation plus browser-auth hotfixes `6fed0a3` and
+  `785408b`): `./scripts/verify-publish.sh` passed end-to-end before the
+  final deploy, including focused multipart/claims/security checks, the full
+  Docker/Testcontainers-backed reactor, settings JS behavior checks,
+  `git diff --check`, `gitleaks`, and Docker image build. Runnable jar SHA
+  `0b64d240a8c4bafef3710282d9d587c106b227b0e3585dc42315cc9557df0a0f`
+  matched after copy to OCI; systemd service `mileage-for-clockify.service`
+  restarted `active`.
+- 2026-06-13 hosted probes against `https://89-168-93-85.sslip.io` after
+  deploy `785408b`: `/actuator/health` returned
+  `200 {"status":"UP","groups":["liveness","readiness"]}`; `/manifest`
+  returned `200`, schema `1.5`, key `mileage-for-clockify`; every current
+  `/assets/mileage/settings*.js` asset plus `report.css`, `report.js`, and
+  `icon.png` returned `200` with the expected JavaScript/CSS/image content
+  types; unauthenticated `/iframe/mileage` and `/iframe/report` returned
+  `401`. Prometheus exposed mileage outcome counters, webhook queue depth,
+  webhook worker timer, and scheduled worker liveness; no `mileage_` metric
+  line had user/workspace/expense/token identifier tags.
+- 2026-06-13 installed Clockify browser smoke via Debug Chrome against the
+  already-installed add-on: the first clean load reproduced missing
+  `Authorization` headers after immediate `history.replaceState`; suppressing
+  that cleanup proved the boot calls worked, so the fix now starts the boot API
+  calls first and scrubs `auth_token` on the next task. Retest without
+  suppression showed boot calls to `create-context`, `options/projects`,
+  `options/users`, and `mine` all carrying `Authorization`, settings loaded
+  as `Workspace rate: 0.725 per mile`, no error toasts, submit enabled, and the
+  iframe URL cleaned of `auth_token`.
+- 2026-06-13 live browser create smoke through the installed iframe: Preview
+  POST returned `0.1` miles x `0.725` = `0.0725`, rounded expense amount
+  `0.07`; Create Expense POST returned `200` and the Mine table refreshed with
+  the new `ADDON_FORM` row as `CONVERTED` (`0.1` miles, rate `0.725`, amount
+  `0.0725`, expense amount `0.07`). Follow-up metrics showed
+  `mileage_webhook_job_process_seconds_count=1`, queue depth `0`, and the
+  loop-guard `SKIPPED` counter incremented after Clockify echoed the add-on
+  create. Post-smoke journal scan since final restart had no `ERROR`/`WARN`,
+  Flyway strict-order, corrupt-jar, or optimistic-lock matches.
 
 ## Required Manual Product Gates
 
