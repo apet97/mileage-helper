@@ -29,8 +29,9 @@
 
   function authHeaders(extra) {
     const headers = Object.assign({}, extra || {});
-    if (authToken) {
-      headers.Authorization = "Bearer " + authToken;
+    const token = app.authToken || authToken;
+    if (token) {
+      headers.Authorization = "Bearer " + token;
     }
     return headers;
   }

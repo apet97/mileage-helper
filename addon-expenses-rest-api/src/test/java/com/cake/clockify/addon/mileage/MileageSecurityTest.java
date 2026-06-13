@@ -85,7 +85,8 @@ class MileageSecurityTest {
         String javascript = settingsJavascript();
 
         assertThat(javascript).contains("Authorization");
-        assertThat(javascript).contains("\"Bearer \" + authToken");
+        assertThat(javascript).contains("const token = app.authToken || authToken");
+        assertThat(javascript).contains("\"Bearer \" + token");
     }
 
     @Test

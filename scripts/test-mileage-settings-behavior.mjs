@@ -478,6 +478,18 @@ async function assertCsvExportsUseAuthHeaderNotQueryToken() {
   assert.equal(harness.fetchLog[0].init.headers.Authorization, "Bearer header.payload.signature");
 }
 
+async function assertApiFetchUsesCurrentRuntimeAuthToken() {
+  resetDom();
+  app.authToken = "runtime.header.signature";
+  harness.responses.set("/api/mileage/create-context", new FakeResponse({ complete: true }));
+
+  await app.apiFetch("/api/mileage/create-context");
+
+  assert.equal(harness.fetchLog.length, 1);
+  assert.equal(harness.fetchLog[0].init.headers.Authorization, "Bearer runtime.header.signature");
+  app.authToken = "header.payload.signature";
+}
+
 async function assertReportOpenCarriesAuthTokenOnlyForIframeReport() {
   resetDom();
   rangeElements("mine");
@@ -541,6 +553,7 @@ for (const test of [
   assertCreatePayloadOmitsUserIdAndTaskId,
   assertProjectNameMapsToProjectId,
   assertCsvExportsUseAuthHeaderNotQueryToken,
+  assertApiFetchUsesCurrentRuntimeAuthToken,
   assertReportOpenCarriesAuthTokenOnlyForIframeReport,
   assertPaginationAddsPageAfterLockedPageSize,
   assertSettingsSaveSendsNoteTemplateAndRate
