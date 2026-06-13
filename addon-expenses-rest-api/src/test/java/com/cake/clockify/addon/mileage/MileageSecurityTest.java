@@ -78,6 +78,8 @@ class MileageSecurityTest {
 
         assertThat(javascript).contains("url.searchParams.delete(\"auth_token\")");
         assertThat(javascript).contains("history.replaceState");
+        assertThat(javascript.indexOf("app.loadCreateContext()"))
+                .isLessThan(javascript.indexOf("app.hideAuthTokenFromLocation"));
     }
 
     @Test

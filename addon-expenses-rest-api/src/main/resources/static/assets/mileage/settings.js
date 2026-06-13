@@ -35,4 +35,5 @@
   app.loadProjects();
   app.loadUserOptions();
   app.switchTab(app.state.userIsAdmin && window.location.pathname.endsWith("/iframe/settings") ? "admin-settings" : "mine");
+  setTimeout(app.hideAuthTokenFromLocation, 0);
 })();

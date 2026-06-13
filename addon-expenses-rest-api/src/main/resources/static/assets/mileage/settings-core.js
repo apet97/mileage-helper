@@ -18,7 +18,10 @@
     pageState: { mine: 0, team: 0, conversion: 0 }
   };
 
-  if (authToken) {
+  function hideAuthTokenFromLocation() {
+    if (!authToken) {
+      return;
+    }
     url.searchParams.delete("auth_token");
     history.replaceState({}, document.title, url.pathname + url.search + url.hash);
   }
@@ -408,6 +411,7 @@
   Object.assign(app, {
     element,
     authHeaders,
+    hideAuthTokenFromLocation,
     apiFetch,
     downloadCsv,
     claimsFromToken,
