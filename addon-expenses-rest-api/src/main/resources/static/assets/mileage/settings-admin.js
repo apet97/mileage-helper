@@ -209,12 +209,17 @@
       allowUserRateOverride: app.element("settings-rate-override").checked,
       noteTemplate: app.formValue("settings-note-template")
     };
-    app.apiFetch("/api/mileage/settings", {
+    return app.apiFetch("/api/mileage/settings", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
-    }).then(() => {
-      app.toast("Settings saved.");
+    }).then(settings => {
+      const warnings = settings && Array.isArray(settings.warnings) ? settings.warnings : [];
+      if (warnings.length) {
+        warnings.forEach(message => app.toast(message, "error"));
+      } else {
+        app.toast("Settings saved.");
+      }
       app.loadCreateContext();
       app.loadDiagnostics();
     }).catch(error => app.toast(error.message, "error")).finally(() => app.setBusy(button, false));

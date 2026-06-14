@@ -38,6 +38,10 @@ public class MileageSettingsController {
             "Clockify did not allow reading expense categories. Try Use or Repair Mileage Category, or verify expense permissions for this workspace.";
     private static final String USERS_UNAVAILABLE =
             "Clockify users are temporarily unavailable. Try again in a moment.";
+    private static final String CATEGORY_SYNC_CLOCKIFY_WARNING =
+            "Settings saved, but Clockify category price could not be synced. Try Use or Repair Mileage Category again when Clockify is available.";
+    private static final String CATEGORY_SYNC_INTERNAL_WARNING =
+            "Settings saved, but category price sync hit an internal error. Check server logs before relying on Clockify category charges.";
 
     private final MileageSettingsService settingsService;
     private final ClockifyExpenseGateway gateway;
@@ -70,29 +74,35 @@ public class MileageSettingsController {
         // Keep the Clockify Mileage category's unit price in step with the saved rate so add-on-created and
         // native-converted expenses are charged the intended amount (a unit category forces total = miles ×
         // price). Best-effort: a Clockify outage must not fail the save.
-        syncMileageCategoryPrice(claims.workspaceId());
-        return ResponseEntity.ok(enrichSettings(claims.workspaceId(), settingsService.getEffectiveSettings(claims.workspaceId())));
+        List<String> warnings = syncMileageCategoryPrice(claims.workspaceId());
+        return ResponseEntity.ok(enrichSettings(
+                claims.workspaceId(),
+                settingsService.getEffectiveSettings(claims.workspaceId())).withWarnings(warnings));
     }
 
-    private void syncMileageCategoryPrice(String workspaceId) {
+    private List<String> syncMileageCategoryPrice(String workspaceId) {
         MileageSettingsResponse settings = settingsService.getEffectiveSettings(workspaceId);
         if (!hasText(settings.rate())
                 || settings.mileageCategoryId() == null || settings.mileageCategoryId().isBlank()) {
-            return;
+            return List.of();
         }
         try {
             gateway.createOrRepairMileageCategory(workspaceId, new BigDecimal(settings.rate()));
+            return List.of();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             log.warn("Mileage category price sync interrupted for workspace {}", workspaceId);
+            return List.of(CATEGORY_SYNC_CLOCKIFY_WARNING);
         } catch (IOException | ClockifyTransportException | ClockifyApiException e) {
             // Expected Clockify outage/permission failure — best-effort sync, never fail the committed save.
             log.warn("Mileage category price sync skipped for workspace {} after Clockify failure: {}",
                     workspaceId, e.toString());
+            return List.of(CATEGORY_SYNC_CLOCKIFY_WARNING);
         } catch (RuntimeException e) {
             // Unexpected: a real bug, not a Clockify hiccup. Log loudly (with stack) but still do not fail the
             // already-committed save — and do not let it masquerade as a routine outage in the logs.
             log.error("Mileage category price sync hit an unexpected error for workspace {}", workspaceId, e);
+            return List.of(CATEGORY_SYNC_INTERNAL_WARNING);
         }
     }
 

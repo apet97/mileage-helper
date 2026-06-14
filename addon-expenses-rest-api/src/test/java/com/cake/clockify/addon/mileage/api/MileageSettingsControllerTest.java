@@ -114,7 +114,8 @@ class MileageSettingsControllerTest {
                         .content("""
                                 {"rate":"0.655","mileageCategoryId":"cat-mileage"}
                                 """))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.warnings").isEmpty());
 
         // The Clockify Mileage category's unit price must be kept in step with the saved rate so a unit
         // category (total = miles × priceInCents) charges the intended amount.
@@ -135,7 +136,8 @@ class MileageSettingsControllerTest {
                                 {"rate":"0.655","mileageCategoryId":"cat-mileage"}
                                 """))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.rate").value("0.655"));
+                .andExpect(jsonPath("$.rate").value("0.655"))
+                .andExpect(jsonPath("$.warnings[0]").value(org.hamcrest.Matchers.containsString("could not be synced")));
     }
 
     @Test
@@ -153,7 +155,8 @@ class MileageSettingsControllerTest {
                                 {"rate":"0.655","mileageCategoryId":"cat-mileage"}
                                 """))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.rate").value("0.655"));
+                .andExpect(jsonPath("$.rate").value("0.655"))
+                .andExpect(jsonPath("$.warnings[0]").value(org.hamcrest.Matchers.containsString("could not be synced")));
     }
 
     @Test
@@ -171,7 +174,8 @@ class MileageSettingsControllerTest {
                                 {"rate":"0.655","mileageCategoryId":"cat-mileage"}
                                 """))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.rate").value("0.655"));
+                .andExpect(jsonPath("$.rate").value("0.655"))
+                .andExpect(jsonPath("$.warnings[0]").value(org.hamcrest.Matchers.containsString("internal error")));
     }
 
     @Test

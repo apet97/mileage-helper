@@ -557,13 +557,36 @@ async function assertSettingsSaveSendsNoteTemplateAndRate() {
   });
   harness.responses.set("/api/mileage/settings", new FakeResponse({}));
 
-  app.saveSettings({ preventDefault() {} });
+  await app.saveSettings({ preventDefault() {} });
 
   assert.equal(harness.fetchLog[0].path, "/api/mileage/settings");
   assert.equal(harness.fetchLog[0].init.method, "PUT");
   const body = JSON.parse(harness.fetchLog[0].init.body);
   assert.equal(body.rate, "0.725");
   assert.equal(body.noteTemplate, "Trip {{miles}} {{unit}} at {{rate}}");
+}
+
+async function assertSettingsSaveWarningsToastAsErrors() {
+  resetDom();
+  const submit = new FakeElement("button");
+  submit.textContent = "Save";
+  harness.document.specialSelectors.set("#settings-form button[type='submit']", submit);
+  const toastContainer = element("toast-container", "div");
+  element("settings-enabled", "input", { checked: true });
+  element("settings-rate", "input", { value: "0.725" });
+  element("settings-mileage-category", "select", { value: "cat-mileage" });
+  element("settings-convert-create", "input", { checked: true });
+  element("settings-convert-update", "input", { checked: true });
+  element("settings-rate-override", "input", { checked: false });
+  element("settings-note-template", "textarea", { value: "" });
+  harness.responses.set("/api/mileage/settings", new FakeResponse({ warnings: ["sync warning"] }));
+
+  await app.saveSettings({ preventDefault() {} });
+
+  const messages = toastContainer.children.map(node => node.children[0].textContent);
+  assert.deepEqual(messages, ["sync warning"]);
+  assert.equal(toastContainer.children[0].className, "toast error");
+  assert.equal(toastContainer.children[0].getAttribute("role"), "alert");
 }
 
 for (const test of [
@@ -574,7 +597,8 @@ for (const test of [
   assertReportOpenCarriesAuthTokenOnlyForIframeReport,
   assertTeamReportCarriesSelectedUserName,
   assertPaginationAddsPageAfterLockedPageSize,
-  assertSettingsSaveSendsNoteTemplateAndRate
+  assertSettingsSaveSendsNoteTemplateAndRate,
+  assertSettingsSaveWarningsToastAsErrors
 ]) {
   await test();
 }

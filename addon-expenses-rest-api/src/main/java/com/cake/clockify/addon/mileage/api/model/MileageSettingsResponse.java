@@ -18,11 +18,38 @@ public record MileageSettingsResponse(
         boolean completeForAddonCreate,
         boolean completeForNativeConversion,
         List<String> diagnostics,
+        List<String> warnings,
         String mileageCategoryId,
         String mileageCategoryName,
         String fixedUnit,
         String fixedRoundingMode
 ) {
+    public MileageSettingsResponse(
+            boolean enabled,
+            String rate,
+            String unit,
+            String inputCategoryId,
+            String outputCategoryId,
+            String roundingMode,
+            boolean convertOnCreate,
+            boolean convertOnUpdate,
+            boolean preserveOriginalNotes,
+            boolean dryRunMode,
+            boolean allowUserRateOverride,
+            String noteTemplate,
+            boolean completeForAddonCreate,
+            boolean completeForNativeConversion,
+            List<String> diagnostics,
+            String mileageCategoryId,
+            String mileageCategoryName,
+            String fixedUnit,
+            String fixedRoundingMode) {
+        this(enabled, rate, unit, inputCategoryId, outputCategoryId, roundingMode,
+                convertOnCreate, convertOnUpdate, preserveOriginalNotes, dryRunMode,
+                allowUserRateOverride, noteTemplate, completeForAddonCreate, completeForNativeConversion,
+                diagnostics, List.of(), mileageCategoryId, mileageCategoryName, fixedUnit, fixedRoundingMode);
+    }
+
     public MileageSettingsResponse withMileageCategoryName(String name) {
         return new MileageSettingsResponse(
                 enabled,
@@ -40,8 +67,33 @@ public record MileageSettingsResponse(
                 completeForAddonCreate,
                 completeForNativeConversion,
                 diagnostics,
+                warnings,
                 mileageCategoryId,
                 name,
+                fixedUnit,
+                fixedRoundingMode);
+    }
+
+    public MileageSettingsResponse withWarnings(List<String> warnings) {
+        return new MileageSettingsResponse(
+                enabled,
+                rate,
+                unit,
+                inputCategoryId,
+                outputCategoryId,
+                roundingMode,
+                convertOnCreate,
+                convertOnUpdate,
+                preserveOriginalNotes,
+                dryRunMode,
+                allowUserRateOverride,
+                noteTemplate,
+                completeForAddonCreate,
+                completeForNativeConversion,
+                diagnostics,
+                warnings == null ? List.of() : List.copyOf(warnings),
+                mileageCategoryId,
+                mileageCategoryName,
                 fixedUnit,
                 fixedRoundingMode);
     }
