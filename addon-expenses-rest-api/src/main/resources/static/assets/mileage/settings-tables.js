@@ -166,10 +166,15 @@
     }
     event.preventDefault();
     let userId = null;
+    let userName = "";
     if (config[1]) {
+      const select = app.element(config[1]);
       userId = app.formValue(config[1]); // empty selection => all users (reportPath omits userId)
+      if (select && select.selectedIndex >= 0 && userId) {
+        userName = select.options[select.selectedIndex].textContent || "";
+      }
     }
-    const path = app.reportPath(config[0], userId);
+    const path = app.reportPath(config[0], userId, userName);
     if (path) {
       const reportWindow = window.open(path, "_blank");
       if (reportWindow) {

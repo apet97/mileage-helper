@@ -11,6 +11,8 @@ import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseGateway;
 import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseListItem;
 import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseListResult;
 import com.cake.clockify.addon.mileage.security.MileageAuthorizationService;
+import com.cake.clockify.client.ClockifyApiException;
+import com.cake.clockify.client.ClockifyTransportException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
@@ -64,6 +66,7 @@ public class MileageReportController {
     public ResponseEntity<String> report(
             HttpServletRequest request,
             @RequestParam(required = false) String userId,
+            @RequestParam(required = false) String selectedUserName,
             @RequestParam(required = false) String scope,
             @RequestParam(required = false) String from,
             @RequestParam(required = false) String to) {
@@ -84,23 +87,24 @@ public class MileageReportController {
         Map<String, String> userNames = includeUser
                 ? nameResolver.allUserNamesById(workspaceId)
                 : Map.of();
-        String label = includeUser ? "All users" : userLabel(userNames, targetUserId);
+        String label = includeUser ? "All users" : userLabel(userNames, targetUserId, selectedUserName);
 
+        ClockifyExpenseListResult scan;
         try {
-            ClockifyExpenseListResult scan = gateway.listExpensesForReport(workspaceId, targetUserId, range.from(), range.to());
-            // Load CONVERTED conversions for exactly the scanned expense ids so every displayed expense
-            // finds its override (no cap/sort mismatch between the conversion query and the merged display).
-            Map<String, MileageConversion> conversions = conversionsByExpenseId(workspaceId, scan.items());
-            List<ReportRow> merged = ReportMerger.merge(scan.items(), conversions, userNames);
-            boolean rowCapHit = merged.size() > MAX_REPORT_ROWS;
-            return ResponseEntity.ok(MileageReportRenderer.render(
-                    label, range.from(), range.to(), cap(merged), includeUser, scan.truncated(), rowCapHit, false));
+            scan = gateway.listExpensesForReport(workspaceId, targetUserId, range.from(), range.to());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return degraded(workspaceId, label, range, targetUserId, userNames, includeUser);
-        } catch (IOException | RuntimeException e) {
+        } catch (IOException | ClockifyTransportException | ClockifyApiException e) {
             return degraded(workspaceId, label, range, targetUserId, userNames, includeUser);
         }
+        // Load CONVERTED conversions for exactly the scanned expense ids so every displayed expense
+        // finds its override (no cap/sort mismatch between the conversion query and the merged display).
+        Map<String, MileageConversion> conversions = conversionsByExpenseId(workspaceId, scan.items());
+        List<ReportRow> merged = ReportMerger.merge(scan.items(), conversions, userNames);
+        boolean rowCapHit = merged.size() > MAX_REPORT_ROWS;
+        return ResponseEntity.ok(MileageReportRenderer.render(
+                label, range.from(), range.to(), cap(merged), includeUser, scan.truncated(), rowCapHit, false));
     }
 
     private Map<String, MileageConversion> conversionsByExpenseId(String workspaceId, List<ClockifyExpenseListItem> expenses) {
@@ -138,9 +142,15 @@ public class MileageReportController {
         return rows.size() > MAX_REPORT_ROWS ? rows.subList(0, MAX_REPORT_ROWS) : rows;
     }
 
-    private static String userLabel(Map<String, String> userNames, String userId) {
+    private static String userLabel(Map<String, String> userNames, String userId, String selectedUserName) {
         String name = userNames.get(userId);
-        return name == null || name.isBlank() ? userId : name;
+        if (hasText(name)) {
+            return name;
+        }
+        if (hasText(selectedUserName)) {
+            return selectedUserName.trim();
+        }
+        return userId;
     }
 
     private static boolean hasText(String value) {

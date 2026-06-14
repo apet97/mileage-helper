@@ -505,6 +505,23 @@ async function assertReportOpenCarriesAuthTokenOnlyForIframeReport() {
   assert.equal(harness.fetchLog.some(entry => String(entry.path).includes("auth_token=")), false);
 }
 
+async function assertTeamReportCarriesSelectedUserName() {
+  resetDom();
+  rangeElements("team");
+  const select = element("team-user-filter", "select", { value: "user-two", selectedIndex: 1 });
+  select.appendChild(new FakeOption("All users", ""));
+  select.appendChild(new FakeOption("Ada Lovelace", "user-two"));
+  const reportButton = button("btn-report-team");
+
+  app.handleReportClick({
+    target: reportButton,
+    preventDefault() {}
+  });
+
+  assert.ok(harness.window.openedPath.includes("userId=user-two"));
+  assert.ok(harness.window.openedPath.includes("selectedUserName=Ada%20Lovelace"));
+}
+
 async function assertPaginationAddsPageAfterLockedPageSize() {
   resetDom();
   rangeElements("mine");
@@ -555,6 +572,7 @@ for (const test of [
   assertCsvExportsUseAuthHeaderNotQueryToken,
   assertApiFetchUsesCurrentRuntimeAuthToken,
   assertReportOpenCarriesAuthTokenOnlyForIframeReport,
+  assertTeamReportCarriesSelectedUserName,
   assertPaginationAddsPageAfterLockedPageSize,
   assertSettingsSaveSendsNoteTemplateAndRate
 ]) {

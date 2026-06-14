@@ -152,7 +152,7 @@
     return userId ? "&userId=" + encodeURIComponent(userId) : "";
   }
 
-  function reportPath(scope, userId) {
+  function reportPath(scope, userId, userName) {
     const range = validSelectedDateRange(scope);
     if (!range) {
       return null;
@@ -161,6 +161,9 @@
     path += "&scope=" + encodeURIComponent(scope); // "mine" pins to the requester; "team" = admin all-users/filter
     if (userId) {
       path += "&userId=" + encodeURIComponent(userId);
+      if (userName) {
+        path += "&selectedUserName=" + encodeURIComponent(userName);
+      }
     }
     if (app.authToken) {
       path += "&auth_token=" + encodeURIComponent(app.authToken);

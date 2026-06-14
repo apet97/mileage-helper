@@ -101,6 +101,24 @@ class MileageReportControllerTest {
     }
 
     @Test
+    void adminWithUserIdCanDisplaySelectedUserNameWithoutFetchingAllUsers() throws Exception {
+        when(gateway.listExpensesForReport(eq("ws-admin"), eq("user-two"), any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(new ClockifyExpenseListResult(List.of(), false));
+
+        mockMvc.perform(get("/iframe/report")
+                        .queryParam("scope", "team")
+                        .queryParam("userId", "user-two")
+                        .queryParam("selectedUserName", "Ada Lovelace")
+                        .queryParam("from", "2026-05-01")
+                        .queryParam("to", "2026-05-31")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("OWNER")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("Ada Lovelace")));
+
+        verify(gateway, never()).listUsers(any());
+    }
+
+    @Test
     void adminMineScopeReportsOwnNotAllUsers() throws Exception {
         when(gateway.listExpensesForReport(eq("ws-admin"), eq("user-claims"), any(LocalDate.class), any(LocalDate.class)))
                 .thenReturn(new ClockifyExpenseListResult(List.of(), false));
@@ -171,6 +189,21 @@ class MileageReportControllerTest {
                 .andExpect(content().string(containsString("Live expense data is unavailable")))
                 .andExpect(content().string(containsString("14.50")))     // amount at 2 dp
                 .andExpect(content().string(containsString("North Route"))); // project attribution survives the outage
+    }
+
+    @Test
+    void internalReportMergeFailureReturnsServerError() throws Exception {
+        when(gateway.listExpensesForReport(eq("ws-admin"), eq("user-claims"), any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(new ClockifyExpenseListResult(List.of(native_("e2", "user-claims", "Meals", "18.00")), false));
+        when(conversionRepository.findByWorkspaceIdAndStatusAndExpenseIdIn(eq("ws-admin"), eq(MileageConversionStatus.CONVERTED), any()))
+                .thenThrow(new IllegalStateException("db bug"));
+
+        mockMvc.perform(get("/iframe/report")
+                        .queryParam("scope", "mine")
+                        .queryParam("from", "2026-05-01")
+                        .queryParam("to", "2026-05-31")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("MEMBER")))
+                .andExpect(status().isInternalServerError());
     }
 
     @Test
