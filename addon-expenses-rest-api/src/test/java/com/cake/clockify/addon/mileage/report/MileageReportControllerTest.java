@@ -86,6 +86,7 @@ class MileageReportControllerTest {
 
     @Test
     void adminWithUserIdReportsSingleUser() throws Exception {
+        when(gateway.listUsers("ws-admin")).thenReturn(List.of());
         when(gateway.listExpensesForReport(eq("ws-admin"), eq("user-two"), any(LocalDate.class), any(LocalDate.class)))
                 .thenReturn(new ClockifyExpenseListResult(List.of(), false));
 
@@ -97,25 +98,28 @@ class MileageReportControllerTest {
                 .andExpect(content().string(containsString("Expense Report")));
 
         verify(gateway).listExpensesForReport(eq("ws-admin"), eq("user-two"), any(LocalDate.class), any(LocalDate.class));
-        verify(gateway, never()).listUsers(any());
+        verify(gateway).listUsers("ws-admin");
     }
 
     @Test
-    void adminWithUserIdCanDisplaySelectedUserNameWithoutFetchingAllUsers() throws Exception {
+    void adminWithUserIdResolvesUserNameServerSide() throws Exception {
+        when(gateway.listUsers("ws-admin")).thenReturn(List.of(
+                new ClockifyUserOption("user-two", "Ada Lovelace", "ada@example.test")));
         when(gateway.listExpensesForReport(eq("ws-admin"), eq("user-two"), any(LocalDate.class), any(LocalDate.class)))
                 .thenReturn(new ClockifyExpenseListResult(List.of(), false));
 
         mockMvc.perform(get("/iframe/report")
                         .queryParam("scope", "team")
                         .queryParam("userId", "user-two")
-                        .queryParam("selectedUserName", "Ada Lovelace")
+                        .queryParam("selectedUserName", "Forged Name")
                         .queryParam("from", "2026-05-01")
                         .queryParam("to", "2026-05-31")
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("OWNER")))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("Ada Lovelace")));
+                .andExpect(content().string(containsString("Ada Lovelace")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(containsString("Forged Name"))));
 
-        verify(gateway, never()).listUsers(any());
+        verify(gateway).listUsers("ws-admin");
     }
 
     @Test

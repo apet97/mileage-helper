@@ -66,7 +66,6 @@ public class MileageReportController {
     public ResponseEntity<String> report(
             HttpServletRequest request,
             @RequestParam(required = false) String userId,
-            @RequestParam(required = false) String selectedUserName,
             @RequestParam(required = false) String scope,
             @RequestParam(required = false) String from,
             @RequestParam(required = false) String to) {
@@ -82,12 +81,13 @@ public class MileageReportController {
                 ? requesterId
                 : (hasText(userId) ? userId.trim() : null);
         boolean includeUser = (targetUserId == null);
+        boolean resolveSingleUserLabel = admin && !mineScope && targetUserId != null;
         MileageDateRange range = dateRangeResolver.required(from, to);
         String workspaceId = claims.workspaceId();
-        Map<String, String> userNames = includeUser
+        Map<String, String> userNames = includeUser || resolveSingleUserLabel
                 ? nameResolver.allUserNamesById(workspaceId)
                 : Map.of();
-        String label = includeUser ? "All users" : userLabel(userNames, targetUserId, selectedUserName);
+        String label = includeUser ? "All users" : userLabel(userNames, targetUserId);
 
         ClockifyExpenseListResult scan;
         try {
@@ -142,15 +142,9 @@ public class MileageReportController {
         return rows.size() > MAX_REPORT_ROWS ? rows.subList(0, MAX_REPORT_ROWS) : rows;
     }
 
-    private static String userLabel(Map<String, String> userNames, String userId, String selectedUserName) {
+    private static String userLabel(Map<String, String> userNames, String userId) {
         String name = userNames.get(userId);
-        if (hasText(name)) {
-            return name;
-        }
-        if (hasText(selectedUserName)) {
-            return selectedUserName.trim();
-        }
-        return userId;
+        return hasText(name) ? name : userId;
     }
 
     private static boolean hasText(String value) {
