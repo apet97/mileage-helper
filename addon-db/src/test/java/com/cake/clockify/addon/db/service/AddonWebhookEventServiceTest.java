@@ -2,9 +2,12 @@ package com.cake.clockify.addon.db.service;
 
 import com.cake.clockify.addon.db.AbstractDbTest;
 import com.cake.clockify.addon.db.entity.AddonWebhookEvent;
+import com.cake.clockify.addon.db.entity.AddonWebhookJob;
 import com.cake.clockify.addon.db.repository.AddonWebhookEventRepository;
+import com.cake.clockify.addon.db.repository.AddonWebhookJobRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.Callable;
@@ -24,6 +27,12 @@ class AddonWebhookEventServiceTest extends AbstractDbTest {
 
     @Autowired
     private AddonWebhookEventRepository repository;
+
+    @Autowired
+    private AddonWebhookJobRepository jobRepository;
+
+    @Autowired
+    private AddonWebhookJobClaimService claimService;
 
     @Test
     void testRecordReceivedCreatesEvent() {
@@ -135,6 +144,32 @@ class AddonWebhookEventServiceTest extends AbstractDbTest {
         Optional<AddonWebhookEvent> dbEvent = repository.findById(event.getId());
         assertThat(dbEvent).isPresent();
         assertThat(dbEvent.get().getStatus()).isEqualTo("PROCESSING");
+    }
+
+    @Test
+    void resetStuckJobsReopensProcessingEvent() {
+        AddonWebhookEvent event = service.recordReceived(
+                "my-addon", "ws-stale", "TIME_ENTRY_CREATED", "dedupe-stale", "hash-1");
+        assertThat(service.tryStartProcessing(event.getId())).isTrue();
+
+        AddonWebhookJob job = new AddonWebhookJob();
+        job.setAddonKey("my-addon");
+        job.setWorkspaceId("ws-stale");
+        job.setEventType("TIME_ENTRY_CREATED");
+        job.setEventId(event.getId());
+        job.setDedupeKey("dedupe-stale");
+        job.setPayload("{}".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        job.setClaimsJson("{}");
+        job.setStatus(AddonWebhookJob.STATUS_CLAIMED);
+        job.setClaimedAt(Instant.now().minusSeconds(600));
+        job.setAttempts(1);
+        jobRepository.saveAndFlush(job);
+
+        int reset = claimService.resetStuckJobs(Instant.now().minusSeconds(300));
+
+        assertThat(reset).isEqualTo(1);
+        assertThat(repository.findById(event.getId()).orElseThrow().getStatus()).isEqualTo("RECEIVED");
+        assertThat(service.tryStartProcessing(event.getId())).isTrue();
     }
 
     @Test

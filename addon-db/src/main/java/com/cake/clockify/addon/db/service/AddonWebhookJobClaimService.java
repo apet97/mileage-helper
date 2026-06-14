@@ -1,6 +1,7 @@
 package com.cake.clockify.addon.db.service;
 
 import com.cake.clockify.addon.db.entity.AddonWebhookJob;
+import com.cake.clockify.addon.db.repository.AddonWebhookEventRepository;
 import com.cake.clockify.addon.db.repository.AddonWebhookJobRepository;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,9 +22,13 @@ import java.util.UUID;
 public class AddonWebhookJobClaimService {
 
     private final AddonWebhookJobRepository repository;
+    private final AddonWebhookEventRepository eventRepository;
 
-    public AddonWebhookJobClaimService(AddonWebhookJobRepository repository) {
+    public AddonWebhookJobClaimService(
+            AddonWebhookJobRepository repository,
+            AddonWebhookEventRepository eventRepository) {
         this.repository = repository;
+        this.eventRepository = eventRepository;
     }
 
     @Transactional
@@ -51,6 +56,7 @@ public class AddonWebhookJobClaimService {
 
     @Transactional
     public int resetStuckJobs(Instant cutoff) {
+        eventRepository.resetProcessingEventsForStuckJobs(cutoff, Instant.now());
         return repository.resetStuckJobs(cutoff);
     }
 

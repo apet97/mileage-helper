@@ -67,6 +67,23 @@ class WebhookJobWorkerTest {
     }
 
     @Test
+    void workerDoesNotCompleteStaleProcessingEventWithoutDispatch() {
+        RecordingHandler handler = new RecordingHandler();
+        AddonWebhookJobClaimService claimService = mock(AddonWebhookJobClaimService.class);
+        WebhookEventService eventService = mock(WebhookEventService.class);
+        when(eventService.tryStartProcessing(EVENT_ID)).thenReturn(false);
+        when(claimService.claimNext()).thenReturn(Optional.of(job("EXPENSE_CREATED")));
+
+        WebhookJobWorker worker = newWorker(handler, claimService, eventService);
+        boolean processed = worker.processOneJob();
+
+        assertThat(processed).isTrue();
+        assertThat(handler.invocations).isZero();
+        verify(claimService).markCompleted(JOB_ID, AddonWebhookJob.STATUS_FAILED, "event is already processing");
+        verify(eventService, never()).markProcessed(EVENT_ID);
+    }
+
+    @Test
     void emptyQueuePollReturnsFalseAndCallsNoHandler() {
         RecordingHandler handler = new RecordingHandler();
         AddonWebhookJobClaimService claimService = mock(AddonWebhookJobClaimService.class);

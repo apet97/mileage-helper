@@ -94,8 +94,9 @@ public class AddonDbAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public AddonWebhookJobClaimService addonWebhookJobClaimService(
-            AddonWebhookJobRepository repository) {
-        return new AddonWebhookJobClaimService(repository);
+            AddonWebhookJobRepository repository,
+            AddonWebhookEventRepository eventRepository) {
+        return new AddonWebhookJobClaimService(repository, eventRepository);
     }
 
     @Bean

@@ -73,4 +73,20 @@ public interface AddonWebhookEventRepository extends JpaRepository<AddonWebhookE
     @Modifying
     @Query("UPDATE AddonWebhookEvent e SET e.status = 'PROCESSING', e.updatedAt = :now WHERE e.id = :id AND e.status = 'RECEIVED'")
     int tryStartProcessing(@Param("id") UUID id, @Param("now") Instant now);
+
+    @Modifying
+    @Query(value = """
+            UPDATE {h-schema}addon_webhook_events e
+               SET status = 'RECEIVED',
+                   updated_at = :now
+             WHERE e.status = 'PROCESSING'
+               AND e.id IN (
+                   SELECT j.event_id
+                     FROM {h-schema}addon_webhook_jobs j
+                    WHERE j.status = 'CLAIMED'
+                      AND j.claimed_at < :cutoff
+                      AND j.event_id IS NOT NULL
+               )
+            """, nativeQuery = true)
+    int resetProcessingEventsForStuckJobs(@Param("cutoff") Instant cutoff, @Param("now") Instant now);
 }

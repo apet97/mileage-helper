@@ -40,6 +40,7 @@ public class WebhookJobWorker {
 
     private static final Logger log = LoggerFactory.getLogger(WebhookJobWorker.class);
     private static final String TIMER_NAME = "mileage.webhook.job.process";
+    private static final String EVENT_ALREADY_PROCESSING_ERROR = "event is already processing";
 
     private final AddonWebhookJobClaimService claimService;
     private final WebhookEventService eventService;
@@ -103,9 +104,15 @@ public class WebhookJobWorker {
         Timer.Sample sample = Timer.start(meterRegistry);
         AddonWebhookJob job = claimed.get();
         try {
-            dispatch(job);
+            DispatchOutcome outcome = dispatch(job);
+            if (outcome == DispatchOutcome.EVENT_ALREADY_PROCESSING) {
+                claimService.markCompleted(job.getId(), AddonWebhookJob.STATUS_FAILED, EVENT_ALREADY_PROCESSING_ERROR);
+                return true;
+            }
             claimService.markCompleted(job.getId(), AddonWebhookJob.STATUS_COMPLETED, null);
-            markEventProcessed(job);
+            if (outcome == DispatchOutcome.HANDLED) {
+                markEventProcessed(job);
+            }
         } catch (Exception e) {
             String redacted = redactErrorMessage(e);
             claimService.markCompleted(job.getId(), AddonWebhookJob.STATUS_FAILED, redacted);
@@ -117,19 +124,20 @@ public class WebhookJobWorker {
         return true;
     }
 
-    private void dispatch(AddonWebhookJob job) throws Exception {
+    private DispatchOutcome dispatch(AddonWebhookJob job) throws Exception {
         AddonWebhookHandler handler = handlerMap.get(job.getEventType().toUpperCase(Locale.ROOT));
         if (handler == null) {
             log.debug("mileage.webhook.job.no-handler eventType={}", job.getEventType());
-            return;
+            return DispatchOutcome.NO_HANDLER;
         }
         if (eventService != null && job.getEventId() != null
                 && !eventService.tryStartProcessing(job.getEventId())) {
             log.info("mileage.webhook.job.event-already-processing eventId={}", job.getEventId());
-            return;
+            return DispatchOutcome.EVENT_ALREADY_PROCESSING;
         }
         NormalizedClaims claims = objectMapper.readValue(job.getClaimsJson(), NormalizedClaims.class);
         handler.handle(claims, job.getEventType(), job.getPayload());
+        return DispatchOutcome.HANDLED;
     }
 
     private void markEventProcessed(AddonWebhookJob job) {
@@ -164,5 +172,11 @@ public class WebhookJobWorker {
                 .replaceAll("(?i)(authorization\\s*:\\s*bearer\\s+)[^,}\\s\\n]+", "$1REDACTED")
                 .replaceAll("(?i)(bearer\\s+)[^,}\\s\\n]+", "$1REDACTED")
                 .replaceAll("(?i)((?:x-api-key|x-addon-token|authorization|authToken|addonToken|api[-_]?key|token|password|secret)\\s*[:=]\\s*)[^,}\\s\\n]+", "$1REDACTED");
+    }
+
+    private enum DispatchOutcome {
+        HANDLED,
+        NO_HANDLER,
+        EVENT_ALREADY_PROCESSING
     }
 }
