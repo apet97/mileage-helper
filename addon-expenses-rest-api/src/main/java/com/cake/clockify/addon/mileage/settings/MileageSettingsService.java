@@ -2,6 +2,7 @@ package com.cake.clockify.addon.mileage.settings;
 
 import com.cake.clockify.addon.mileage.api.model.MileageSettingsRequest;
 import com.cake.clockify.addon.mileage.api.model.MileageSettingsResponse;
+import com.cake.clockify.addon.mileage.calculation.MileageDecimalPolicy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -58,7 +59,7 @@ public class MileageSettingsService {
         MileageWorkspaceSettings settings = repository.findById(workspaceId).orElseGet(() -> defaults(workspaceId));
         if (request != null) {
             if (request.enabled() != null) settings.setEnabled(request.enabled());
-            if (request.rate() != null) settings.setRate(parsePositiveDecimal("rate", request.rate()));
+            if (request.rate() != null) settings.setRate(MileageDecimalPolicy.parseOptionalRate(request.rate()));
             String categoryId = firstNonBlank(request.mileageCategoryId(), request.inputCategoryId(), request.outputCategoryId());
             if (categoryId != null) {
                 settings.setInputCategoryId(categoryId);
@@ -166,21 +167,6 @@ public class MileageSettingsService {
             return RoundingMode.valueOf(value);
         } catch (IllegalArgumentException e) {
             return DEFAULT_ROUNDING_MODE;
-        }
-    }
-
-    private static BigDecimal parsePositiveDecimal(String field, String raw) {
-        if (raw == null || raw.isBlank()) {
-            return null;
-        }
-        try {
-            BigDecimal value = new BigDecimal(raw.trim());
-            if (value.compareTo(BigDecimal.ZERO) <= 0) {
-                throw new IllegalArgumentException(field + " must be greater than zero");
-            }
-            return value;
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException(field + " must be a decimal number", e);
         }
     }
 

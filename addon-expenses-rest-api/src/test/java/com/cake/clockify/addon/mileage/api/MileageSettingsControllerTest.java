@@ -89,6 +89,22 @@ class MileageSettingsControllerTest {
     }
 
     @Test
+    void invalidSettingsRateReturnsBadRequest() throws Exception {
+        when(settingsService.saveSettings(eq("ws-admin"), any(), eq("user-claims")))
+                .thenThrow(new IllegalArgumentException("rate must be at most 10000"));
+
+        mockMvc.perform(put("/api/mileage/settings")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("OWNER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"rate":"10000.000001","mileageCategoryId":"cat-mileage"}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("invalid_request"))
+                .andExpect(jsonPath("$.message").value("rate must be at most 10000"));
+    }
+
+    @Test
     void savingSettingsSyncsClockifyMileageCategoryPriceToRate() throws Exception {
         when(settingsService.getEffectiveSettings("ws-admin")).thenReturn(settingsResponse(List.of()));
 

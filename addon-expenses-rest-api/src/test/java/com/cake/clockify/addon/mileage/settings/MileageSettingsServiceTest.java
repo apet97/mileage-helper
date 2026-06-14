@@ -299,6 +299,28 @@ class MileageSettingsServiceTest {
     }
 
     @Test
+    void rejectsSettingsRateAboveDomainMaximum() {
+        MileageSettingsRequest request = new MileageSettingsRequest(
+                true, "10000.000001", "mi", null, "cat-output", "cat-output", "HALF_UP",
+                true, true, null, false, false, null);
+
+        assertThatThrownBy(() -> settingsService.saveSettings("ws-rate-max", request, "admin-1"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("rate must be at most 10000");
+    }
+
+    @Test
+    void rejectsSettingsRateExponentNotation() {
+        MileageSettingsRequest request = new MileageSettingsRequest(
+                true, "1E+3", "mi", null, "cat-output", "cat-output", "HALF_UP",
+                true, true, null, false, false, null);
+
+        assertThatThrownBy(() -> settingsService.saveSettings("ws-rate-exp", request, "admin-1"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("rate must be a plain decimal number");
+    }
+
+    @Test
     void savesCustomNoteTemplate() {
         MileageSettingsRequest request = new MileageSettingsRequest(
                 true, "0.725", "mi", null, "cat-output", "cat-output", "HALF_UP",
