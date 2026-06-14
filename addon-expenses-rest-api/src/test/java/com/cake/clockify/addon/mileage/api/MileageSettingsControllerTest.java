@@ -60,7 +60,7 @@ class MileageSettingsControllerTest {
                 gateway,
                 new MileageAuthorizationService(),
                 installationService,
-                jobRepository);
+                Optional.of(jobRepository));
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new MileageExceptionHandler(objectMapper))
                 .build();

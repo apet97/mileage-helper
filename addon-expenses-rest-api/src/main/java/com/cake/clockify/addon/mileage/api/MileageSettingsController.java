@@ -36,6 +36,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 @RestController
 public class MileageSettingsController {
@@ -53,14 +54,14 @@ public class MileageSettingsController {
     private final ClockifyExpenseGateway gateway;
     private final MileageAuthorizationService authorizationService;
     private final AddonInstallationService installationService;
-    private final AddonWebhookJobRepository jobRepository;
+    private final Optional<AddonWebhookJobRepository> jobRepository;
 
     public MileageSettingsController(
             MileageSettingsService settingsService,
             ClockifyExpenseGateway gateway,
             MileageAuthorizationService authorizationService,
             AddonInstallationService installationService,
-            AddonWebhookJobRepository jobRepository) {
+            Optional<AddonWebhookJobRepository> jobRepository) {
         this.settingsService = settingsService;
         this.gateway = gateway;
         this.authorizationService = authorizationService;
@@ -208,13 +209,17 @@ public class MileageSettingsController {
     }
 
     private MileageOperationalHealthResponse operationalHealth() {
-        long pending = jobRepository.countByStatus(AddonWebhookJob.STATUS_PENDING);
-        long claimed = jobRepository.countByStatus(AddonWebhookJob.STATUS_CLAIMED);
-        long failed = jobRepository.countByStatus(AddonWebhookJob.STATUS_FAILED);
-        Long oldestPendingAgeSeconds = jobRepository.findFirstByStatusOrderByCreatedAtAsc(AddonWebhookJob.STATUS_PENDING)
+        if (jobRepository.isEmpty()) {
+            return new MileageOperationalHealthResponse(0, 0, 0, null, null);
+        }
+        AddonWebhookJobRepository jobs = jobRepository.get();
+        long pending = jobs.countByStatus(AddonWebhookJob.STATUS_PENDING);
+        long claimed = jobs.countByStatus(AddonWebhookJob.STATUS_CLAIMED);
+        long failed = jobs.countByStatus(AddonWebhookJob.STATUS_FAILED);
+        Long oldestPendingAgeSeconds = jobs.findFirstByStatusOrderByCreatedAtAsc(AddonWebhookJob.STATUS_PENDING)
                 .map(job -> Duration.between(job.getCreatedAt(), Instant.now()).getSeconds())
                 .orElse(null);
-        Instant lastCompleted = jobRepository.findFirstByStatusOrderByCompletedAtDesc(AddonWebhookJob.STATUS_COMPLETED)
+        Instant lastCompleted = jobs.findFirstByStatusOrderByCompletedAtDesc(AddonWebhookJob.STATUS_COMPLETED)
                 .map(AddonWebhookJob::getCompletedAt)
                 .orElse(null);
         return new MileageOperationalHealthResponse(pending, claimed, failed, oldestPendingAgeSeconds, lastCompleted);
