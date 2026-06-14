@@ -407,6 +407,7 @@ button[aria-busy="true"] {
 .empty-state,
 .table-wrap,
 .diagnostics,
+.diagnostics-section,
 .warnings,
 .note-preview {
   margin-top: 16px;
@@ -557,15 +558,36 @@ tbody tr:last-child td { border-bottom: 0; }
   gap: 10px 18px;
 }
 
-.diagnostics dt { color: var(--muted); }
+.diagnostics-list {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 8px 16px;
+  margin: 12px 0 0;
+}
 
-.diagnostics dd {
+.diagnostics dt,
+.diagnostics-list dt { color: var(--muted); }
+
+.diagnostics dd,
+.diagnostics-list dd {
   margin: 0;
   font-weight: 600;
 }
 
 .diagnostics .ok { color: var(--success); }
 .diagnostics .warn { color: var(--danger); }
+
+.diagnostics-section h2 { margin-bottom: 10px; }
+
+.checklist {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.checklist .ok { color: var(--success); }
+.checklist .warn { color: var(--danger); }
 
 .warnings {
   color: var(--danger);

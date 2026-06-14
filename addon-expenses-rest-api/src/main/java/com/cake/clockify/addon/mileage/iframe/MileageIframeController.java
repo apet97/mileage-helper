@@ -294,6 +294,14 @@ public class MileageIframeController {
                         <header class="panel-heading"><h1>Diagnostics</h1><div class="actions"><button type="button" id="btn-refresh-diagnostics">Refresh</button></div></header>
                         <dl class="diagnostics" id="diagnostics-list"></dl>
                         <ul class="warnings" id="diagnostics-warnings"></ul>
+                        <section class="diagnostics-section" aria-labelledby="diagnostics-checklist-title">
+                          <h2 id="diagnostics-checklist-title">First-run checklist</h2>
+                          <ul id="diagnostics-checklist" class="checklist"></ul>
+                        </section>
+                        <section class="diagnostics-section" aria-labelledby="diagnostics-health-title">
+                          <h2 id="diagnostics-health-title">Operational health</h2>
+                          <dl id="diagnostics-health" class="diagnostics-list"></dl>
+                        </section>
                       </section>
                 """;
     }

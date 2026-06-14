@@ -282,6 +282,8 @@
         item.textContent = text;
         warnings.appendChild(item);
       });
+      renderDiagnosticsChecklist(data.checklist || []);
+      renderOperationalHealth(data.operationalHealth || {});
     }).catch(error => {
       renderDiagnosticsStatus(list, "Status", "Could not load diagnostics", "warn");
       app.toast(error.message, "error");
@@ -298,6 +300,52 @@
       dd.className = className;
     }
     list.append(dt, dd);
+  }
+
+  function renderDiagnosticsChecklist(items) {
+    const checklist = app.element("diagnostics-checklist");
+    if (!checklist) {
+      return;
+    }
+    checklist.replaceChildren();
+    items.forEach(item => {
+      const row = document.createElement("li");
+      row.className = item.complete ? "ok" : "warn";
+      row.textContent = (item.label || "") + " — " + (item.complete ? "OK" : (item.action || "Needs attention"));
+      checklist.appendChild(row);
+    });
+  }
+
+  function renderOperationalHealth(health) {
+    const list = app.element("diagnostics-health");
+    if (!list) {
+      return;
+    }
+    list.replaceChildren();
+    appendHealthMetric(list, "Pending jobs", health.pendingJobs);
+    appendHealthMetric(list, "Claimed jobs", health.claimedJobs);
+    appendHealthMetric(list, "Failed jobs", health.failedJobs);
+    appendHealthMetric(list, "Oldest pending age", formatAge(health.oldestPendingAgeSeconds));
+    appendHealthMetric(list, "Last completed job", health.lastCompletedJobAt || "None");
+  }
+
+  function appendHealthMetric(list, label, value) {
+    const dt = document.createElement("dt");
+    const dd = document.createElement("dd");
+    dt.textContent = label;
+    dd.textContent = value == null || value === "" ? "None" : String(value);
+    list.append(dt, dd);
+  }
+
+  function formatAge(seconds) {
+    if (seconds == null) {
+      return "None";
+    }
+    const value = Number(seconds);
+    if (!Number.isFinite(value)) {
+      return "None";
+    }
+    return Math.max(0, Math.round(value)) + "s";
   }
 
   Object.assign(app, {

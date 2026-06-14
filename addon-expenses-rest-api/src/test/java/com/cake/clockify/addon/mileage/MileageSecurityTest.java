@@ -139,6 +139,8 @@ class MileageSecurityTest {
         assertThat(html).contains("<option value=\"last_month\">Last month</option>");
         assertThat(html).contains("<option value=\"this_year\">This year</option>");
         assertThat(html).contains("<option value=\"last_year\">Last year</option>");
+        assertThat(html).contains("id=\"diagnostics-checklist\"");
+        assertThat(html).contains("id=\"diagnostics-health\"");
     }
 
     @Test

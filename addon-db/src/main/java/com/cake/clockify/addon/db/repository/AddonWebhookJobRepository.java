@@ -8,6 +8,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface AddonWebhookJobRepository extends JpaRepository<AddonWebhookJob, UUID> {
@@ -42,4 +43,8 @@ public interface AddonWebhookJobRepository extends JpaRepository<AddonWebhookJob
     int resetStuckJobs(@Param("cutoff") Instant cutoff);
 
     long countByStatus(String status);
+
+    Optional<AddonWebhookJob> findFirstByStatusOrderByCreatedAtAsc(String status);
+
+    Optional<AddonWebhookJob> findFirstByStatusOrderByCompletedAtDesc(String status);
 }

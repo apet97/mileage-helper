@@ -589,6 +589,36 @@ async function assertSettingsSaveWarningsToastAsErrors() {
   assert.equal(toastContainer.children[0].getAttribute("role"), "alert");
 }
 
+async function assertDiagnosticsRendersChecklistAndHealth() {
+  resetDom();
+  element("diagnostics-list", "dl");
+  element("diagnostics-warnings", "ul");
+  element("diagnostics-checklist", "ul");
+  element("diagnostics-health", "dl");
+  harness.responses.set("/api/mileage/diagnostics", new FakeResponse({
+    installationAvailable: true,
+    settingsComplete: true,
+    nativeConversionReady: false,
+    warnings: ["native conversion not ready"],
+    checklist: [
+      { key: "installation", label: "Add-on installed", complete: true, action: "" },
+      { key: "category", label: "Mileage category configured", complete: false, action: "Use or Repair Mileage Category" }
+    ],
+    operationalHealth: {
+      pendingJobs: 2,
+      claimedJobs: 0,
+      failedJobs: 1,
+      oldestPendingAgeSeconds: 301,
+      lastCompletedJobAt: "2026-06-15T10:00:00Z"
+    }
+  }));
+
+  await app.loadDiagnostics();
+
+  assert.ok(harness.document.getElementById("diagnostics-checklist").children.length >= 2);
+  assert.ok(harness.document.getElementById("diagnostics-health").children.length >= 8);
+}
+
 for (const test of [
   assertCreatePayloadOmitsUserIdAndTaskId,
   assertProjectNameMapsToProjectId,
@@ -598,7 +628,8 @@ for (const test of [
   assertTeamReportCarriesSelectedUserName,
   assertPaginationAddsPageAfterLockedPageSize,
   assertSettingsSaveSendsNoteTemplateAndRate,
-  assertSettingsSaveWarningsToastAsErrors
+  assertSettingsSaveWarningsToastAsErrors,
+  assertDiagnosticsRendersChecklistAndHealth
 ]) {
   await test();
 }

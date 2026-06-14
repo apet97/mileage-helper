@@ -2,6 +2,8 @@ package com.cake.clockify.addon.mileage.api;
 
 import com.cake.clockify.addon.core.auth.NormalizedClaims;
 import com.cake.clockify.addon.core.auth.RequestAttributes;
+import com.cake.clockify.addon.db.entity.AddonWebhookJob;
+import com.cake.clockify.addon.db.repository.AddonWebhookJobRepository;
 import com.cake.clockify.addon.db.service.AddonInstallationService;
 import com.cake.clockify.addon.mileage.clockify.ClockifyCategoryOption;
 import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseGateway;
@@ -23,6 +25,7 @@ import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -41,6 +44,7 @@ class MileageSettingsControllerTest {
     private MileageSettingsService settingsService;
     private ClockifyExpenseGateway gateway;
     private AddonInstallationService installationService;
+    private AddonWebhookJobRepository jobRepository;
     private MockMvc mockMvc;
 
     @BeforeEach
@@ -48,11 +52,15 @@ class MileageSettingsControllerTest {
         settingsService = mock(MileageSettingsService.class);
         gateway = mock(ClockifyExpenseGateway.class);
         installationService = mock(AddonInstallationService.class);
+        jobRepository = mock(AddonWebhookJobRepository.class);
+        when(jobRepository.findFirstByStatusOrderByCreatedAtAsc(any())).thenReturn(Optional.empty());
+        when(jobRepository.findFirstByStatusOrderByCompletedAtDesc(any())).thenReturn(Optional.empty());
         MileageSettingsController controller = new MileageSettingsController(
                 settingsService,
                 gateway,
                 new MileageAuthorizationService(),
-                installationService);
+                installationService,
+                jobRepository);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new MileageExceptionHandler(objectMapper))
                 .build();
@@ -324,6 +332,65 @@ class MileageSettingsControllerTest {
                 .andExpect(jsonPath("$.warnings[0]").value("installation record is missing; reinstall the add-on before publishing or testing native conversion"));
     }
 
+    @Test
+    void diagnosticsIncludesFirstRunChecklist() throws Exception {
+        when(settingsService.getEffectiveSettings("ws-admin")).thenReturn(incompleteSettingsResponse());
+        when(installationService.isInstalled("ws-admin")).thenReturn(true);
+
+        mockMvc.perform(get("/api/mileage/diagnostics")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.checklist[0].key").value("installation"))
+                .andExpect(jsonPath("$.checklist[0].complete").value(true))
+                .andExpect(jsonPath("$.checklist[1].key").value("rate"))
+                .andExpect(jsonPath("$.checklist[1].complete").value(false))
+                .andExpect(jsonPath("$.checklist[1].action").value("Set a positive rate in Settings"))
+                .andExpect(jsonPath("$.checklist[2].key").value("category"))
+                .andExpect(jsonPath("$.checklist[2].complete").value(false))
+                .andExpect(jsonPath("$.checklist[3].key").value("nativeConversion"));
+    }
+
+    @Test
+    void diagnosticsIncludesOperationalHealth() throws Exception {
+        AddonWebhookJob completed = webhookJob(AddonWebhookJob.STATUS_COMPLETED);
+        Instant completedAt = Instant.parse("2026-06-15T10:00:00Z");
+        completed.setCompletedAt(completedAt);
+        when(settingsService.getEffectiveSettings("ws-admin")).thenReturn(settingsResponse(List.of()));
+        when(installationService.isInstalled("ws-admin")).thenReturn(true);
+        when(jobRepository.countByStatus(AddonWebhookJob.STATUS_PENDING)).thenReturn(2L);
+        when(jobRepository.countByStatus(AddonWebhookJob.STATUS_CLAIMED)).thenReturn(1L);
+        when(jobRepository.countByStatus(AddonWebhookJob.STATUS_FAILED)).thenReturn(3L);
+        when(jobRepository.findFirstByStatusOrderByCompletedAtDesc(AddonWebhookJob.STATUS_COMPLETED))
+                .thenReturn(Optional.of(completed));
+
+        mockMvc.perform(get("/api/mileage/diagnostics")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.operationalHealth.pendingJobs").value(2))
+                .andExpect(jsonPath("$.operationalHealth.claimedJobs").value(1))
+                .andExpect(jsonPath("$.operationalHealth.failedJobs").value(3))
+                .andExpect(jsonPath("$.operationalHealth.lastCompletedJobAt").exists())
+                .andExpect(jsonPath("$.warnings").value(org.hamcrest.Matchers.hasItem(
+                        "webhook queue has failed jobs; inspect logs before publishing")));
+    }
+
+    @Test
+    void diagnosticsWarnsWhenOldPendingJobExists() throws Exception {
+        AddonWebhookJob pending = webhookJob(AddonWebhookJob.STATUS_PENDING);
+        pending.setCreatedAt(Instant.now().minusSeconds(600));
+        when(settingsService.getEffectiveSettings("ws-admin")).thenReturn(settingsResponse(List.of()));
+        when(installationService.isInstalled("ws-admin")).thenReturn(true);
+        when(jobRepository.countByStatus(AddonWebhookJob.STATUS_PENDING)).thenReturn(1L);
+        when(jobRepository.findFirstByStatusOrderByCreatedAtAsc(AddonWebhookJob.STATUS_PENDING))
+                .thenReturn(Optional.of(pending));
+
+        mockMvc.perform(get("/api/mileage/diagnostics")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.warnings").value(org.hamcrest.Matchers.hasItem(
+                        "webhook queue has pending jobs older than 5 minutes; check worker liveness")));
+    }
+
     private static com.cake.clockify.addon.mileage.api.model.MileageSettingsResponse settingsResponse(List<String> diagnostics) {
         return settingsResponse("0.655", "cat-mileage", "Mileage", diagnostics);
     }
@@ -346,5 +413,18 @@ class MileageSettingsControllerTest {
     private static NormalizedClaims claims(String role) {
         return new NormalizedClaims("ws-admin", "mileage-for-clockify", "https://backend.example.test",
                 "https://reports.example.test", null, null, "user-claims", role, "en", "DEFAULT", "UTC", Instant.now());
+    }
+
+    private static AddonWebhookJob webhookJob(String status) {
+        AddonWebhookJob job = new AddonWebhookJob();
+        job.setId(UUID.randomUUID());
+        job.setAddonKey("mileage-for-clockify");
+        job.setWorkspaceId("ws-admin");
+        job.setEventType("EXPENSE_CREATED");
+        job.setDedupeKey("dedupe-" + status);
+        job.setClaimsJson("{}");
+        job.setStatus(status);
+        job.setCreatedAt(Instant.now());
+        return job;
     }
 }

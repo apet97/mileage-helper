@@ -6,6 +6,8 @@ public record MileageDiagnosticsResponse(
         boolean installationAvailable,
         boolean settingsComplete,
         boolean nativeConversionReady,
-        List<String> warnings
+        List<String> warnings,
+        List<MileageChecklistItemResponse> checklist,
+        MileageOperationalHealthResponse operationalHealth
 ) {
 }

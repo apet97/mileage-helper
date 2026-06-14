@@ -2,9 +2,13 @@ package com.cake.clockify.addon.mileage.api;
 
 import com.cake.clockify.addon.core.auth.NormalizedClaims;
 import com.cake.clockify.addon.core.auth.RequestAttributes;
+import com.cake.clockify.addon.db.entity.AddonWebhookJob;
+import com.cake.clockify.addon.db.repository.AddonWebhookJobRepository;
 import com.cake.clockify.addon.db.service.AddonInstallationService;
 import com.cake.clockify.addon.mileage.api.model.MileageCategoryOptionsResponse;
+import com.cake.clockify.addon.mileage.api.model.MileageChecklistItemResponse;
 import com.cake.clockify.addon.mileage.api.model.MileageDiagnosticsResponse;
+import com.cake.clockify.addon.mileage.api.model.MileageOperationalHealthResponse;
 import com.cake.clockify.addon.mileage.api.model.MileageSettingsRequest;
 import com.cake.clockify.addon.mileage.api.model.MileageSettingsResponse;
 import com.cake.clockify.addon.mileage.api.model.MileageUserOptionsResponse;
@@ -28,6 +32,8 @@ import org.springframework.http.HttpStatus;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -47,16 +53,19 @@ public class MileageSettingsController {
     private final ClockifyExpenseGateway gateway;
     private final MileageAuthorizationService authorizationService;
     private final AddonInstallationService installationService;
+    private final AddonWebhookJobRepository jobRepository;
 
     public MileageSettingsController(
             MileageSettingsService settingsService,
             ClockifyExpenseGateway gateway,
             MileageAuthorizationService authorizationService,
-            AddonInstallationService installationService) {
+            AddonInstallationService installationService,
+            AddonWebhookJobRepository jobRepository) {
         this.settingsService = settingsService;
         this.gateway = gateway;
         this.authorizationService = authorizationService;
         this.installationService = installationService;
+        this.jobRepository = jobRepository;
     }
 
     @GetMapping("/api/mileage/settings")
@@ -180,11 +189,63 @@ public class MileageSettingsController {
         if (!installationAvailable) {
             warnings.add(0, "installation record is missing; reinstall the add-on before publishing or testing native conversion");
         }
+        MileageOperationalHealthResponse health = operationalHealth();
+        if (health.pendingJobs() > 0
+                && health.oldestPendingAgeSeconds() != null
+                && health.oldestPendingAgeSeconds() > 300) {
+            warnings.add("webhook queue has pending jobs older than 5 minutes; check worker liveness");
+        }
+        if (health.failedJobs() > 0) {
+            warnings.add("webhook queue has failed jobs; inspect logs before publishing");
+        }
         return ResponseEntity.ok(new MileageDiagnosticsResponse(
                 installationAvailable,
                 settings.completeForAddonCreate(),
                 settings.completeForNativeConversion(),
-                List.copyOf(warnings)));
+                List.copyOf(warnings),
+                checklist(installationAvailable, settings),
+                health));
+    }
+
+    private MileageOperationalHealthResponse operationalHealth() {
+        long pending = jobRepository.countByStatus(AddonWebhookJob.STATUS_PENDING);
+        long claimed = jobRepository.countByStatus(AddonWebhookJob.STATUS_CLAIMED);
+        long failed = jobRepository.countByStatus(AddonWebhookJob.STATUS_FAILED);
+        Long oldestPendingAgeSeconds = jobRepository.findFirstByStatusOrderByCreatedAtAsc(AddonWebhookJob.STATUS_PENDING)
+                .map(job -> Duration.between(job.getCreatedAt(), Instant.now()).getSeconds())
+                .orElse(null);
+        Instant lastCompleted = jobRepository.findFirstByStatusOrderByCompletedAtDesc(AddonWebhookJob.STATUS_COMPLETED)
+                .map(AddonWebhookJob::getCompletedAt)
+                .orElse(null);
+        return new MileageOperationalHealthResponse(pending, claimed, failed, oldestPendingAgeSeconds, lastCompleted);
+    }
+
+    private static List<MileageChecklistItemResponse> checklist(
+            boolean installationAvailable,
+            MileageSettingsResponse settings) {
+        boolean rateSaved = hasText(settings.rate());
+        boolean categoryConfigured = hasText(settings.mileageCategoryId());
+        return List.of(
+                new MileageChecklistItemResponse(
+                        "installation",
+                        "Add-on installed",
+                        installationAvailable,
+                        installationAvailable ? "" : "Reinstall the add-on from the current manifest"),
+                new MileageChecklistItemResponse(
+                        "rate",
+                        "Mileage rate saved",
+                        rateSaved,
+                        rateSaved ? "" : "Set a positive rate in Settings"),
+                new MileageChecklistItemResponse(
+                        "category",
+                        "Mileage category configured",
+                        categoryConfigured,
+                        categoryConfigured ? "" : "Use or Repair Mileage Category"),
+                new MileageChecklistItemResponse(
+                        "nativeConversion",
+                        "Native conversion ready",
+                        settings.completeForNativeConversion(),
+                        settings.completeForNativeConversion() ? "" : "Resolve the diagnostics warnings above"));
     }
 
     private NormalizedClaims adminClaims(HttpServletRequest request) {
