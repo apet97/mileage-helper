@@ -94,7 +94,7 @@
         app.appendTextCell(row, item.expenseId);
         app.appendTextCell(row, item.sourceLabel || app.sourceLabel(item.source));
         app.appendTextCell(row, item.userName || item.userId);
-        app.appendTextCell(row, item.status);
+        app.appendTextCell(row, conversionStatusText(item));
         app.appendTextCell(row, app.trimDecimal(item.miles));
         app.appendTextCell(row, app.trimDecimal(item.rate));
         app.appendAmountCell(row, item.calculatedAmount, item.roundedAmount);
@@ -149,6 +149,41 @@
     });
     buttons.append(prev, next);
     pager.append(label, buttons);
+  }
+
+  function conversionStatusText(item) {
+    const status = item.status || "";
+    if (status !== "SKIPPED" || !item.skipReason) {
+      return status;
+    }
+    return status + " — " + skipReasonLabel(item.skipReason);
+  }
+
+  function skipReasonLabel(reason) {
+    const labels = {
+      ADDON_DISABLED: "Add-on disabled",
+      EVENT_DISABLED: "Event disabled",
+      SETTINGS_INCOMPLETE: "Settings incomplete",
+      NOT_INPUT_CATEGORY: "Not input category",
+      ALREADY_OUTPUT_CATEGORY: "Already output category",
+      ALREADY_MARKED: "Already marked",
+      ALREADY_CONVERTED: "Already converted",
+      MISSING_QUANTITY: "Missing quantity",
+      INVALID_QUANTITY: "Invalid quantity",
+      FINALIZED_OR_LOCKED: "Finalized or locked",
+      DRY_RUN: "Dry run",
+      WORKSPACE_MISMATCH: "Workspace mismatch",
+      API_RESOURCE_NOT_FOUND: "API resource not found"
+    };
+    if (labels[reason]) {
+      return labels[reason];
+    }
+    return String(reason)
+      .toLowerCase()
+      .split("_")
+      .filter(Boolean)
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ");
   }
 
   function handleReportClick(event) {
@@ -207,6 +242,8 @@
     loadTeam,
     renderMileageRows,
     loadConversions,
+    conversionStatusText,
+    skipReasonLabel,
     renderPager,
     handleReportClick,
     handleCsvExport

@@ -619,6 +619,36 @@ async function assertDiagnosticsRendersChecklistAndHealth() {
   assert.ok(harness.document.getElementById("diagnostics-health").children.length >= 8);
 }
 
+async function assertConversionsRenderSkipReasonLabels() {
+  resetDom();
+  rangeElements("conversion");
+  const rows = tableElement("conversion-rows");
+  element("conversion-pager", "nav");
+  harness.responses.set("/api/mileage/conversions?pageSize=50&from=2026-06-01&to=2026-06-07&page=0", new FakeResponse({
+    conversions: [{
+      expenseDate: "2026-06-02",
+      expenseId: "exp-skipped",
+      source: "WEBHOOK_CREATED",
+      status: "SKIPPED",
+      skipReason: "ALREADY_CONVERTED",
+      userName: "Ada Lovelace",
+      miles: "12.4",
+      rate: "0.725",
+      calculatedAmount: "8.990",
+      roundedAmount: "8.99",
+      updatedAt: "2026-06-02T10:00:00Z"
+    }],
+    totalElements: 1,
+    page: 0,
+    pageSize: 50,
+    totalPages: 1
+  }));
+
+  await app.loadConversions();
+
+  assert.equal(rows.children[0].children[4].textContent, "SKIPPED — Already converted");
+}
+
 for (const test of [
   assertCreatePayloadOmitsUserIdAndTaskId,
   assertProjectNameMapsToProjectId,
@@ -629,7 +659,8 @@ for (const test of [
   assertPaginationAddsPageAfterLockedPageSize,
   assertSettingsSaveSendsNoteTemplateAndRate,
   assertSettingsSaveWarningsToastAsErrors,
-  assertDiagnosticsRendersChecklistAndHealth
+  assertDiagnosticsRendersChecklistAndHealth,
+  assertConversionsRenderSkipReasonLabels
 ]) {
   await test();
 }
