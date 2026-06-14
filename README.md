@@ -147,5 +147,5 @@ Runtime config uses `SPRING_DATASOURCE_*` (incl. `SPRING_DATASOURCE_HIKARI_*` po
 | [AGENTS.md](AGENTS.md) | Binding agent rules, module map, non-negotiables. |
 | [CLAUDE.md](CLAUDE.md) | Claude Code project guide. |
 | [addon-expenses-rest-api/README.md](addon-expenses-rest-api/README.md) | Product module guide. |
-| [endpoints.md](addon-expenses-rest-api/endpoints.md) · [models.md](addon-expenses-rest-api/models.md) · [webhooks.md](addon-expenses-rest-api/webhooks.md) · [edge-cases.md](addon-expenses-rest-api/edge-cases.md) · [reports.md](addon-expenses-rest-api/reports.md) | Active product docs. |
+| [endpoints.md](addon-expenses-rest-api/endpoints.md) · [models.md](addon-expenses-rest-api/models.md) · [webhooks.md](addon-expenses-rest-api/webhooks.md) · [edge-cases.md](addon-expenses-rest-api/edge-cases.md) | Active product docs. |
 | [PRE_PUBLISH_CHECKLIST.md](addon-expenses-rest-api/docs/PRE_PUBLISH_CHECKLIST.md) | Local, live-dev, and manual gates before Marketplace submission. |

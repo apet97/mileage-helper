@@ -92,5 +92,4 @@ mvn -pl addon-expenses-rest-api -am clean test
 - `models.md` - DTO/entity map.
 - `webhooks.md` - expense webhook payload shapes, conversion behavior, and loop prevention.
 - `edge-cases.md` - skip/failure behavior and default create behavior.
-- `reports.md` - relationship to native Clockify reports.
 - `docs/PRE_PUBLISH_CHECKLIST.md` - current local and manual pre-publish gates.

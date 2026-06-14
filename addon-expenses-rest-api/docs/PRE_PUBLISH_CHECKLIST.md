@@ -1,232 +1,77 @@
 # Mileage for Clockify Pre-Publish Checklist
 
+This checklist is the current publish gate. Older deploy transcripts live in git history; keep this file focused on the gates and the latest reusable evidence.
+
 ## Required Gates Run Now
 
 Run from the repository root before claiming publish readiness:
 
 - [ ] `git status --short --branch` reviewed.
 - [ ] `./scripts/verify-publish.sh` passes.
-- [ ] If a new OCI deploy was made, the systemd restart time and fresh `journalctl` error scan were captured.
-- [ ] If a new hosted deploy was made, hosted `/actuator/health`, `/manifest`, every `/assets/mileage/settings*.js` asset, `/assets/mileage/report.css`, `/assets/mileage/report.js`, `/assets/mileage/icon.png`, unauthenticated `/iframe/mileage`, unauthenticated `/iframe/report`, prometheus metric families, and scheduler liveness probes passed and the dated evidence was added below.
-- [ ] If Railway was explicitly used, `railway deployment list` was used for that run's deployment ID.
+- [ ] `git diff --check` passes.
+- [ ] If a new OCI deploy was made, capture the systemd restart time, jar SHA, and a fresh `journalctl -u mileage-for-clockify.service` scan for boot errors.
+- [ ] If a hosted deploy was made, probe `/actuator/health`, `/manifest`, every `/assets/mileage/settings*.js` asset, `/assets/mileage/report.css`, `/assets/mileage/report.js`, `/assets/mileage/icon.png`, unauthenticated `/iframe/mileage`, unauthenticated `/iframe/report`, prometheus metric families, and scheduler liveness.
+- [ ] If Railway was explicitly restored for this run, use `railway deployment list` for the current deployment id. Do not reuse old ids from historical notes.
 
-`./scripts/verify-publish.sh` runs these local publish-safety checks:
+`./scripts/verify-publish.sh` runs:
 
-- `mvn -pl clockify-rest-client -Dtest=ExpensesClientTest,FilesClientTest test`
-- `mvn -pl addon-core -Dtest=ClaimsNormalizerTest test`
-- `mvn -pl addon-expenses-rest-api -am -Dtest=MileageSecurityTest -Dsurefire.failIfNoSpecifiedTests=false test`
-- Docker auto-detection, then `mvn -pl addon-expenses-rest-api -am test`
-- `git diff --check`
-- `./scripts/check-mileage-settings-js.sh`
-- `./scripts/check-static-guardrails.sh`
-- `node scripts/test-mileage-date-helpers.mjs`
-- `node scripts/test-mileage-settings-behavior.mjs`
-- `gitleaks detect --source . --no-git --redact --verbose`
-- `docker compose -f addon-expenses-rest-api/docker-compose.yml build`
+- Focused multipart, claims-normalizer, and `MileageSecurityTest` checks.
+- Full Docker/Testcontainers-backed add-on reactor.
+- `git diff --check`, static JS checks, static guardrails, date/settings behavior Node tests.
+- `gitleaks detect --source . --no-git --redact --verbose`.
+- `docker compose -f addon-expenses-rest-api/docker-compose.yml build`.
+
+## Hosted Probe Set
+
+Use the current base URL unless a run explicitly targets Cloudflared or restored Railway:
+
+```bash
+BASE=https://89-168-93-85.sslip.io
+curl -sS -w "\n%{http_code}\n" "$BASE/actuator/health"
+curl -sS -w "\n%{http_code}\n" "$BASE/manifest"
+for asset in \
+  settings-date.js settings-core.js settings-ranges.js settings-create.js \
+  settings-admin.js settings-tables.js settings.js; do
+  curl -sS -o /dev/null -D - "$BASE/assets/mileage/$asset" | head -3
+done
+curl -sS -o /dev/null -D - "$BASE/assets/mileage/report.css" | head -3
+curl -sS -o /dev/null -D - "$BASE/assets/mileage/report.js" | head -3
+curl -sS -o /dev/null -D - "$BASE/assets/mileage/icon.png" | head -3
+curl -sS -o /dev/null -D - "$BASE/iframe/mileage" | head -10
+curl -sS -o /dev/null -w "%{http_code}\n" "$BASE/iframe/report"
+curl -sS "$BASE/actuator/prometheus" | grep -E "^mileage_conversion_outcome_total|^mileage_webhook_queue_depth|^mileage_webhook_job_process_seconds_count"
+curl -sS "$BASE/actuator/prometheus" | grep -E "^tasks_scheduled_execution_seconds_count.*pollAndProcess.*outcome=\"SUCCESS\""
+```
+
+Metric expectations:
+
+- `mileage_conversion_outcome_total` has one series for each current `MileageConversionStatus`: `RECEIVED`, `DRY_RUN`, `SKIPPED`, `CONVERTING`, `CONVERTED`, `FAILED`, `DELETED`, `RESTORED_IGNORED`.
+- `mileage_webhook_queue_depth{status="PENDING"}` is present.
+- `mileage_webhook_job_process_seconds_count` is present; `0` is acceptable before a real webhook lands.
+- `tasks_scheduled_execution_seconds_count{code_function="pollAndProcess",outcome="SUCCESS",exception="none"}` grows across scrapes.
+- No `mileage_` metric line may contain `userid=`, `workspaceid=`, `expenseid=`, or `token=`.
 
 ## Optional Live Clockify Smoke
 
 Live Clockify smoke is optional and requires local secrets. Never commit or echo API keys/tokens. If not run, final output must say it was skipped.
 
-There is no repo-owned live smoke script. Use only environment variables, stdin, or a local secret store when manually testing a sacrificial Clockify workspace. Do not paste real keys into repo files, docs, screenshots, terminal transcripts intended for docs, or final reports. Live Clockify mutation is historical evidence unless it is rerun for the current deploy.
+There is no repo-owned live smoke script. Use environment variables, stdin, or a local secret store for sacrificial-workspace testing. Do not paste real keys into repo files, docs, screenshots, terminal transcripts intended for docs, or final reports.
 
-## Last Evidence Snapshot
+## Latest Evidence Snapshot
 
-Historical only: do not treat this section as current truth unless the listed checks were rerun. Dated deployment evidence belongs here after each deploy.
+Historical only unless rerun for the current change.
 
-Last local/live stabilization pass: 2026-06-05.
-
-- 2026-06-06 OCI deploy of branch `feat/mileage-ux-ui-uplift` (PR #12 "UX/UI uplift across iframe + report", git `f69474e`, **pre-merge hosted verification** at the user's request): full Testcontainers reactor `mvn -pl addon-expenses-rest-api -am test` PASS (267 tests, 0 failures; run on the Docker Desktop socket — Colima not present, so `verify-publish.sh` was not used verbatim) plus `node --check` on all assets, `git diff --check` clean, date-helper test PASS, `gitleaks` no leaks. Built jar sha256 `de0753290b7d546fcfa9e2d902e47f9f2ed56469e1b4a268653406248e6e10b1` (62 MB); host jar sha256 matches exactly. Backed up running jar to `/opt/mileage-for-clockify/mileage-for-clockify.jar.bak-20260606-181042`, atomically replaced `/opt/mileage-for-clockify/mileage-for-clockify.jar`, restarted `mileage-for-clockify.service`. Boot: `Started MileageAddonApplication in 86.386 seconds (process running for 91.923)`. Flyway: `Successfully validated 17 migrations`; `Current version of schema "public": 20` — no new migration (this PR adds none). Zero `ERROR`, `Detected resolved migration`, `ObjectOptimisticLockingFailureException`, or `StaleObjectStateException` lines in the journal since restart. NOTE: production now serves the PR #12 branch build pending merge; redeploy from `main` after squash-merge if a main-sha provenance is required.
-- 2026-06-06 hosted probes at `https://89-168-93-85.sslip.io` for git `f69474e` (PR #12): `/actuator/health` `200` `{"status":"UP","groups":["liveness","readiness"]}` PASS; `/manifest` `200` schema `1.5` key `mileage-for-clockify` PASS; `/assets/mileage/settings-date.js` `200` `text/javascript` PASS; `/assets/mileage/settings.js` `200` `text/javascript` (served build contains the new `renderPager`, confirming the UX bundle is live; pre-deploy build had 0) PASS; `/assets/mileage/report.css` `200` `text/css` PASS; `/assets/mileage/report.js` `200` `text/javascript` PASS; `/assets/mileage/icon.png` `200` `image/png` PASS; `/iframe/mileage` unauthenticated `401` with `cache-control: no-store`, `content-security-policy`, `permissions-policy`, `referrer-policy: no-referrer`, `strict-transport-security: max-age=63072000; includeSubDomains`, `x-content-type-options: nosniff` PASS; `/iframe/report` unauthenticated `401` PASS. All 9 baseline probes PASS.
-- 2026-06-06 prometheus probes for git `f69474e` (PR #12): `mileage_conversion_outcome_total` 8 series PASS; `mileage_webhook_queue_depth{status="PENDING"} 0` PASS; `mileage_webhook_job_process_seconds_count` present (0, no webhooks yet) PASS; worker liveness `tasks_scheduled_execution_seconds_count{code_function="pollAndProcess",outcome="SUCCESS",exception="none"}` growing across scrapes 33→63 (~1 Hz, consistent with the configured `MILEAGE_WORKER_POLL_DELAY_MS=1000` on this VM) PASS; `code_function="reapStuckJobs" 1` PASS. PII-tag audit of `^mileage_` lines found no `userid=`/`workspaceid=`/`expenseid=`/`token=` tags PASS. All 3 metric families present; scheduler alive with zero exception tags. UX/UI is a frontend-asset + report-renderer change with no webhook/conversion behavior change, so live Clockify E2E webhook smoke was NOT run this pass (asset + renderer changes are covered by the 267-test reactor and the served-asset probe).
-- 2026-06-06 OCI deploy of git `8f25c8f` "fix(mileage): deferred note-charge reconcile must send full datetime to Clockify (#8)": `./scripts/verify-publish.sh` PASS (266 tests: clockify-rest-client 18, addon-core 76+11 focused, addon-db 38, addon-expenses-rest-api 266 reactor total; Docker build PASS). Built jar sha256: `f97c51c43e63c1c33d13231f5b205bbd7a99b6f380e3ab9132f2d9b4baa9a076` (59 MB). Backed up running jar to `/opt/mileage-for-clockify/mileage-for-clockify.jar.backup_20260606_151745`, sha256 verified on host (exact match), atomically replaced `/opt/mileage-for-clockify/mileage-for-clockify.jar`, restarted `mileage-for-clockify.service`. Boot: `Started MileageAddonApplication in 94.696 seconds (process running for 99.68)`. Flyway: `Successfully validated 17 migrations`; `Current version of schema "public": 20. Schema "public" is up to date. No migration necessary.` — V20 was already applied by the prior deploy; correct, no re-run. Zero `ERROR`, `Detected resolved migration`, `ObjectOptimisticLockingFailureException`, or `StaleObjectStateException` lines in journal since restart. OCI worker poll delay: `MILEAGE_WORKER_POLL_DELAY_MS=1000` (not 250ms default; this is the configured production value on this VM).
-- 2026-06-06 hosted probes at `https://89-168-93-85.sslip.io` for git `8f25c8f`: `/actuator/health` `200` `{"status":"UP","groups":["liveness","readiness"]}` PASS; `/manifest` `200` schema `1.5` key `mileage-for-clockify` name `Mileage for Clockify` plan `PRO` PASS; `/assets/mileage/settings-date.js` `200` `text/javascript` PASS; `/assets/mileage/settings.js` `200` `text/javascript` PASS; `/assets/mileage/icon.png` `200` `image/png` PASS; `/iframe/mileage` unauthenticated `401` with `cache-control: no-store`, `content-security-policy: default-src 'self'; script-src 'self'; style-src 'self' https://resources.developer.clockify.me; img-src 'self' data: https://resources.developer.clockify.me; font-src 'self' https://resources.developer.clockify.me; connect-src 'self' https://*.clockify.me; frame-ancestors https://app.clockify.me https://*.clockify.me`, `permissions-policy: camera=(), microphone=(), geolocation=()`, `referrer-policy: no-referrer`, `strict-transport-security: max-age=63072000; includeSubDomains`, `x-content-type-options: nosniff` PASS; `/iframe/report` unauthenticated `401` PASS. All 9 baseline probes PASS.
-- 2026-06-06 prometheus probes for git `8f25c8f`: `mileage_conversion_outcome_total` 8 series (CONVERTED, CONVERTING, DELETED, DRY_RUN, FAILED, RECEIVED, RESTORED_IGNORED, SKIPPED) all present PASS; `mileage_webhook_queue_depth{status="PENDING"} 0` PASS; `mileage_webhook_job_process_seconds_count 0` (no webhooks yet, expected) PASS; worker liveness `tasks_scheduled_execution_seconds_count{code_function="pollAndProcess",outcome="SUCCESS",exception="none"} 155` at T+170s uptime (0.91 Hz — matches `MILEAGE_WORKER_POLL_DELAY_MS=1000` configured on OCI: 1000ms delay + ~97ms avg execution ≈ 1097ms cycle ≈ 0.91 Hz; confirmed growing across three scrapes: 36→68→155 at T+17s/T+79s/T+170s with zero exception tags) PASS; `code_function="reapStuckJobs"` count 1 PASS; NEW sweeper liveness `tasks_scheduled_execution_seconds_count{code_function="reconcilePendingNotes",code_namespace="...MileageNoteReconcileWorker",outcome="SUCCESS",exception="none"} 3` at T+170s (growing across two scrapes: 1→2→3; avg 1.6s/sweep consistent with a DB scan + reconcile attempt on pending rows) PASS. PII-tag audit of `^mileage_` lines found no `userid=`/`workspaceid=`/`expenseid=`/`token=` tags PASS. All 3 metric families present. All 3 scheduled functions alive with zero exception tags. Note: the `reconcilePendingNotes` sweeper began firing immediately after boot and is processing the carry-over pending row for expense `6a2435058793e5b9508a5631` (from the pre-deploy journal — that expense was left in a pending-reconcile state from the previous deploy's broken date-format path); the fix deployed here sends the full ISO-8601 datetime from the live snapshot to `updateFlatExpense` instead of a date-only string so Clockify no longer rejects the request with HTTP 400. Live Clockify E2E webhook smoke was NOT run this pass — this is a one-line fix to the reconcile sweeper's date format; the webhook/conversion path is unchanged. Live add-on-create E2E re-verification will be driven separately by the operator after this deploy.
-- 2026-06-06 LIVE add-on-create deferred-reconcile E2E for git `8f25c8f` (sacrificial workspace `672f9cf4ad6f45299c3e3de2`, Mileage category UNIT/mile at `priceInCents=73`, saved rate `0.725`): created a 12.4-mile mileage expense **through the installed add-on UI** (source `ADDON_FORM`). Recorded amount `8.99` (12.4 × 0.725); Clockify category charge `9.05` (12.4 × 0.73 → total `905` cents) → genuine divergence. (1) IMMEDIATELY after create the Clockify note was CLEAN — `Mileage reimbursement: 12.4 miles x 0.725 = 8.99. Created/converted by Mileage for Clockify.` (no parenthetical) — confirming the add-on-create request thread does NOT stamp the charge. (2) The deferred `MileageNoteReconcileWorker` automatically annotated it **~45 s later** (settle floor 30 s + ~60 s poll) to `Mileage reimbursement: 12.4 miles x 0.725 = 8.99 (Clockify category charge: 9.05). Created/converted by Mileage for Clockify.` with `total` unchanged at `905` cents and `quantity` `12.4`. Sacrificial expense deleted (DELETE `200`, post-delete GET `400`). NOTE: this pass also caught and fixed the date-format bug — a first attempt under git `7134a29` failed because the sweeper sent a date-only string (`ClockifyValidationException` 400 every cycle); `8f25c8f` (full snapshot datetime) is the version verified working here. Acceptance criterion met live.
-
-- 2026-06-06 OCI deploy of PR #7 "annotate add-on-created notes with Clockify category charge via deferred reconcile" (squash-merged to `main` at git `7134a29`): `./scripts/verify-publish.sh` PASS (266 tests: clockify-rest-client 18, addon-core 76+11 (focused), clockify-rest-client focused 18, addon-db 38, addon-expenses-rest-api 266 reactor total; Docker build PASS). Built jar sha256: `e885a3f123f947f192349536ade0e54c257ca2e6401b45a22a36bea9497840b5`. Backed up running jar to `/opt/mileage-for-clockify/mileage-for-clockify.jar.bak-20260606T142737Z`, copied new jar to OCI staging `/tmp/mileage-for-clockify-new.jar`, sha256 verified on host (matches), atomically replaced `/opt/mileage-for-clockify/mileage-for-clockify.jar`, restarted `mileage-for-clockify.service`. Boot: `Started MileageAddonApplication in 84.787 seconds (process running for 89.425)`. Flyway: `Successfully validated 17 migrations`; `Migrating schema "public" to version "20 - add mileage note charge reconciled at"` — V20 applied for the first time (production was at V19). Zero `ERROR`, `Detected resolved migration`, `ObjectOptimisticLockingFailureException`, or `StaleObjectStateException` lines in journal since restart.
-- 2026-06-06 hosted probes at `https://89-168-93-85.sslip.io` for git `7134a29`: `/actuator/health` `200` `{"status":"UP","groups":["liveness","readiness"]}` PASS; `/manifest` `200` schema `1.5` key `mileage-for-clockify` name `Mileage for Clockify` plan `PRO` PASS; `/assets/mileage/settings-date.js` `200` `text/javascript` PASS; `/assets/mileage/settings.js` `200` `text/javascript` PASS; `/assets/mileage/report.css` `200` `text/css` PASS; `/assets/mileage/report.js` `200` `text/javascript` PASS; `/assets/mileage/icon.png` `200` `image/png` PASS; `/iframe/mileage` unauthenticated `401` with `cache-control: no-store`, `content-security-policy: default-src 'self'; script-src 'self'; style-src 'self' https://resources.developer.clockify.me; img-src 'self' data: https://resources.developer.clockify.me; font-src 'self' https://resources.developer.clockify.me; connect-src 'self' https://*.clockify.me; frame-ancestors https://app.clockify.me https://*.clockify.me`, `permissions-policy: camera=(), microphone=(), geolocation=()`, `referrer-policy: no-referrer`, `strict-transport-security: max-age=63072000; includeSubDomains`, `x-content-type-options: nosniff` PASS; `/iframe/report` unauthenticated `401` PASS. All 9 baseline probes PASS.
-- 2026-06-06 prometheus probes for git `7134a29`: `mileage_conversion_outcome_total` 8 series (CONVERTED, CONVERTING, DELETED, DRY_RUN, FAILED, RECEIVED, RESTORED_IGNORED, SKIPPED) all present PASS; `mileage_webhook_queue_depth{status="PENDING"} 0` PASS; `mileage_webhook_job_process_seconds_count 0` (no webhooks yet, expected) PASS; worker liveness `tasks_scheduled_execution_seconds_count{code_function="pollAndProcess",outcome="SUCCESS",exception="none"} 29` (growing, ~4 Hz theoretical at 250ms poll-delay; lower observed rate due to constrained OCI VM consistent with prior deploys) PASS; `code_function="reapStuckJobs" 1` PASS; NEW sweeper liveness `tasks_scheduled_execution_seconds_count{code_function="reconcilePendingNotes",code_namespace="...MileageNoteReconcileWorker",outcome="SUCCESS",exception="none"} 1` — first 60s poll ran successfully, proves the `MileageNoteReconcileWorker` sweeper registered and executed in production via the `WebhookJobWorkerConfig` `@AutoConfiguration` path PASS. PII-tag audit of `^mileage_` lines found no `userid=`/`workspaceid=`/`expenseid=`/`token=` tags PASS. All 3 metric families present. All 3 scheduled functions alive with zero exception tags. Live Clockify E2E webhook smoke was NOT run this pass — no behavioral change to the webhook or conversion paths in this PR (PR adds only the deferred reconcile sweeper and V20 migration column; live smoke is a separate follow-up).
-
-- 2026-06-06 OCI deploy of PR #6 "drop unreliable add-on-create category-charge annotation" (squash-merged to `main` at git `94b2070`): `mvn -pl addon-expenses-rest-api -am package -DskipTests` BUILD SUCCESS in 4.137s (no tests re-run — CI and full Testcontainers reactor were already green on this commit). Built jar sha256: `c240c5327c4481bac1afa5307060ce4d68dbd012f70fb6eb64479022a7276241` (differs from the prior debug jar `a00c1e36…`). Jar copied to OCI host, backed up the running jar to `/opt/mileage-for-clockify/mileage-for-clockify.jar.bak-20260606T012926Z` (stale debug backup `mileage-for-clockify.jar.bak-20260605T165853Z` left in place), atomically replaced `/opt/mileage-for-clockify/mileage-for-clockify.jar` (sha256 on host matches), restarted `mileage-for-clockify.service`. Boot reached `Started MileageAddonApplication in 135.722 seconds (process running for 142.034)`. Flyway: `Successfully validated 16 migrations`, `Current version of schema "public": 19. Schema "public" is up to date. No migration necessary.` Zero `DBG`, `ERROR`, `Detected resolved migration`, `ObjectOptimisticLockingFailureException`, or `StaleObjectStateException` lines in the journal since restart.
-- 2026-06-06 hosted probes at `https://89-168-93-85.sslip.io` for git `94b2070`: `/actuator/health` `200` `{"status":"UP","groups":["liveness","readiness"]}` PASS; `/manifest` `200` schema `1.5` key `mileage-for-clockify` name `Mileage for Clockify` PASS; `/assets/mileage/settings-date.js` `200` `text/javascript` PASS; `/assets/mileage/settings.js` `200` `text/javascript` PASS; `/assets/mileage/icon.png` `200` `image/png` PASS; `/iframe/mileage` unauthenticated `401` with `cache-control: no-store`, `content-security-policy: default-src 'self'; script-src 'self'; style-src 'self' https://resources.developer.clockify.me; img-src 'self' data: https://resources.developer.clockify.me; font-src 'self' https://resources.developer.clockify.me; connect-src 'self' https://*.clockify.me; frame-ancestors https://app.clockify.me https://*.clockify.me`, `permissions-policy: camera=(), microphone=(), geolocation=()`, `referrer-policy: no-referrer`, `strict-transport-security: max-age=63072000; includeSubDomains`, `x-content-type-options: nosniff` PASS. All 6 baseline probes PASS.
-- 2026-06-06 prometheus probes for git `94b2070`: `mileage_conversion_outcome_total` 8 series (CONVERTED, CONVERTING, DELETED, DRY_RUN, FAILED, RECEIVED, RESTORED_IGNORED, SKIPPED) all present PASS; `mileage_webhook_queue_depth{status="PENDING"} 0` PASS; `mileage_webhook_job_process_seconds_count 0` (no webhooks yet, expected) PASS; worker liveness `tasks_scheduled_execution_seconds_count{code_function="pollAndProcess",outcome="SUCCESS",exception="none"} 82` (growing at multiple scrapes: 24→47→58→65→71→81→82), `code_function="reapStuckJobs" 2`; PII-tag audit of `^mileage_` lines found no `userid=`/`workspaceid=`/`expenseid=`/`token=` tags PASS. All 3 metric families present. Worker liveness: counter growing across scrapes with zero exception tags — scheduler alive and processing end-to-end. Poll rate lower than 4 Hz theoretical maximum due to constrained OCI VM (SerialGC, 256 MB heap, 135s cold-start); delta between two proximate scrapes was 6 polls / ~5-10s ≈ 0.6–1.2 Hz; consistent with prior deploys on this VM. Live Clockify E2E webhook smoke was NOT run this pass — no behavior change to the webhook path in this PR (change reverts only `MileageApiController.createExpense` add-on-create category-charge annotation logic).
-
-- 2026-06-05 OCI deploy of PR #4 "close 4 live-QA findings" (squash-merged to `main` at git `a3667b2`, deployed as `4cf6417`): built `addon-expenses-rest-api/target/mileage-for-clockify-0.1.0-SNAPSHOT.jar` (60 MB, BUILD SUCCESS), backed up the live jar to `/opt/mileage-for-clockify/mileage-for-clockify.jar.bak-20260605-155726`, atomically replaced `/opt/mileage-for-clockify/mileage-for-clockify.jar` via `cp + mv` (service stopped before replace), and restarted `mileage-for-clockify.service`. Boot reached `Started MileageAddonApplication in 104.608 seconds`; Flyway `Successfully validated 16 migrations` and `Current version of schema "public": 19. Schema "public" is up to date. No migration necessary.` No `ERROR`, `Exception`, `Detected resolved migration`, `ObjectOptimisticLockingFailureException`, or `StaleObjectStateException` in the journal since restart. Note: the first restart attempt used a corrupt jar (partial `cp` while the prior process was still shutting down); the second install used `stop + cp-to-staging + mv` (atomic) which succeeded cleanly. The corrupt jar attempts are visible in the journal as `Error: Invalid or corrupt jarfile` for PIDs 133042, 133085, 133127 — these are from systemd auto-restart with the bad jar, not from the new jar. PID 133182 is the healthy running process.
-- 2026-06-05 hosted probes at `https://89-168-93-85.sslip.io` for git `4cf6417`: `/actuator/health` `200` `{"status":"UP","groups":["liveness","readiness"]}`; `/manifest` `200` schema `1.5` key `mileage-for-clockify` name `Mileage for Clockify`; `/assets/mileage/settings-date.js` `200` `text/javascript`; `/assets/mileage/settings.js` `200` `text/javascript`; `/assets/mileage/icon.png` `200` `image/png`; `/iframe/mileage` unauthenticated `401` with `cache-control: no-store`, `content-security-policy: default-src 'self'; script-src 'self'; style-src 'self' https://resources.developer.clockify.me; img-src 'self' data: https://resources.developer.clockify.me; font-src 'self' https://resources.developer.clockify.me; connect-src 'self' https://*.clockify.me; frame-ancestors https://app.clockify.me https://*.clockify.me`, `permissions-policy: camera=(), microphone=(), geolocation=()`, `referrer-policy: no-referrer`, `strict-transport-security: max-age=63072000; includeSubDomains`, `x-content-type-options: nosniff`. All 6 baseline probes PASS.
-- 2026-06-05 prometheus probes for git `4cf6417`: `mileage_conversion_outcome_total` 8 series (CONVERTED, CONVERTING, DELETED, DRY_RUN, FAILED, RECEIVED, RESTORED_IGNORED, SKIPPED) all present; `mileage_webhook_queue_depth{status="PENDING"} 0`; `mileage_webhook_job_process_seconds_count 0` (no webhooks yet, expected); worker liveness `tasks_scheduled_execution_seconds_count{code_function="pollAndProcess",outcome="SUCCESS",exception="none"} 86`, `tasks_scheduled_execution_seconds_sum 10.355s` (avg ~120ms/poll), `code_function="reapStuckJobs" 2` (~2/min, matching hardcoded reaper cadence); PII-tag audit of `^mileage_` lines found no `userid=`/`workspaceid=`/`expenseid=`/`token=` tags — PASS. All 3 metric families present. Worker liveness: 86 polls growing at ~0.86 Hz at time of scrape (~100s post-start); avg poll latency 120ms; no exception tags. Note: poll rate lower than the 4 Hz target seen on prior deploys — this reflects the `fixedDelay=250ms` pattern where the 250ms interval starts AFTER each completion; with initial cold-start polling (one 9.5s cold-start outlier) the effective rate during the observation window was below steady-state. Counter was observed growing across multiple scrapes (29→50→57→61→86) with zero exceptions, confirming the scheduler is alive and processing end-to-end.
-- 2026-06-05 CI gate (already green on this exact commit before deploy): all 5 GitHub CI checks (`build-test`, `docker-build`, `dep-check`, `secret-scan`, `static-guardrails`) passed on `main` at `4cf6417`. Local jar build: `mvn -pl addon-expenses-rest-api -am package -DskipTests` BUILD SUCCESS in 6.458s. Live Clockify E2E webhook smoke was NOT run this pass — worker-liveness and all-probes-green are runtime proof. Favicon `<link rel="icon">` change (one of the 4 QA findings closed by this PR) is confirmed deployed via the new jar; browser rendering verification is a browser QA step, not a hosted curl probe.
-
-- 2026-06-05 OCI deploy of the all-expenses report (PR #3, squash-merged to `main` at `07ada75`; cloud-ultrareviewed, all 4 findings fixed): built `addon-expenses-rest-api/target/mileage-for-clockify-0.1.0-SNAPSHOT.jar`, backed up the live jar to `/opt/mileage-for-clockify/mileage-for-clockify.jar.bak-20260605-105612`, replaced it, and restarted `mileage-for-clockify.service` at `2026-06-05 10:56:12 UTC`. Boot reached `Started MileageAddonApplication in 90.603 seconds`; Flyway `Successfully validated 16 migrations` and `Schema "public" is up to date. No migration necessary.` (this release adds no migration); a `journalctl --since` scan since restart found no `ERROR`/`Exception`/`Detected resolved migration` lines.
-- 2026-06-05 hosted probes at `https://89-168-93-85.sslip.io`: `/actuator/health` `200` `UP`; `/manifest` `200` schema `1.5` key `mileage-for-clockify`; static assets `200` for `settings-date.js`, `settings.js`, `report.css`, `report.js`, `icon.png`; `/iframe/mileage` and `/iframe/report?scope=team&from=2026-05-01&to=2026-05-31` both `401` (guarded — the new `scope` query param does not bypass auth). Prometheus: `mileage_webhook_queue_depth{status="PENDING"} 0`, `mileage_conversion_outcome_total` 8 series, worker liveness `tasks_scheduled_execution_seconds_count{code_function="pollAndProcess",outcome="SUCCESS"} 28` post-restart; PII audit of `^mileage_` lines clean.
-- 2026-06-05 pre-deploy verification on merged `main`: full Testcontainers reactor `mvn -pl addon-expenses-rest-api -am clean test` passed with 246 tests; `node --check` (settings.js, report.js) and `git diff --check` clean; all five GitHub CI checks passed on the PR head. NOT verified via curl: the rendered report CONTENT (all-expenses list, reconciled-mileage vs native rows, all-users User column) — `/iframe/report` requires the Clockify-signed `auth_token` from the installed iframe, so live content verification is a browser/iframe step, not a hosted curl probe. The 401-guard + asset probes confirm the route is wired and served.
-- 2026-06-05 OCI deploy of the reports/user-filter/note-template/default-rate feature (PR #2, squash-merged to `main` at `ff5966b`; reviewed by 3 adversarial agents + cloud ultrareview, all findings fixed): built `addon-expenses-rest-api/target/mileage-for-clockify-0.1.0-SNAPSHOT.jar`, backed up the live jar to `/opt/mileage-for-clockify/mileage-for-clockify.jar.bak-20260605-020634`, replaced `/opt/mileage-for-clockify/mileage-for-clockify.jar`, and restarted `mileage-for-clockify.service` at `2026-06-05 02:06:43 UTC`. Boot reached `Started MileageAddonApplication in 89.119 seconds`; Flyway `Successfully validated 16 migrations` and `Schema "public" is up to date. No migration necessary.` (no new migration in this change); a `journalctl --since` error scan since restart found no `ERROR`/`Exception`/`Detected resolved migration`/optimistic-lock lines.
-- 2026-06-05 hosted probes at `https://89-168-93-85.sslip.io`: `/actuator/health` `200` `UP`; `/manifest` `200` schema `1.5` key `mileage-for-clockify` plan `PRO`; static assets `200` for `/assets/mileage/settings-date.js`, `/assets/mileage/settings.js`, `/assets/mileage/icon.png`, and the NEW `/assets/mileage/report.css` (`text/css`) and `/assets/mileage/report.js` (`text/javascript`); `/iframe/mileage` and the NEW `/iframe/report` both returned `401` (guarded, no `auth_token`) with the full CSP / HSTS / `Cache-Control: no-store` / `Referrer-Policy: no-referrer` / `X-Content-Type-Options: nosniff` header set.
-- 2026-06-05 prometheus probes: `mileage_conversion_outcome_total` (8 series), `mileage_webhook_queue_depth{status="PENDING"} 0`, `mileage_webhook_job_process_seconds_*` registered; worker liveness `tasks_scheduled_execution_seconds_count{code_function="pollAndProcess",outcome="SUCCESS",exception="none"} 37` and `code_function="reapStuckJobs" 1` after ~1 min uptime; PII-tag audit of `^mileage_` lines found no `userid=`/`workspaceid=`/`expenseid=`/`token=` tags.
-- 2026-06-05 pre-deploy verification on merged `main`: full Testcontainers reactor `mvn -pl addon-expenses-rest-api -am clean test` passed with 237 tests; `node --check` passed for `settings.js` and `report.js`; `git diff --check` clean; `gitleaks` found no leaks; all five GitHub CI checks (`build-test`, `dep-check`, `docker-build`, `secret-scan`, `static-guardrails`) passed on the PR head. Live Clockify E2E webhook smoke was NOT run this pass (no sacrificial expense was created/converted/deleted) — the worker-liveness and 401-guard probes above are runtime proof, not an end-to-end conversion.
-- 2026-06-04 OCI reinstall cleanup deploy at `https://89-168-93-85.sslip.io`: built `addon-expenses-rest-api/target/mileage-for-clockify-0.1.0-SNAPSHOT.jar`, replaced `/opt/mileage-for-clockify/mileage-for-clockify.jar`, and restarted `mileage-for-clockify.service` at `2026-06-04 03:17:51 UTC`. Boot reached `Started MileageAddonApplication` with Flyway schema `public` current at V19 and no migration needed.
-- 2026-06-04 follow-up OCI frontend deploy for delegated CSV export handling: rebuilt `addon-expenses-rest-api/target/mileage-for-clockify-0.1.0-SNAPSHOT.jar`, replaced `/opt/mileage-for-clockify/mileage-for-clockify.jar`, and restarted `mileage-for-clockify.service` at `2026-06-04 04:51:34 UTC`; `/actuator/health` returned `UP` and `/assets/mileage/settings.js` contained `handleCsvExport`.
-- 2026-06-04 hosted probes: `/actuator/health` returned `200` status `UP`; `/manifest` returned `200`, schema `1.5`, key `mileage-for-clockify`, baseUrl `https://89-168-93-85.sslip.io`; `/assets/mileage/settings-date.js`, `/assets/mileage/settings.js`, and `/assets/mileage/icon.png` returned `200`.
-- 2026-06-04 reinstall lifecycle verification: after reinstall, fresh service logs since restart contained `mileage-for-clockify.installed workspace=69bda6b317a0c5babe34b4ff` and no `Lifecycle DELETED handler ... failed`, `ObjectOptimisticLockingFailureException`, or `StaleObjectStateException`.
-- 2026-06-04 live UI smoke in the installed Clockify add-on: Settings showed rate `0.73`, `Mileage (UNIT: mile, 0.73/mile)`, enabled settings, and Save Settings remained usable; Mine exercised project selector, receipt chooser cancel, billable checkbox, preview, create, refresh, and CSV. Sacrificial expense `6a20f36ce85c9e6e702953e3` previewed `1.2 miles x 0.73 = 0.876`, created as `CONVERTED`, appeared in Mine and Team with John Owner, exported fresh non-empty `mileage-mine (2).csv` and `mileage-team (3).csv`, then was deleted through Clockify API (`DELETE 200`, post-delete GET `400`). Delete webhook cleanup produced `/webhook/**` POST count `2`, worker process count `2`, `DELETED +1`, `SKIPPED +1`, queue depth `0`, and no fresh service WARN/ERROR lines.
-- 2026-06-04 Conversions/Diagnostics browser pass: Conversions loaded and refreshed the sacrificial row under a custom date range with no console warnings/errors, and Diagnostics showed Installation `OK`, Settings `OK`, Native conversion `OK`. The initial per-button export listener pass did not produce a Conversions CSV request, so CSV export handling was moved to delegated `handleCsvExport`; after redeploy and same-tab reload, Conversions CSV produced `/api/mileage/conversions.csv` `200` count `1` and fresh non-empty `/Users/15x/Downloads/mileage-conversions (2).csv` (`452` bytes) containing the sacrificial deleted audit row.
-- 2026-06-04 final local verification after the reinstall cleanup/docs/delegated CSV patch: `node --check addon-expenses-rest-api/src/main/resources/static/assets/mileage/settings.js` passed; `git diff --check` passed; `mvn -pl addon-db -am -Dtest=JpaPersistenceLifecycleHandlerTest -Dsurefire.failIfNoSpecifiedTests=false test` passed with 6 tests; `DOCKER_HOST=unix:///Users/15x/.docker/run/docker.sock mvn -pl addon-expenses-rest-api -am -Dtest=MileageSecurityTest -Dsurefire.failIfNoSpecifiedTests=false test` passed with 30 tests; Docker Desktop-backed `DOCKER_HOST=unix:///Users/15x/.docker/run/docker.sock mvn -pl addon-expenses-rest-api -am test` passed with 212 tests.
-
-- Local small-hardening pass on 2026-05-27: `./scripts/verify-publish.sh`
-  passed after the settings date helper split and 307/308 redirect hardening.
-  This pass did not deploy and did not run live Clockify mutation smoke.
-  Final reports for that local-only pass must say live Clockify smoke was
-  skipped.
-- Follow-up expanded live Clockify API smoke on 2026-05-27: using local
-  environment secrets only, direct API probes confirmed the current user,
-  workspace list, target workspace, first workspace users page, first projects
-  page, and active `Mileage` expense category. The same pass created a marked
-  sacrificial Mileage receipt expense, fetched it, verified the marker, updated
-  it with the full app-style update payload, deleted it, and confirmed a
-  post-delete fetch returned non-success (`400`). Follow-up receipt probes
-  created marked sacrificial PNG and valid generated PDF receipts, observed
-  `fileId`, downloaded nonzero binary content through
-  `GET /v1/workspaces/{workspaceId}/expenses/{expenseId}/files/{fileId}`, then
-  deleted both expenses and confirmed post-delete fetches returned non-success
-  (`400`). A malformed hand-written PDF fixture returned `200` with zero bytes;
-  do not use that fixture as product evidence. No API key or token is stored in
-  this repo.
-- Pre-deploy hosted split-asset recheck on 2026-05-27: `/actuator/health` and
-  `/manifest` returned `200`, but `/assets/mileage/settings-date.js` returned
-  `404`, proving production was still serving an older deployment. Do not claim
-  the current split settings bundle is live until a post-deploy probe passes for
-  every `settings*.js` asset.
-- Post-deploy hosted split-asset recheck on 2026-05-27: a Railway deployment
-  reached `SUCCESS`; use `railway deployment list` for the current deployment
-  ID instead of treating this dated evidence as current truth. Public probes
-  passed for `/actuator/health`, `/manifest`, `/assets/mileage/settings-date.js`,
-  `/assets/mileage/settings.js`, `/assets/mileage/icon.png`, and
-  unauthenticated `/iframe/mileage` (`401` with no-store behavior).
-- Local small-hardening pass on 2026-05-27: `node --check` passed for
-  `/assets/mileage/settings-date.js` and `/assets/mileage/settings.js`;
-  `node scripts/test-mileage-date-helpers.mjs` passed claim-timezone and invalid
-  timezone fallback checks.
-- Local small-hardening pass on 2026-05-27: `mvn -pl clockify-rest-client
-  -Dtest=TransportRetryAndConfigTest test` passed with focused 307/308
-  redirected POST body/content-type regression coverage.
-- Public hosted recheck on 2026-05-27: `railway deployment list --limit 1
-  --json` showed the latest listed deployment in `SUCCESS` state, created at
-  `2026-05-26T22:57:34.506Z`; use `railway deployment list` for the current
-  Railway deployment ID.
-- Public hosted recheck on 2026-05-27: `/actuator/health` returned `200` with
-  `{"status":"UP","groups":["liveness","readiness"]}`.
-- Public hosted recheck on 2026-05-27: `/manifest` returned `200`, schema
-  `1.5`, key `mileage-for-clockify`, scopes `EXPENSE_READ`, `EXPENSE_WRITE`,
-  `USER_READ`, `PROJECT_READ`, `WORKSPACE_READ`, and webhooks
-  `EXPENSE_CREATED`, `EXPENSE_UPDATED`, `EXPENSE_DELETED`, `EXPENSE_RESTORED`.
-- Public hosted recheck on 2026-05-27: settings JS returned `200` with
-  `Content-Type: text/javascript`, `/assets/mileage/icon.png` returned `200`
-  with `Content-Type: image/png`, and unauthenticated `/iframe/mileage`
-  returned `401` with `Cache-Control: no-store`, CSP, `nosniff`,
-  `no-referrer`, and permissions-policy headers.
-- Earlier live Clockify mutation smoke on 2026-05-27: using local environment
-  secrets only, a direct API smoke created one marked sacrificial expense with
-  multipart form fields, fetched it, deleted it, and confirmed a post-delete
-  fetch returned non-success (`400`). The smoke used the existing `Mileage`
-  category and an existing active project. No API key or token is stored in
-  this repo.
-- `git diff --check`: passed after the multipart and timezone hardening pass.
-- `node --check addon-expenses-rest-api/src/main/resources/static/assets/mileage/settings-date.js`: passed for the local small-hardening pass.
-- `node --check addon-expenses-rest-api/src/main/resources/static/assets/mileage/settings.js`: passed.
-- `node scripts/test-mileage-date-helpers.mjs`: passed for the local small-hardening pass.
-- `gitleaks detect --source . --no-git --redact --verbose`: passed with no leaks found.
-- 2026-05-28 ship + redeploy at git `3fbe57c` (`feat(mileage): enrich CSV exports with project_name and pin multipart limits`): `./scripts/verify-publish.sh` passed end-to-end including Docker/Testcontainers-backed reactor, `node --check` on both settings JS assets, `node scripts/test-mileage-date-helpers.mjs`, `git diff --check`, `gitleaks` (no leaks), and Docker image build.
-- 2026-05-28 Railway deployment `2287245e-a4cf-4bf0-ab0f-fa4d94566b93` reached `SUCCESS` at `2026-05-27T23:48:36.784Z` (UTC); previous deployment `63265289-2fd5-4abf-bea3-8c2a16048bb2` is `REMOVED`. Use `railway deployment list` for the current deployment ID instead of treating this dated entry as current truth.
-- 2026-05-28 public hosted recheck against `https://mileage-for-clockify-production.up.railway.app`: `/actuator/health` returned `200 {"status":"UP","groups":["liveness","readiness"]}`; `/manifest` returned `200`, schema `1.5`, key `mileage-for-clockify`, baseUrl matched; `/assets/mileage/settings-date.js` and `/assets/mileage/settings.js` returned `200 text/javascript`; `/assets/mileage/icon.png` returned `200 image/png`; unauthenticated `/iframe/mileage` returned `401` with CSP `frame-ancestors https://app.clockify.me https://*.clockify.me`, HSTS `max-age=63072000; includeSubDomains`, `Cache-Control: no-store`, `Referrer-Policy: no-referrer`, and Permissions-Policy locking camera/microphone/geolocation.
-- 2026-05-30 G1–G4 scale-hardening deploy at git `011d4e8`, Railway deployment `9d89508d-9592-45df-b2dc-4b650d38fb10` (`SUCCESS`). Closes the four scale gaps after three production-only fixes during the session: Flyway V7→V17 renumber, `WebhookJobWorkerConfig` `@ConditionalOnBean` moved to `@Bean` method level, final promotion to `@AutoConfiguration(after=AddonDbAutoConfiguration.class)` with `META-INF/spring/...AutoConfiguration.imports` registration. Six baseline probes green; Flyway boot log shows `Migrating schema "public" to version "17 - addon webhook jobs"`. `/actuator/prometheus` exposes `mileage_conversion_outcome_total` for all 9 statuses, `mileage_webhook_queue_depth{status="PENDING"}=0`, `mileage_webhook_job_process_seconds_*`. Worker liveness confirmed via Spring's auto-bound `tasks_scheduled_execution_seconds_count{code_function="pollAndProcess",outcome="SUCCESS",exception="none"}=977` over 4 min (~4 Hz, matching `MILEAGE_WORKER_POLL_DELAY_MS=250`) and `code_function="reapStuckJobs"=5` (~1/min). Avg poll latency 3.9 ms, max 12.8 ms. Zero PII tags on any `mileage_` line.
-- 2026-05-30 live Clockify E2E webhook smoke against deployment `9d89508d` from sacrificial developer workspace `672f9cf4ad6f45299c3e3de2`. One Mileage expense at 12.4 mi × $7.25/mi traversed the entire pipeline: Clockify `EXPENSE_CREATED` → 200 on `/webhook/**` → controller enqueue → worker `claimNext` (SKIP LOCKED) → `MileageConversionService.convertIfEligible` → `gateway.updateFlatExpense` → expense rewritten with the canonical note `"Mileage reimbursement: 12.4 miles x 7.25123 = 89.915252. Created/converted by Mileage for Clockify…"` and `total=8990` cents. The addon's own update triggered a second `EXPENSE_UPDATED` webhook which the loop-prevention guard correctly refused (`outcome="SKIPPED"`). Cleanup delete fired `EXPENSE_DELETED` → `markDeleted` → `outcome="DELETED"`. Cumulative test deltas: `/webhook/**` POSTs +3, worker timer count +3, CONVERTED +1, SKIPPED +1 (loop guard), DELETED +2. Per-job latency avg 334 ms, max 805 ms (CONVERTED makes two Clockify roundtrips). Queue depth stayed 0 throughout. Zero `exception` tags on any worker invocation. Sacrificial expenses deleted; post-delete GET returned `400 "Expense doesn't belong to Workspace"`. No secrets persisted.
-- 2026-05-31 Cloudflared/Docker live E2E against developer workspace `69bda6b317a0c5babe34b4ff`: tunnel manifest returned `200`, schema `1.5`, key `mileage-for-clockify`; `/actuator/health` returned `UP`; `/actuator/prometheus` exposed worker liveness (`pollAndProcess`, `reapStuckJobs`), queue depth `0`, and all mileage outcome counters. Browser/devtools pass loaded the installed Clockify add-on iframe and swept Mine, Settings, Conversions, and Diagnostics with zero console warnings/errors. UI create found and fixed a race where Clockify's create webhook could overwrite the successful `ADDON_FORM/CONVERTED` audit row as `WEBHOOK_CREATED/SKIPPED`; regression test `MileageConversionServiceTest.addonFormConversionStaysConvertedWhenCreateWebhookRacesAfterCreateResponse` now pins the invariant. Retest created expense `6a1c673e8c295653c18d8e31`, and after the loop-guard webhook the DB row stayed `ADDON_FORM|ADDON_FORM|CONVERTED` with 4.4 miles at rate 0.725. Native Clockify create of expense `6a1c6768da5b62da684af926` at 5.6 miles produced DB row `CONVERTED`, Clockify note `Mileage reimbursement: 5.6 miles x 0.725 = 4.06 (Clockify category charge: 0.73). Created/converted by Mileage for Clockify.`, metrics `CONVERTED +1`, loop-guard `SKIPPED +1`, worker timer `+2`, queue depth `0`. Cleanup deleted native and both UI sacrificial expenses (`DELETE 200`, post-delete GET `400` for all three), metrics `DELETED +3`, worker timer `+3`, queue depth `0`. No secrets persisted.
-- 2026-05-30 maintenance pass at git `<pending-commit>`: bumped Spring Boot 3.3.5 → 3.3.13 (LTS patch line, addresses CVE backports through May 2026), OWASP `dependency-check-maven` 10.0.4 → 12.2.2 (fixes the H2 `URL VARCHAR(1000)` overflow on 2026-era CVE entries that crashed the previous CI dep-check job), added the `ALREADY_CONVERTED` loop-guard regression test (`MileageConversionServiceTest.updatedWebhookOnAlreadyConvertedExpenseSkipsToBreakLoop` — pins the production-observed behavior so a future eligibility refactor cannot regress it), explicit Railway env vars (`MILEAGE_WORKER_ENABLED=true`, `MILEAGE_WORKER_POLL_DELAY_MS=250`, `MILEAGE_WORKER_BATCH_SIZE=8`, `MILEAGE_WORKER_STUCK_JOB_TIMEOUT_SECONDS=300`), and a `postgres:16` service block in CI `build-test` so the addon-db integration tests run against a real Postgres instead of crashing on connection-refused. Full reactor: 205 tests, BUILD SUCCESS via Docker/Testcontainers.
-- `mvn -pl clockify-rest-client -Dtest=ExpensesClientTest,FilesClientTest test`: passed with 15 tests covering receipt expense uploads and shared file upload multipart sanitization.
-- `mvn -pl addon-core -Dtest=ClaimsNormalizerTest test`: passed with 11 tests covering Clockify timezone claim aliases.
-- `mvn -pl addon-expenses-rest-api -Dtest=MileageSecurityTest test`: passed with 30 security tests.
-- Docker/Testcontainers-backed `mvn -pl addon-expenses-rest-api -am test`: passed with full reactor `BUILD SUCCESS`:
-  `addon-core` 76 tests, `clockify-rest-client` 105 tests, `addon-db` 37 tests,
-  and `addon-expenses-rest-api` 180 tests.
-- `docker compose -f addon-expenses-rest-api/docker-compose.yml build`: passed.
-- Dev workspace live receipt smoke via the local `clockify-rest-client`: created, fetched, and deleted a sacrificial Mileage PDF receipt expense; post-delete GET returned non-success. No API key or token is stored in this repo.
-- Runtime `/manifest` probe with the compose stack: returned schema `1.5`, key
-  `mileage-for-clockify`, scopes `EXPENSE_READ`, `EXPENSE_WRITE`, `USER_READ`,
-  `PROJECT_READ`, `WORKSPACE_READ`, and the four expense webhooks
-  `EXPENSE_CREATED`, `EXPENSE_UPDATED`, `EXPENSE_DELETED`, `EXPENSE_RESTORED`.
-- Runtime `/iframe/mileage` unauthenticated probe: returned `401` with CSP,
-  `nosniff`, `no-referrer`, permissions policy, and `Cache-Control: no-store`.
-- Runtime `/assets/mileage/icon.png` probe: returned `200` with
-  `Content-Type: image/png`.
-- Static forbidden-number scan: no `double`, `Double`, `float`, or `Float`
-  usage in Java source/tests.
-- Static Clockify-host scan: no hardcoded Clockify API hosts in active main
-  code; add-on clients require URLs from installation/token context.
-- Static stale/dead-code scan: no active hits for removed expense-boilerplate
-  names, deleted REST facade types, legacy handoff docs, old live-evidence docs,
-  or deprecated webhook alias names.
-- Multipart hardening review: receipt/file upload field names are constrained,
-  uploaded filenames are reduced to sanitized basenames, unsafe content types
-  fall back to `application/octet-stream`, and Clockify token values are never
-  written to multipart logs or docs.
-- Timezone alias review: server normalization accepts `userTimeZone`,
-  `userTimezone`, `timeZone`, `timezone`, and `tz`, matching the settings UI
-  fallback behavior.
-- Workspace-isolation review: mileage conversion detail and retry paths now use
-  workspace-scoped repository lookups; remaining ID-only repository lookups are
-  workspace primary-key reads or internal webhook event status updates.
-- Flyway history keeps V5/V10 for existing database validation; V12 drops the
-  leftover generic tables.
-- Historical Railway deployment for this dated pass reached `SUCCESS`; hosted
-  `/actuator/health`, `/manifest`, and settings asset probes passed. Use
-  `railway deployment list` for that run's deployment ID.
-- Historical live Clockify uninstall/install/settings/create/delete smoke passed
-  after the deleted-expense webhook fix. Production audit rows for stale test
-  deletes were marked `DELETED` with `deleted_at`, while the then-current live
-  expense remained `CONVERTED`.
-- 2026-06-13 OCI deploy at git `785408b` (main pushed through
-  `beca069` plan implementation plus browser-auth hotfixes `6fed0a3` and
-  `785408b`): `./scripts/verify-publish.sh` passed end-to-end before the
-  final deploy, including focused multipart/claims/security checks, the full
-  Docker/Testcontainers-backed reactor, settings JS behavior checks,
-  `git diff --check`, `gitleaks`, and Docker image build. Runnable jar SHA
-  `0b64d240a8c4bafef3710282d9d587c106b227b0e3585dc42315cc9557df0a0f`
-  matched after copy to OCI; systemd service `mileage-for-clockify.service`
-  restarted `active`.
-- 2026-06-13 hosted probes against `https://89-168-93-85.sslip.io` after
-  deploy `785408b`: `/actuator/health` returned
-  `200 {"status":"UP","groups":["liveness","readiness"]}`; `/manifest`
-  returned `200`, schema `1.5`, key `mileage-for-clockify`; every current
-  `/assets/mileage/settings*.js` asset plus `report.css`, `report.js`, and
-  `icon.png` returned `200` with the expected JavaScript/CSS/image content
-  types; unauthenticated `/iframe/mileage` and `/iframe/report` returned
-  `401`. Prometheus exposed mileage outcome counters, webhook queue depth,
-  webhook worker timer, and scheduled worker liveness; no `mileage_` metric
-  line had user/workspace/expense/token identifier tags.
-- 2026-06-13 installed Clockify browser smoke via Debug Chrome against the
-  already-installed add-on: the first clean load reproduced missing
-  `Authorization` headers after immediate `history.replaceState`; suppressing
-  that cleanup proved the boot calls worked, so the fix now starts the boot API
-  calls first and scrubs `auth_token` on the next task. Retest without
-  suppression showed boot calls to `create-context`, `options/projects`,
-  `options/users`, and `mine` all carrying `Authorization`, settings loaded
-  as `Workspace rate: 0.725 per mile`, no error toasts, submit enabled, and the
-  iframe URL cleaned of `auth_token`.
-- 2026-06-13 live browser create smoke through the installed iframe: Preview
-  POST returned `0.1` miles x `0.725` = `0.0725`, rounded expense amount
-  `0.07`; Create Expense POST returned `200` and the Mine table refreshed with
-  the new `ADDON_FORM` row as `CONVERTED` (`0.1` miles, rate `0.725`, amount
-  `0.0725`, expense amount `0.07`). Follow-up metrics showed
-  `mileage_webhook_job_process_seconds_count=1`, queue depth `0`, and the
-  loop-guard `SKIPPED` counter incremented after Clockify echoed the add-on
-  create. Post-smoke journal scan since final restart had no `ERROR`/`WARN`,
-  Flyway strict-order, corrupt-jar, or optimistic-lock matches.
+- 2026-06-15 docs hygiene publish check: `./scripts/verify-publish.sh` passed end-to-end, hosted probes passed for health, manifest, every current settings asset, report assets, icon, unauthenticated iframe/report guards, prometheus metric families, scheduler liveness, and no PII metric tags. Live Clockify smoke stopped before mutation because the sacrificial workspace had no Mileage add-on webhook URL installed; reinstall the add-on before rerunning the E2E smoke.
+- 2026-06-13 OCI deploy at git `785408b`: `./scripts/verify-publish.sh` passed end-to-end, jar SHA matched after copy to OCI, `mileage-for-clockify.service` restarted active, and hosted probes passed for health, manifest, every current settings asset, report assets, icon, unauthenticated iframe/report guards, prometheus metric families, scheduler liveness, and no PII metric tags.
+- 2026-06-13 installed Clockify browser smoke: iframe boot requests carried `Authorization`, URL token scrub happened after boot, settings loaded, no error toasts appeared, Preview/Create worked, Mine refreshed with the new `ADDON_FORM` row, queue depth stayed `0`, and the loop-guard `SKIPPED` counter incremented after Clockify echoed the add-on create.
+- 2026-06-06 OCI deploys proved the deferred note-charge reconcile path and the `MileageNoteReconcileWorker` scheduler. Add-on-created notes are initially clean; the `(Clockify category charge: X)` parenthetical appears asynchronously after the row settles.
+- 2026-05-30 and 2026-05-31 live webhook smokes proved async webhook queueing, SKIP LOCKED worker dispatch, conversion-loop prevention, and cleanup delete behavior. Treat those as historical evidence unless rerun.
 
 ## Required Manual Product Gates
 
 - [ ] Runtime `/manifest` probe passes.
 - [ ] Runtime probes pass for every `/assets/mileage/settings*.js` asset.
-- [ ] Runtime `/assets/mileage/icon.png` probe passes.
+- [ ] Runtime `/assets/mileage/report.css`, `/assets/mileage/report.js`, and `/assets/mileage/icon.png` probes pass.
 - [ ] Static secret scan passes.
 - [ ] Manifest uses the production `ADDON_BASE_URL`.
 - [ ] Installed lifecycle payload with official webhook entries stores manifest event types.
@@ -235,10 +80,11 @@ Last local/live stabilization pass: 2026-06-05.
 - [ ] User mileage creation uses verified token claims for target user identity; create requests and multipart form fields do not carry `userId`.
 - [ ] Installation token is not exposed to frontend HTML, JavaScript, logs, docs, screenshots, or test output.
 - [ ] Uninstall removes stored installation and webhook secrets.
-- [ ] Diagnostics show installation, settings, and native conversion readiness.
+- [ ] Diagnostics show installation, settings, native conversion readiness, setup checklist, and webhook queue health.
 - [ ] UI creates mileage without raw or hidden user ID entry.
+- [ ] Report buttons open `/iframe/report` without client-supplied display-name query parameters; single-user labels are resolved server-side.
 - [ ] Deleting a Clockify expense marks the audit row `DELETED` and removes it from `Mine`/`Team` refreshes.
-- [ ] Active source has no legacy temp-addon schema names, deleted shell probe, or generic expense-boilerplate references outside immutable Flyway history.
+- [ ] Active source has no legacy temp-addon schema names, deleted shell probes, or generic expense-boilerplate references outside immutable Flyway history.
 
 ## Required Manual Marketplace Gates
 

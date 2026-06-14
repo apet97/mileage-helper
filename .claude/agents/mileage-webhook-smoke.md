@@ -24,7 +24,7 @@ Before doing anything, verify:
 ## Capture baseline
 
 Probe `$BASE_PROD/actuator/prometheus` (production URL) and snapshot the current values of:
-- `mileage_conversion_outcome_total{outcome=…}` for all 8 active outcomes
+- `mileage_conversion_outcome_total{outcome=…}` for all 8 current MileageConversionStatus outcomes
 - `mileage_webhook_queue_depth{status="PENDING"}`
 - `mileage_webhook_job_process_seconds_count`
 - `http_server_requests_seconds_count{uri="/webhook/**", method="POST", status="200"}`
