@@ -38,6 +38,18 @@ Read in this order:
 5. `addon-expenses-rest-api/webhooks.md`
 6. Relevant source and tests before editing
 
+## Current Hardening Checkpoint
+
+Recent product-hardening work on this branch touched operational behavior that future agents are likely to trip over. Before changing nearby code, verify these facts against tests and docs:
+
+- Stale CLAIMED webhook jobs are reaped back to PENDING and their paired `addon_webhook_events` rows are reopened from `PROCESSING`; otherwise a worker crash can leave the dedupe guard permanently closed.
+- Settings rate validation is centralized in `MileageDecimalPolicy`; settings save can succeed with `warnings` when best-effort Clockify category price sync fails.
+- Diagnostics now exposes first-run checklist items and webhook queue health, but no-DB app contexts must still start by returning zeroed operational health.
+- Note idempotency trusts the hidden marker or canonical generated mileage line, not public signature text alone.
+- `/iframe/report` should degrade only for Clockify/API failures; internal merge/render bugs should remain visible as 500s.
+- The Conversions table renders `SKIPPED` rows with plain-language skip reason labels.
+- `addon-expenses-rest-api/docs/report-export-scale-spike.md` records why async report/export jobs were deferred.
+
 ## Current Architecture
 
 - `addon-expenses-rest-api` is the product module.

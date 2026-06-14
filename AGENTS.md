@@ -18,6 +18,18 @@ This is the standalone repository for Mileage for Clockify. It contains the add-
 2. Read this file, then `CLAUDE.md`, then [README.md](README.md).
 3. For product behavior, use [addon-expenses-rest-api/README.md](addon-expenses-rest-api/README.md), [addon-expenses-rest-api/endpoints.md](addon-expenses-rest-api/endpoints.md), [addon-expenses-rest-api/webhooks.md](addon-expenses-rest-api/webhooks.md), [clockify-rest-client/docs/endpoint-provenance.md](clockify-rest-client/docs/endpoint-provenance.md), and the implemented tests.
 
+## Current Hardening Checkpoint
+
+Recent product-hardening work on this branch changed several operational contracts. Verify these before editing nearby code:
+
+- Stale CLAIMED webhook jobs are reaped back to PENDING and paired webhook events are reopened from `PROCESSING`.
+- Settings rate validation is centralized through the same decimal bounds as create/preview; settings save may return `warnings` when Clockify category price sync fails.
+- Diagnostics includes setup checklist items plus webhook queue health, while no-DB app contexts must still start with zeroed operational health.
+- Note idempotency trusts the hidden marker or canonical generated mileage line, not public signature text alone.
+- `/iframe/report` degrades only for Clockify/API failures; internal merge/render bugs remain 500s.
+- The Conversions table renders `SKIPPED` rows with plain-language skip reason labels.
+- `addon-expenses-rest-api/docs/report-export-scale-spike.md` records why async report/export jobs were deferred.
+
 ## Architecture Decision: Postgres
 
 The persistence layer stays on PostgreSQL. Asked 2026-05-30 whether to migrate to MongoDB; decision was no. Three load-bearing reasons:
