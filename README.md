@@ -19,11 +19,11 @@ Users log mileage from a Clockify sidebar UI and have it created as a proper exp
 - **Exact money math** — every mileage / rate / amount value is `BigDecimal`. Clockify receives the rounded amount while the UI keeps full decimal precision.
 - **Honest notes** — the converted note **preserves any user-typed note** and reconciles the add-on's calculated amount with the real Clockify category charge, e.g. `12.4 miles x 7.25123 = 89.915252 (Clockify category charge: 89.90)`.
 - **Async, built for scale** — webhooks are verified, de-duplicated, and queued in Postgres; a worker drains them with `SELECT … FOR UPDATE SKIP LOCKED`, so Clockify never waits on a conversion or retries on a timeout.
-- **Loop-safe** — the add-on's own write fires another webhook, which the conversion guard correctly skips.
+- **Loop-safe** — the add-on's own write fires another webhook, which the conversion guard correctly skips; the Conversions table shows the skip reason in plain language.
 - **Observable** — Prometheus counters/gauges for conversion outcomes, queue depth, and worker latency at `/actuator/prometheus` (low-cardinality tags only — no PII).
 - **Secure by default** — installation tokens stay server-side, CSP/HSTS/Permissions-Policy headers, OWASP dependency-check gate (fail on CVSS ≥ 7.0), and workspace isolation on every query.
 - **Printable expense report** — `GET /iframe/report` renders a print-to-PDF report of **all** Clockify expenses (no PDF library); mileage expenses show the add-on's reconciled miles/rate/amount, everything else shows native Clockify values. Admins get all users by default (or filter to one); members get their own. Falls back to reconciled-mileage-only with a banner if Clockify is unreachable.
-- **Sensible defaults** — fresh workspaces start at a `0.725` per-mile rate, and the converted-note template is admin-editable in Settings (a hidden loop-safe marker is always appended).
+- **Sensible defaults** — fresh workspaces start at a `0.725` per-mile rate, and the converted-note template is admin-editable in Settings. Notes stay idempotent through the hidden marker or canonical generated mileage line; public signature text alone is not trusted.
 
 ## How conversion works
 
@@ -119,7 +119,7 @@ docker compose -f addon-expenses-rest-api/docker-compose.yml \
 
 - **UI** — `GET /iframe/mileage`, `GET /iframe/settings`, `GET /iframe/report` (printable per-user reimbursement report)
 - **User** — `GET /api/mileage/create-context`, `GET /api/mileage/mine`, `GET /api/mileage/mine.csv`, `POST /api/mileage/preview`, `POST /api/mileage/expenses`
-- **Admin** — settings, Mileage category repair, diagnostics, category options, user options, team list/export, conversion list/detail/retry/export under `/api/mileage`. Team and Conversions views (and their CSVs) accept an optional `userId` filter backed by `GET /api/mileage/options/users`.
+- **Admin** — settings, Mileage category repair, diagnostics, category options, user options, team list/export, conversion list/detail/retry/export under `/api/mileage`. Diagnostics includes a setup checklist plus webhook queue health; Team and Conversions views (and their CSVs) accept an optional `userId` filter backed by `GET /api/mileage/options/users`.
 - **Webhooks** — `EXPENSE_CREATED`, `EXPENSE_UPDATED`, `EXPENSE_DELETED`, `EXPENSE_RESTORED`
 - **Ops** — `GET /manifest`, `GET /actuator/health`, `GET /actuator/prometheus`
 

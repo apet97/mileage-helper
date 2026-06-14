@@ -11,6 +11,7 @@ This module is the implemented product module inside the standalone repository. 
 - Settings store only mileage configuration per workspace.
 - Settings use one `Mileage` unit category, fixed unit `mile`, fixed `HALF_UP` rounding, and rate override disabled by default.
 - Setup can adopt an existing Clockify `Mileage` UNIT/mile category and derive the local rate from Clockify `unitPrice` cents when no rate is saved yet.
+- Settings rate validation uses the same decimal bounds as create and preview, and saving settings returns warning messages when the best-effort Clockify category price sync fails.
 - Audit rows provide idempotency, delete/restore state, dry-run records, and conversion failures.
 - Clockify remains the source of truth for expenses, receipts, approvals, reports, budgets, and invoices.
 - Mileage, rate, and money values are handled with `BigDecimal`.
@@ -20,9 +21,11 @@ This module is the implemented product module inside the standalone repository. 
 - Regular users see only `Mine`; admins also see `Team`, `Settings`, `Conversions`, and `Diagnostics`.
 - Mileage lists and CSV exports default to this US week, Sunday through Saturday, with presets for custom ranges, this/last month, this/last week, and this/last year.
 - The UI date presets and default create date use the Clockify claim timezone through `/assets/mileage/settings-date.js`, falling back to the browser-local date only when the claim timezone is absent or invalid.
-- Generated Clockify notes are deterministic and exact, for example `Mileage reimbursement: 1 mile x 0.725 = 0.725. Created/converted by Mileage for Clockify.`
+- Generated Clockify notes are deterministic and exact, for example `Mileage reimbursement: 1 mile x 0.725 = 0.725. Created/converted by Mileage for Clockify.` Idempotency trusts the hidden marker or canonical generated mileage line, not public signature text alone.
 - Add-on previews and mileage tables show full `calculatedAmount` decimals first, with the rounded Clockify expense amount shown as secondary context.
 - Mine and Team lists/CSVs exclude audit rows marked `DELETED`; the admin Conversions view/export keeps them as audit history.
+- Diagnostics reports setup checklist items and operational webhook queue health; stale pending jobs and failed jobs surface as warnings before publish.
+- The admin Conversions table renders `SKIPPED` rows with plain-language skip reason labels.
 - Expense webhooks tolerate both full expense payloads with `id` and reference payloads containing `expenseId`.
 
 ## Hosted Test Deployment

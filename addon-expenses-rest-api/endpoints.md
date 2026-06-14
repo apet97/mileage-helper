@@ -13,12 +13,12 @@ All API routes are scoped by the verified Clockify add-on JWT claims. There are 
 ## Admin Routes
 
 - `GET /api/mileage/settings`
-- `PUT /api/mileage/settings` - body includes the admin-editable `noteTemplate` (converted-note template, capped at 500 chars; over-length returns 400). A fresh workspace with no saved row reports the default rate `0.725`.
+- `PUT /api/mileage/settings` - body includes the admin-editable `noteTemplate` (converted-note template, capped at 500 chars; over-length returns 400). Rate validation uses the same decimal bounds as create/preview. A fresh workspace with no saved row reports the default rate `0.725`. Response may include `warnings` when settings saved but best-effort Clockify category price sync failed.
 - `POST /api/mileage/settings/mileage-category`
 - `GET /api/mileage/options/categories`
 - `GET /api/mileage/options/projects`
 - `GET /api/mileage/options/users` - admin user directory for the Team/Conversions user filter (from `gateway.listUsers`).
-- `GET /api/mileage/diagnostics`
+- `GET /api/mileage/diagnostics` - returns installation/settings/native-conversion readiness, warning messages, first-run checklist items, and webhook operational health (`pendingJobs`, `claimedJobs`, `failedJobs`, `oldestPendingAgeSeconds`, `lastCompletedJobAt`).
 - `GET /api/mileage/team?page=0&pageSize=50&userId=&from=YYYY-MM-DD&to=YYYY-MM-DD` - admin/team visible mileage rows, excluding `DELETED`. Optional `userId` filters to one user.
 - `GET /api/mileage/team.csv?userId=&from=YYYY-MM-DD&to=YYYY-MM-DD` - admin/team visible CSV export, excluding `DELETED`. Optional `userId` filters to one user.
 - `GET /api/mileage/conversions?page=0&pageSize=50&status=CONVERTED&userId=&from=YYYY-MM-DD&to=YYYY-MM-DD` - audit view. Includes `DELETED` rows unless a different status filter is supplied. Optional `userId` filters to one user.
