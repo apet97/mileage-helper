@@ -128,6 +128,34 @@ class MileageNoteServiceTest {
     }
 
     @Test
+    void publicSignatureAloneDoesNotSuppressGeneratedMileageLine() {
+        String original = "Customer wrote: Created/converted by Mileage for Clockify.";
+
+        String note = service.buildConvertedNote(original, calculation, "mi", conversionId, null, null);
+
+        assertThat(note).contains("Customer wrote: Created/converted by Mileage for Clockify.");
+        assertThat(note).contains("Mileage reimbursement: 37.4 miles x 0.655 = 24.497.");
+    }
+
+    @Test
+    void canonicalDefaultMileageNoteDoesNotRestack() {
+        String alreadyConverted = "Mileage reimbursement: 37.4 miles x 0.655 = 24.497. Created/converted by Mileage for Clockify.";
+
+        String note = service.buildConvertedNote(alreadyConverted, calculation, "mi", conversionId, null, null);
+
+        assertThat(note).isEqualTo(alreadyConverted);
+    }
+
+    @Test
+    void customTemplateWithSignatureStillGetsLoopMarkerWhenNoCanonicalLine() {
+        String note = service.buildConvertedNote("", calculation, "mi", conversionId,
+                "Trip {{miles}} {{unit}}. Created/converted by Mileage for Clockify.", null);
+
+        assertThat(note).contains("Trip 37.4 miles. Created/converted by Mileage for Clockify.");
+        assertThat(note).contains(service.marker(conversionId));
+    }
+
+    @Test
     void doesNotDuplicateMarker() {
         String original = "Already done " + service.marker(conversionId);
 

@@ -77,14 +77,21 @@ public class MileageNoteService {
     }
 
     private String ensureLoopMarker(String note, UUID conversionId) {
-        if (note.contains(MARKER_PREFIX) || note.contains(CONVERTED_SIGNATURE)) {
+        if (note.contains(MARKER_PREFIX) || containsCanonicalMileageLine(note)) {
             return note;
         }
         return note + " " + marker(conversionId);
     }
 
     private boolean isAlreadyConverted(String notes) {
-        return notes != null && (notes.contains(MARKER_PREFIX) || notes.contains(CONVERTED_SIGNATURE));
+        return notes != null && (notes.contains(MARKER_PREFIX) || containsCanonicalMileageLine(notes));
+    }
+
+    private boolean containsCanonicalMileageLine(String notes) {
+        return notes.contains("Mileage reimbursement:")
+                && notes.contains(" x ")
+                && notes.contains(" = ")
+                && notes.contains(CONVERTED_SIGNATURE);
     }
 
     private static String categoryChargeToken(MileageCalculation calculation, BigDecimal categoryCharge) {
