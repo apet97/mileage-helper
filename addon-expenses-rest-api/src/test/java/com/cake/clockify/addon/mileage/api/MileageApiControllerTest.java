@@ -13,6 +13,8 @@ import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseGateway;
 import com.cake.clockify.addon.mileage.clockify.CreateFlatExpenseCommand;
 import com.cake.clockify.addon.mileage.clockify.UpdateFlatExpenseCommand;
 import com.cake.clockify.addon.mileage.note.MileageNoteService;
+import com.cake.clockify.addon.mileage.policy.MileageRatePolicyService;
+import com.cake.clockify.addon.mileage.policy.MileageRateResolution;
 import com.cake.clockify.addon.mileage.settings.MileageSettingsService;
 import com.cake.clockify.addon.mileage.settings.MileageSettingsValidation;
 import com.cake.clockify.addonsdk.clockify.ClockifySignatureParser;
@@ -32,8 +34,10 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.security.KeyPairGenerator;
 import java.security.interfaces.RSAPublicKey;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -57,6 +61,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class MileageApiControllerTest {
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
     private MileageSettingsService settingsService;
+    private MileageRatePolicyService ratePolicyService;
     private ClockifyExpenseGateway gateway;
     private MileageConversionRepository conversionRepository;
     private MileageConversionReservationRepository reservationRepository;
@@ -65,11 +70,14 @@ class MileageApiControllerTest {
     @BeforeEach
     void setUp() {
         settingsService = mock(MileageSettingsService.class);
+        ratePolicyService = mock(MileageRatePolicyService.class);
         gateway = mock(ClockifyExpenseGateway.class);
         conversionRepository = mock(MileageConversionRepository.class);
         reservationRepository = mock(MileageConversionReservationRepository.class);
         MileageApiController controller = new MileageApiController(
                 settingsService,
+                ratePolicyService,
+                new MileageDateRangeResolver(Clock.fixed(Instant.parse("2026-05-24T12:00:00Z"), ZoneOffset.UTC)),
                 new MileageCalculator(),
                 gateway,
                 conversionRepository,
@@ -78,6 +86,8 @@ class MileageApiControllerTest {
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new MileageExceptionHandler(objectMapper))
                 .build();
+        when(ratePolicyService.resolveRate(anyString(), any(), any(MileageSettingsValidation.class)))
+                .thenAnswer(invocation -> settingsFallback(invocation.getArgument(2)));
         when(reservationRepository.reserve(anyString(), anyString(), eq(MileageConversionSource.ADDON_FORM), eq("ADDON_FORM")))
                 .thenAnswer(invocation -> UUID.randomUUID());
         when(reservationRepository.reserve(any(UUID.class), anyString(), anyString(),
@@ -99,12 +109,88 @@ class MileageApiControllerTest {
         mockMvc.perform(post("/api/mileage/preview")
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(""" 
-                                {"miles":"37.4"}
+                        .content("""
+                                {"date":"2026-05-24","miles":"37.4"}
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.calculatedAmount").value("24.497"))
-                .andExpect(jsonPath("$.roundedAmount").value("24.50"));
+                .andExpect(jsonPath("$.roundedAmount").value("24.50"))
+                .andExpect(jsonPath("$.rateSource").value("SETTINGS_FALLBACK"));
+    }
+
+    @Test
+    void previewUsesPolicyMatchingDate() throws Exception {
+        when(settingsService.validateForAddonCreate("ws-api")).thenReturn(settings(false));
+        UUID policyId = UUID.fromString("00000000-0000-0000-0000-000000000701");
+        when(ratePolicyService.resolveRate(eq("ws-api"), eq(LocalDate.parse("2026-05-24")), any(MileageSettingsValidation.class)))
+                .thenReturn(policyResolution(policyId, "2026 mileage rate", "0.700"));
+
+        mockMvc.perform(post("/api/mileage/preview")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"date":"2026-05-24","miles":"10"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rate").value("0.7"))
+                .andExpect(jsonPath("$.calculatedAmount").value("7"))
+                .andExpect(jsonPath("$.roundedAmount").value("7.00"))
+                .andExpect(jsonPath("$.rateSource").value("POLICY"))
+                .andExpect(jsonPath("$.ratePolicyId").value(policyId.toString()))
+                .andExpect(jsonPath("$.ratePolicyName").value("2026 mileage rate"));
+    }
+
+    @Test
+    void previewRequiresIsoDate() throws Exception {
+        when(settingsService.validateForAddonCreate("ws-api")).thenReturn(settings(false));
+
+        mockMvc.perform(post("/api/mileage/preview")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"miles":"37.4"}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("date must use YYYY-MM-DD"));
+
+        mockMvc.perform(post("/api/mileage/preview")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"date":"05/24/2026","miles":"37.4"}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("date must use YYYY-MM-DD"));
+    }
+
+    @Test
+    void previewUserOverrideWinsOnlyWhenAllowed() throws Exception {
+        UUID policyId = UUID.fromString("00000000-0000-0000-0000-000000000702");
+        when(ratePolicyService.resolveRate(eq("ws-api"), eq(LocalDate.parse("2026-05-24")), any(MileageSettingsValidation.class)))
+                .thenReturn(policyResolution(policyId, "2026 mileage rate", "0.700"));
+
+        when(settingsService.validateForAddonCreate("ws-api")).thenReturn(settings(true));
+        mockMvc.perform(post("/api/mileage/preview")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"date":"2026-05-24","miles":"10","rate":"2.50"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rate").value("2.5"))
+                .andExpect(jsonPath("$.rateSource").value("USER_OVERRIDE"))
+                .andExpect(jsonPath("$.ratePolicyId").doesNotExist());
+
+        when(settingsService.validateForAddonCreate("ws-api")).thenReturn(settings(false));
+        mockMvc.perform(post("/api/mileage/preview")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"date":"2026-05-24","miles":"10","rate":"2.50"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rate").value("0.7"))
+                .andExpect(jsonPath("$.rateSource").value("POLICY"));
     }
 
     @Test
@@ -114,7 +200,7 @@ class MileageApiControllerTest {
         mockMvc.perform(post("/api/mileage/preview")
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"miles\":\"1E+1000000\"}"))
+                        .content("{\"date\":\"2026-05-24\",\"miles\":\"1E+1000000\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("miles must be a plain decimal number"));
 
@@ -126,6 +212,8 @@ class MileageApiControllerTest {
         when(settingsService.validateForAddonCreate("ws-api")).thenReturn(settings(false));
         MockMvc filteredMockMvc = MockMvcBuilders.standaloneSetup(new MileageApiController(
                         settingsService,
+                        ratePolicyService,
+                        new MileageDateRangeResolver(Clock.fixed(Instant.parse("2026-05-24T12:00:00Z"), ZoneOffset.UTC)),
                         new MileageCalculator(),
                         gateway,
                         conversionRepository,
@@ -139,7 +227,7 @@ class MileageApiControllerTest {
                         .header("Authorization", "Bearer valid-user-token")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"miles":"37.4"}
+                                {"date":"2026-05-24","miles":"37.4"}
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.calculatedAmount").value("24.497"))
@@ -327,6 +415,140 @@ class MileageApiControllerTest {
     }
 
     @Test
+    void createMileageExpenseStoresPolicyAuditFields() throws Exception {
+        when(settingsService.validateForAddonCreate("ws-api")).thenReturn(settings(false));
+        UUID policyId = UUID.fromString("00000000-0000-0000-0000-000000000703");
+        when(ratePolicyService.resolveRate(eq("ws-api"), eq(LocalDate.parse("2026-05-24")), any(MileageSettingsValidation.class)))
+                .thenReturn(policyResolution(policyId, "2026 mileage rate", "0.700"));
+        when(gateway.createFlatExpense(eq("ws-api"), any(CreateFlatExpenseCommand.class))).thenReturn(createdExpense("exp-1"));
+
+        mockMvc.perform(post("/api/mileage/expenses")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createBody("10", null)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rate").value("0.7"))
+                .andExpect(jsonPath("$.rateSource").value("POLICY"))
+                .andExpect(jsonPath("$.ratePolicyId").value(policyId.toString()))
+                .andExpect(jsonPath("$.ratePolicyName").value("2026 mileage rate"));
+
+        ArgumentCaptor<MileageConversion> saved = ArgumentCaptor.forClass(MileageConversion.class);
+        verify(conversionRepository).saveAndFlush(saved.capture());
+        assertThat(saved.getValue().getRate()).isEqualByComparingTo("0.700");
+        assertThat(saved.getValue().getRateSource()).isEqualTo("POLICY");
+        assertThat(saved.getValue().getRatePolicyId()).isEqualTo(policyId);
+        assertThat(saved.getValue().getRatePolicyName()).isEqualTo("2026 mileage rate");
+    }
+
+    @Test
+    void createMileageExpenseJsonStoresTripEvidence() throws Exception {
+        when(settingsService.validateForAddonCreate("ws-api")).thenReturn(settings(false));
+        when(gateway.createFlatExpense(eq("ws-api"), any(CreateFlatExpenseCommand.class))).thenReturn(createdExpense("exp-1"));
+
+        mockMvc.perform(post("/api/mileage/expenses")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"date":"2026-05-24","projectId":"project-1","miles":"10","tripOrigin":"  HQ  ","tripDestination":"Client site","tripPurpose":"Install support","odometerStart":"1200.5","odometerEnd":"1225.5","policyExceptionReason":"Storm detour"}
+                                """))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<MileageConversion> saved = ArgumentCaptor.forClass(MileageConversion.class);
+        verify(conversionRepository).saveAndFlush(saved.capture());
+        assertThat(saved.getValue().getTripOrigin()).isEqualTo("HQ");
+        assertThat(saved.getValue().getTripDestination()).isEqualTo("Client site");
+        assertThat(saved.getValue().getTripPurpose()).isEqualTo("Install support");
+        assertThat(saved.getValue().getOdometerStart()).isEqualByComparingTo("1200.5");
+        assertThat(saved.getValue().getOdometerEnd()).isEqualByComparingTo("1225.5");
+        assertThat(saved.getValue().getPolicyExceptionReason()).isEqualTo("Storm detour");
+    }
+
+    @Test
+    void createMileageExpenseMultipartStoresPolicyAuditFields() throws Exception {
+        when(settingsService.validateForAddonCreate("ws-api")).thenReturn(settings(false));
+        UUID policyId = UUID.fromString("00000000-0000-0000-0000-000000000704");
+        when(ratePolicyService.resolveRate(eq("ws-api"), eq(LocalDate.parse("2026-05-24")), any(MileageSettingsValidation.class)))
+                .thenReturn(policyResolution(policyId, "2026 mileage rate", "0.700"));
+        when(gateway.createFlatExpenseWithReceipt(eq("ws-api"), any(CreateFlatExpenseCommand.class), eq("receipt.png"), eq("image/png"), any()))
+                .thenReturn(createdExpense("exp-file"));
+        MockMultipartFile file = new MockMultipartFile("file", "receipt.png", "image/png", new byte[] {1, 2, 3});
+
+        mockMvc.perform(multipart("/api/mileage/expenses")
+                        .file(file)
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims())
+                        .param("date", "2026-05-24")
+                        .param("projectId", "project-1")
+                        .param("miles", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rateSource").value("POLICY"));
+
+        ArgumentCaptor<MileageConversion> saved = ArgumentCaptor.forClass(MileageConversion.class);
+        verify(conversionRepository).saveAndFlush(saved.capture());
+        assertThat(saved.getValue().getRatePolicyId()).isEqualTo(policyId);
+    }
+
+    @Test
+    void createMileageExpenseMultipartStoresTripEvidence() throws Exception {
+        when(settingsService.validateForAddonCreate("ws-api")).thenReturn(settings(false));
+        when(gateway.createFlatExpenseWithReceipt(eq("ws-api"), any(CreateFlatExpenseCommand.class), eq("receipt.png"), eq("image/png"), any()))
+                .thenReturn(createdExpense("exp-file"));
+        MockMultipartFile file = new MockMultipartFile("file", "receipt.png", "image/png", new byte[] {1, 2, 3});
+
+        mockMvc.perform(multipart("/api/mileage/expenses")
+                        .file(file)
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims())
+                        .param("date", "2026-05-24")
+                        .param("projectId", "project-1")
+                        .param("miles", "10")
+                        .param("tripOrigin", "HQ")
+                        .param("tripDestination", "Client site")
+                        .param("tripPurpose", "Install support")
+                        .param("odometerStart", "1200")
+                        .param("odometerEnd", "1225")
+                        .param("policyExceptionReason", "Storm detour"))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<MileageConversion> saved = ArgumentCaptor.forClass(MileageConversion.class);
+        verify(conversionRepository).saveAndFlush(saved.capture());
+        assertThat(saved.getValue().getTripOrigin()).isEqualTo("HQ");
+        assertThat(saved.getValue().getOdometerEnd()).isEqualByComparingTo("1225");
+        assertThat(saved.getValue().getPolicyExceptionReason()).isEqualTo("Storm detour");
+    }
+
+    @Test
+    void createMileageExpenseRejectsOverlongTripEvidenceBeforeCallingClockify() throws Exception {
+        when(settingsService.validateForAddonCreate("ws-api")).thenReturn(settings(false));
+        String tooLong = "x".repeat(257);
+
+        mockMvc.perform(post("/api/mileage/expenses")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"date":"2026-05-24","projectId":"project-1","miles":"10","tripPurpose":"%s"}
+                                """.formatted(tooLong)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("tripPurpose must be 256 characters or fewer"));
+
+        verify(gateway, never()).createFlatExpense(any(), any());
+    }
+
+    @Test
+    void createMileageExpenseRejectsInvalidOdometerOrderBeforeCallingClockify() throws Exception {
+        when(settingsService.validateForAddonCreate("ws-api")).thenReturn(settings(false));
+
+        mockMvc.perform(post("/api/mileage/expenses")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"date":"2026-05-24","projectId":"project-1","miles":"10","odometerStart":"1225","odometerEnd":"1200"}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("odometerEnd must be greater than or equal to odometerStart"));
+
+        verify(gateway, never()).createFlatExpense(any(), any());
+    }
+
+    @Test
     void createExpenseMergesAuditRowWhenWebhookReservedExpenseFirst() throws Exception {
         when(settingsService.validateForAddonCreate("ws-api")).thenReturn(new MileageSettingsValidation(
                 "ws-api", true, true, new BigDecimal("0.655"), "mi",
@@ -476,6 +698,9 @@ class MileageApiControllerTest {
                 .andExpect(jsonPath("$.unit").value("mi"))
                 .andExpect(jsonPath("$.allowUserRateOverride").value(false))
                 .andExpect(jsonPath("$.complete").value(true));
+
+        verify(ratePolicyService).resolveRate(
+                eq("ws-api"), eq(LocalDate.parse("2026-05-24")), any(MileageSettingsValidation.class));
     }
 
     @Test
@@ -487,7 +712,7 @@ class MileageApiControllerTest {
         String response = mockMvc.perform(post("/api/mileage/preview")
                         .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"miles\":\"37.4\"}"))
+                        .content("{\"date\":\"2026-05-24\",\"miles\":\"37.4\"}"))
                 .andExpect(status().isBadRequest())
                 .andReturn()
                 .getResponse()
@@ -621,6 +846,30 @@ class MileageApiControllerTest {
     private static MileageSettingsValidation singleCategorySettings() {
         return new MileageSettingsValidation("ws-api", true, true, new BigDecimal("0.725"), "mile",
                 "cat-mileage", "cat-mileage", RoundingMode.HALF_UP, true, true, false, false, false, null, List.of());
+    }
+
+    private static MileageRateResolution settingsFallback(MileageSettingsValidation settings) {
+        return new MileageRateResolution(
+                settings.rate(),
+                settings.rate() == null ? null : settings.rate().stripTrailingZeros().toPlainString(),
+                MileageRateResolution.SOURCE_SETTINGS_FALLBACK,
+                null,
+                null,
+                null,
+                null,
+                List.of());
+    }
+
+    private static MileageRateResolution policyResolution(UUID id, String name, String rate) {
+        return new MileageRateResolution(
+                new BigDecimal(rate),
+                new BigDecimal(rate).stripTrailingZeros().toPlainString(),
+                MileageRateResolution.SOURCE_POLICY,
+                id,
+                name,
+                LocalDate.parse("2026-01-01"),
+                null,
+                List.of());
     }
 
     private static NormalizedClaims claims() {

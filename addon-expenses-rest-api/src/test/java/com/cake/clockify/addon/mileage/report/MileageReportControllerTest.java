@@ -159,7 +159,7 @@ class MileageReportControllerTest {
         when(gateway.listUsers("ws-admin")).thenReturn(List.of(new ClockifyUserOption("user-claims", "Ada", "a@x.test")));
         when(gateway.listExpensesForReport(eq("ws-admin"), eq("user-claims"), any(LocalDate.class), any(LocalDate.class)))
                 .thenReturn(new ClockifyExpenseListResult(List.of(
-                        new ClockifyExpenseListItem("e1", "user-claims", LocalDate.parse("2026-05-03"), "North Route", "cat-mileage", "Mileage", new BigDecimal("7.25")),
+                        new ClockifyExpenseListItem("e1", "user-claims", LocalDate.parse("2026-05-03"), "North Route", "cat-mileage", "Mileage", new BigDecimal("7.25"), "USD"),
                         native_("e2", "user-claims", "Meals", "18.00")), false));
         when(conversionRepository.findByWorkspaceIdAndStatusAndExpenseIdIn(eq("ws-admin"), eq(MileageConversionStatus.CONVERTED), any()))
                 .thenReturn(List.of(conversion("e1", "user-claims", "3.5", "7.2531", "25.38585")));
@@ -173,6 +173,29 @@ class MileageReportControllerTest {
                 .andExpect(content().string(containsString("7.2531")))    // our rate (natural precision)
                 .andExpect(content().string(containsString("Meals")))     // native category
                 .andExpect(content().string(containsString(">18.00</td>"))); // native amount at 2 dp
+    }
+
+    @Test
+    void currencyFilterKeepsUnknownCurrencyAddonRowsAndMatchingNativeRows() throws Exception {
+        when(gateway.listExpensesForReport(eq("ws-admin"), eq("user-claims"), any(LocalDate.class), any(LocalDate.class)))
+                .thenReturn(new ClockifyExpenseListResult(List.of(
+                        native_("e-mileage-unknown", "user-claims", "Mileage", "7.25", null),
+                        native_("e-usd", "user-claims", "Meals", "18.00", "USD"),
+                        native_("e-eur", "user-claims", "Parking", "9.00", "EUR")), false));
+        when(conversionRepository.findByWorkspaceIdAndStatusAndExpenseIdIn(eq("ws-admin"), eq(MileageConversionStatus.CONVERTED), any()))
+                .thenReturn(List.of(conversion("e-mileage-unknown", "user-claims", "1", "7.25", "7.25")));
+
+        mockMvc.perform(get("/iframe/report")
+                        .queryParam("scope", "mine")
+                        .queryParam("from", "2026-05-01")
+                        .queryParam("to", "2026-05-31")
+                        .queryParam("currency", " usd ")
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("MEMBER")))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("<th>Currency</th>")))
+                .andExpect(content().string(containsString("Mileage")))
+                .andExpect(content().string(containsString("Meals")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(containsString("Parking"))));
     }
 
     @Test
@@ -218,7 +241,13 @@ class MileageReportControllerTest {
     }
 
     private static ClockifyExpenseListItem native_(String id, String userId, String category, String amount) {
-        return new ClockifyExpenseListItem(id, userId, LocalDate.parse("2026-05-04"), "", "cat-" + id, category, new BigDecimal(amount));
+        return native_(id, userId, category, amount, null);
+    }
+
+    private static ClockifyExpenseListItem native_(
+            String id, String userId, String category, String amount, String currency) {
+        return new ClockifyExpenseListItem(
+                id, userId, LocalDate.parse("2026-05-04"), "", "cat-" + id, category, new BigDecimal(amount), currency);
     }
 
     private static MileageConversion conversion(String expenseId, String userId, String miles, String rate, String calc) {

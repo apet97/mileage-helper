@@ -39,9 +39,13 @@ You are a focused deployment agent for Mileage for Clockify. Your job is to take
    /assets/mileage/settings.js            → expect 200 text/javascript
    /assets/mileage/report.css             → expect 200 text/css
    /assets/mileage/report.js              → expect 200 text/javascript
+   /assets/mileage/packet.css             → expect 200 text/css
+   /assets/mileage/packet.js              → expect 200 text/javascript
    /assets/mileage/icon.png               → expect 200 image/png
    /iframe/mileage (unauthenticated)      → expect 401 with CSP + HSTS + Cache-Control: no-store + Permissions-Policy + Referrer-Policy + X-Content-Type-Options
    /iframe/report (unauthenticated)       → expect 401 with CSP + HSTS + Cache-Control: no-store + Permissions-Policy + Referrer-Policy + X-Content-Type-Options
+   /iframe/reimbursement-packet (unauthenticated)
+                                          → expect 401 with CSP + HSTS + Cache-Control: no-store + Permissions-Policy + Referrer-Policy + X-Content-Type-Options
    /actuator/prometheus                   → expect mileage_conversion_outcome_total (8 current MileageConversionStatus outcomes),
                                                    mileage_webhook_queue_depth{status="PENDING"},
                                                    mileage_webhook_job_process_seconds_*,

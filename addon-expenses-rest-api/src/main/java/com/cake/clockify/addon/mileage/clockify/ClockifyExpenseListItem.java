@@ -15,5 +15,6 @@ public record ClockifyExpenseListItem(
         String projectName,
         String categoryId,
         String categoryName,
-        BigDecimal amount) {
+        BigDecimal amount,
+        String currency) {
 }

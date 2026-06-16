@@ -14,11 +14,17 @@
   document.addEventListener("click", app.handleCsvExport);
   document.addEventListener("click", app.handleReportClick);
   app.on("btn-preview", "click", app.previewMileage);
+  app.on("field-date", "change", app.refreshEffectiveRate);
   app.on("mileage-form", "submit", app.createMileage);
   app.on("settings-form", "submit", app.saveSettings);
+  app.on("rate-policy-form", "submit", app.saveRatePolicy);
+  app.on("rate-policy-rows", "click", app.handleRatePolicyTableClick);
+  app.on("btn-cancel-rate-policy", "click", app.clearRatePolicyForm);
   app.on("btn-setup-mileage-category", "click", app.setupMileageCategory);
+  app.on("btn-refresh-rate-policies", "click", app.refreshHandler(app.loadRatePolicies));
   app.on("btn-refresh-mine", "click", app.refreshHandler(app.loadMine));
   app.on("btn-refresh-team", "click", app.refreshHandler(app.loadTeam));
+  app.on("btn-refresh-insights", "click", app.refreshHandler(app.loadInsights));
   app.on("btn-refresh-conversions", "click", app.refreshHandler(app.loadConversions));
   app.on("btn-refresh-diagnostics", "click", app.refreshHandler(app.loadDiagnostics));
   app.on("team-user-filter", "change", () => { app.state.pageState.team = 0; app.loadTeam(); });

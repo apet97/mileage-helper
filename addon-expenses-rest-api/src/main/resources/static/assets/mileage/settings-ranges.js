@@ -11,7 +11,7 @@
   };
 
   function initDateRanges() {
-    ["mine", "team", "conversion"].forEach(initDateRange);
+    ["mine", "team", "insights", "conversion"].forEach(initDateRange);
   }
 
   function initDateRange(scope) {
@@ -62,6 +62,8 @@
       app.loadMine();
     } else if (scope === "team" && app.state.userIsAdmin) {
       app.loadTeam();
+    } else if (scope === "insights" && app.state.userIsAdmin) {
+      app.loadInsights();
     } else if (scope === "conversion" && app.state.userIsAdmin) {
       app.loadConversions();
     }
@@ -153,11 +155,19 @@
   }
 
   function reportPath(scope, userId) {
+    return printablePath("/iframe/report", scope, userId);
+  }
+
+  function packetPath(scope, userId) {
+    return printablePath("/iframe/reimbursement-packet", scope, userId);
+  }
+
+  function printablePath(basePath, scope, userId) {
     const range = validSelectedDateRange(scope);
     if (!range) {
       return null;
     }
-    let path = "/iframe/report?from=" + encodeURIComponent(range.from) + "&to=" + encodeURIComponent(range.to);
+    let path = basePath + "?from=" + encodeURIComponent(range.from) + "&to=" + encodeURIComponent(range.to);
     path += "&scope=" + encodeURIComponent(scope); // "mine" pins to the requester; "team" = admin all-users/filter
     if (userId) {
       path += "&userId=" + encodeURIComponent(userId);
@@ -180,6 +190,7 @@
     setRangeInputs,
     dateRangeForPreset,
     userFilterQuery,
-    reportPath
+    reportPath,
+    packetPath
   });
 })();

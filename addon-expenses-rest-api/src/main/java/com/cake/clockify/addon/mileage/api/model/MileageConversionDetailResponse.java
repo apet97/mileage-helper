@@ -6,6 +6,7 @@ import com.cake.clockify.addon.mileage.audit.MileageConversionStatus;
 import com.cake.clockify.addon.mileage.audit.MileageSkipReason;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 public record MileageConversionDetailResponse(
@@ -24,6 +25,9 @@ public record MileageConversionDetailResponse(
         String expenseDate,
         String miles,
         String rate,
+        String rateSource,
+        UUID ratePolicyId,
+        String ratePolicyName,
         String calculatedAmount,
         String roundedAmount,
         String roundingMode,
@@ -31,7 +35,15 @@ public record MileageConversionDetailResponse(
         MileageSkipReason skipReason,
         String errorCode,
         String errorMessage,
+        List<String> workflowWarnings,
+        List<String> workflowBlockers,
         String noteMarker,
+        String tripOrigin,
+        String tripDestination,
+        String tripPurpose,
+        String odometerStart,
+        String odometerEnd,
+        String policyExceptionReason,
         Instant createdAt,
         Instant updatedAt,
         Instant convertedAt,
@@ -67,6 +79,9 @@ public record MileageConversionDetailResponse(
                 conversion.getExpenseDate() == null ? null : conversion.getExpenseDate().toString(),
                 text(conversion.getMiles()),
                 text(conversion.getRate()),
+                conversion.getRateSource(),
+                conversion.getRatePolicyId(),
+                conversion.getRatePolicyName(),
                 text(conversion.getCalculatedAmount()),
                 roundedText(conversion.getRoundedAmount()),
                 conversion.getRoundingMode(),
@@ -74,7 +89,15 @@ public record MileageConversionDetailResponse(
                 conversion.getSkipReason(),
                 conversion.getErrorCode(),
                 conversion.getErrorMessage(),
+                workflowWarnings(conversion),
+                workflowBlockers(conversion),
                 conversion.getNoteMarker(),
+                conversion.getTripOrigin(),
+                conversion.getTripDestination(),
+                conversion.getTripPurpose(),
+                text(conversion.getOdometerStart()),
+                text(conversion.getOdometerEnd()),
+                conversion.getPolicyExceptionReason(),
                 conversion.getCreatedAt(),
                 conversion.getUpdatedAt(),
                 conversion.getConvertedAt(),
@@ -94,6 +117,17 @@ public record MileageConversionDetailResponse(
 
     private static String roundedText(java.math.BigDecimal value) {
         return value == null ? null : value.toPlainString();
+    }
+
+    private static List<String> workflowWarnings(MileageConversion conversion) {
+        return List.of();
+    }
+
+    private static List<String> workflowBlockers(MileageConversion conversion) {
+        if (conversion.getSkipReason() == MileageSkipReason.FINALIZED_OR_LOCKED) {
+            return List.of("Expense is locked or finalized");
+        }
+        return List.of();
     }
 
     public static String sourceLabel(MileageConversionSource source) {

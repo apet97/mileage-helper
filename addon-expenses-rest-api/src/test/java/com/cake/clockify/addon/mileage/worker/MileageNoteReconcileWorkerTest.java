@@ -121,6 +121,7 @@ class MileageNoteReconcileWorkerTest {
         // Snapshot date is the full Clockify "yyyy-MM-ddThh:mm:ssZ" form (the conversion row carries a
         // date-only LocalDate). The update MUST use this full form — Clockify rejects a date-only string with 400.
         return new ClockifyExpenseSnapshot("exp-1", "ws-1", "user-1", "2026-06-06T12:00:00Z", null, null,
-                "cat-mileage", notes, new BigDecimal("12.4"), Boolean.TRUE, "", totalCents, Boolean.FALSE);
+                "cat-mileage", notes, new BigDecimal("12.4"), Boolean.TRUE, "", totalCents,
+                Boolean.FALSE, Boolean.FALSE, null, Boolean.FALSE);
     }
 }

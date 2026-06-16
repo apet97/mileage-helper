@@ -60,6 +60,15 @@ public class MileageConversion implements Persistable<UUID> {
     @Column(name = "rate", precision = 18, scale = 6)
     private BigDecimal rate;
 
+    @Column(name = "rate_source", length = 32)
+    private String rateSource;
+
+    @Column(name = "rate_policy_id")
+    private UUID ratePolicyId;
+
+    @Column(name = "rate_policy_name", length = 128)
+    private String ratePolicyName;
+
     @Column(name = "calculated_amount", precision = 18, scale = 6)
     private BigDecimal calculatedAmount;
 
@@ -97,6 +106,24 @@ public class MileageConversion implements Persistable<UUID> {
 
     @Column(name = "note_charge_reconciled_at")
     private Instant noteChargeReconciledAt;
+
+    @Column(name = "trip_origin", length = 256)
+    private String tripOrigin;
+
+    @Column(name = "trip_destination", length = 256)
+    private String tripDestination;
+
+    @Column(name = "trip_purpose", length = 256)
+    private String tripPurpose;
+
+    @Column(name = "odometer_start", precision = 18, scale = 6)
+    private BigDecimal odometerStart;
+
+    @Column(name = "odometer_end", precision = 18, scale = 6)
+    private BigDecimal odometerEnd;
+
+    @Column(name = "policy_exception_reason", length = 256)
+    private String policyExceptionReason;
 
     @Column(name = "deleted_at")
     private Instant deletedAt;
@@ -147,6 +174,12 @@ public class MileageConversion implements Persistable<UUID> {
     public void setMiles(BigDecimal miles) { this.miles = miles; }
     public BigDecimal getRate() { return rate; }
     public void setRate(BigDecimal rate) { this.rate = rate; }
+    public String getRateSource() { return rateSource; }
+    public void setRateSource(String rateSource) { this.rateSource = rateSource; }
+    public UUID getRatePolicyId() { return ratePolicyId; }
+    public void setRatePolicyId(UUID ratePolicyId) { this.ratePolicyId = ratePolicyId; }
+    public String getRatePolicyName() { return ratePolicyName; }
+    public void setRatePolicyName(String ratePolicyName) { this.ratePolicyName = ratePolicyName; }
     public BigDecimal getCalculatedAmount() { return calculatedAmount; }
     public void setCalculatedAmount(BigDecimal calculatedAmount) { this.calculatedAmount = calculatedAmount; }
     public BigDecimal getRoundedAmount() { return roundedAmount; }
@@ -171,6 +204,18 @@ public class MileageConversion implements Persistable<UUID> {
     public void setConvertedAt(Instant convertedAt) { this.convertedAt = convertedAt; }
     public Instant getNoteChargeReconciledAt() { return noteChargeReconciledAt; }
     public void setNoteChargeReconciledAt(Instant noteChargeReconciledAt) { this.noteChargeReconciledAt = noteChargeReconciledAt; }
+    public String getTripOrigin() { return tripOrigin; }
+    public void setTripOrigin(String tripOrigin) { this.tripOrigin = tripOrigin; }
+    public String getTripDestination() { return tripDestination; }
+    public void setTripDestination(String tripDestination) { this.tripDestination = tripDestination; }
+    public String getTripPurpose() { return tripPurpose; }
+    public void setTripPurpose(String tripPurpose) { this.tripPurpose = tripPurpose; }
+    public BigDecimal getOdometerStart() { return odometerStart; }
+    public void setOdometerStart(BigDecimal odometerStart) { this.odometerStart = odometerStart; }
+    public BigDecimal getOdometerEnd() { return odometerEnd; }
+    public void setOdometerEnd(BigDecimal odometerEnd) { this.odometerEnd = odometerEnd; }
+    public String getPolicyExceptionReason() { return policyExceptionReason; }
+    public void setPolicyExceptionReason(String policyExceptionReason) { this.policyExceptionReason = policyExceptionReason; }
     public Instant getDeletedAt() { return deletedAt; }
     public void setDeletedAt(Instant deletedAt) { this.deletedAt = deletedAt; }
 }

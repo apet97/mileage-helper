@@ -15,6 +15,9 @@ public record ClockifyExpenseSnapshot(
         Boolean billable,
         String fileId,
         BigDecimal total,
-        Boolean locked
+        Boolean locked,
+        Boolean finalized,
+        String approvalStatus,
+        Boolean invoiced
 ) {
 }

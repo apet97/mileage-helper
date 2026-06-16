@@ -67,6 +67,8 @@ Two refinements landed after 2026-05-30 — expect them in the live note:
 
 That canonical line proves `MileageConversionService.convertIfEligible → gateway.updateFlatExpense` ran end-to-end against the real Clockify backend.
 
+The conversion row should also reflect the current dated rate source (`WORKSPACE_DEFAULT` or an applicable rate policy) and leave manual-only trip evidence fields blank. Do not expect native/mobile webhook conversion to infer origin/destination, odometer readings, or policy exception text from Clockify.
+
 ## Clean up
 
 `DELETE $BASE/workspaces/{wsId}/expenses/{expId}`. Confirm post-delete `GET` returns non-success (4xx). Re-probe metrics and confirm `DELETED` ticked by +1.

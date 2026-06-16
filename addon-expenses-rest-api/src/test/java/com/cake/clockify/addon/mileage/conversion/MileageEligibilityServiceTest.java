@@ -3,6 +3,7 @@ package com.cake.clockify.addon.mileage.conversion;
 import com.cake.clockify.addon.mileage.audit.MileageSkipReason;
 import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseSnapshot;
 import com.cake.clockify.addon.mileage.settings.MileageSettingsValidation;
+import com.cake.clockify.addon.mileage.workflow.MileageWorkflowPreflightService;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -12,7 +13,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class MileageEligibilityServiceTest {
-    private final MileageEligibilityService service = new MileageEligibilityService();
+    private final MileageEligibilityService service = new MileageEligibilityService(new MileageWorkflowPreflightService());
 
     @Test
     void disabledSettingsAreSkipped() {
@@ -71,6 +72,53 @@ class MileageEligibilityServiceTest {
     }
 
     @Test
+    void finalizedExpenseIsSkippedWhenSnapshotProvidesFinalizedFlag() {
+        EligibilityDecision decision = service.evaluate(
+                settings(true, true, false),
+                workflowExpense("cat-input", "37.4", false, true, null, null, ""),
+                false);
+
+        assertThat(decision.skipReason()).isEqualTo(MileageSkipReason.FINALIZED_OR_LOCKED);
+        assertThat(decision.message()).contains("finalized");
+    }
+
+    @Test
+    void submittedApprovalStateWarnsButDoesNotSkipBecauseApprovalMutationIsOutOfScope() {
+        EligibilityDecision decision = service.evaluate(
+                settings(true, true, false),
+                workflowExpense("cat-input", "37.4", false, false, "SUBMITTED", null, ""),
+                false);
+
+        assertThat(decision.eligible()).isTrue();
+        assertThat(decision.skipReason()).isNull();
+        assertThat(decision.warnings()).contains("Expense is submitted for approval");
+    }
+
+    @Test
+    void invoicedStateWarnsButDoesNotSkipBecauseInvoiceMutationIsOutOfScope() {
+        EligibilityDecision decision = service.evaluate(
+                settings(true, true, false),
+                workflowExpense("cat-input", "37.4", false, false, null, true, ""),
+                false);
+
+        assertThat(decision.eligible()).isTrue();
+        assertThat(decision.skipReason()).isNull();
+        assertThat(decision.warnings()).contains("Expense is invoiced");
+    }
+
+    @Test
+    void unknownWorkflowStateDoesNotCrashOrSkip() {
+        EligibilityDecision decision = service.evaluate(
+                settings(true, true, false),
+                workflowExpense("cat-input", "37.4", false, false, "CLOCKIFY_NEW_STATE", null, ""),
+                false);
+
+        assertThat(decision.eligible()).isTrue();
+        assertThat(decision.skipReason()).isNull();
+        assertThat(decision.warnings()).contains("Workflow state is unknown");
+    }
+
+    @Test
     void dryRunReturnsDryRunDecision() {
         EligibilityDecision decision = service.evaluate(settings(true, true, true), expense("cat-input", "37.4", false, ""), false);
         assertThat(decision.dryRun()).isTrue();
@@ -92,7 +140,22 @@ class MileageEligibilityServiceTest {
     private static ClockifyExpenseSnapshot expense(String categoryId, String quantity, boolean locked, String notes) {
         return new ClockifyExpenseSnapshot("exp-1", "ws-1", "user-1", "2026-05-24T12:00:00Z",
                 "project-1", "task-1", categoryId, notes,
-                quantity == null ? null : new BigDecimal(quantity), true, "file-1", new BigDecimal("2450"), locked);
+                quantity == null ? null : new BigDecimal(quantity), true, "file-1", new BigDecimal("2450"),
+                locked, false, null, false);
+    }
+
+    private static ClockifyExpenseSnapshot workflowExpense(
+            String categoryId,
+            String quantity,
+            boolean locked,
+            boolean finalized,
+            String approvalStatus,
+            Boolean invoiced,
+            String notes) {
+        return new ClockifyExpenseSnapshot("exp-1", "ws-1", "user-1", "2026-05-24T12:00:00Z",
+                "project-1", "task-1", categoryId, notes,
+                quantity == null ? null : new BigDecimal(quantity), true, "file-1", new BigDecimal("2450"),
+                locked, finalized, approvalStatus, invoiced);
     }
 
     private static BigDecimal rate() {

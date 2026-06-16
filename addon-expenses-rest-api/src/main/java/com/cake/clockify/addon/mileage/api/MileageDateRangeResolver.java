@@ -39,8 +39,12 @@ public class MileageDateRangeResolver {
         return validateOrder(parsedFrom, parsedTo);
     }
 
+    public LocalDate today(NormalizedClaims claims) {
+        return LocalDate.now(clock.withZone(zoneId(claims.userTimeZone())));
+    }
+
     private MileageDateRange defaultDateRange(NormalizedClaims claims) {
-        LocalDate today = LocalDate.now(clock.withZone(zoneId(claims.userTimeZone())));
+        LocalDate today = today(claims);
         int daysSinceSunday = today.getDayOfWeek().getValue() % 7;
         LocalDate from = today.minusDays(daysSinceSunday);
         return new MileageDateRange(from, from.plusDays(6));

@@ -18,5 +18,6 @@ public record ReportRow(
         boolean mileage,
         BigDecimal miles,
         BigDecimal rate,
-        BigDecimal amount) {
+        BigDecimal amount,
+        String currency) {
 }

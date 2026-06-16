@@ -18,6 +18,8 @@ import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseGateway;
 import com.cake.clockify.addon.mileage.clockify.CreateFlatExpenseCommand;
 import com.cake.clockify.addon.mileage.clockify.UpdateFlatExpenseCommand;
 import com.cake.clockify.addon.mileage.note.MileageNoteService;
+import com.cake.clockify.addon.mileage.policy.MileageRatePolicyService;
+import com.cake.clockify.addon.mileage.policy.MileageRateResolution;
 import com.cake.clockify.addon.mileage.settings.MileageSettingsService;
 import com.cake.clockify.addon.mileage.settings.MileageSettingsValidation;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -40,6 +42,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -53,9 +56,13 @@ public class MileageApiController {
     private static final Set<String> ALLOWED_RECEIPT_TYPES = Set.of(
             "image/png", "image/jpeg", "image/gif", "image/webp", "image/heic", "application/pdf");
     private static final Set<String> MULTIPART_FIELDS = Set.of(
-            "date", "projectId", "miles", "rate", "billable", "notes");
+            "date", "projectId", "miles", "rate", "billable", "notes",
+            "tripOrigin", "tripDestination", "tripPurpose",
+            "odometerStart", "odometerEnd", "policyExceptionReason");
 
     private final MileageSettingsService settingsService;
+    private final MileageRatePolicyService ratePolicyService;
+    private final MileageDateRangeResolver dateRangeResolver;
     private final MileageCalculator calculator;
     private final ClockifyExpenseGateway gateway;
     private final MileageConversionRepository conversionRepository;
@@ -64,12 +71,16 @@ public class MileageApiController {
 
     public MileageApiController(
             MileageSettingsService settingsService,
+            MileageRatePolicyService ratePolicyService,
+            MileageDateRangeResolver dateRangeResolver,
             MileageCalculator calculator,
             ClockifyExpenseGateway gateway,
             MileageConversionRepository conversionRepository,
             MileageConversionReservationRepository reservationRepository,
             MileageNoteService noteService) {
         this.settingsService = settingsService;
+        this.ratePolicyService = ratePolicyService;
+        this.dateRangeResolver = dateRangeResolver;
         this.calculator = calculator;
         this.gateway = gateway;
         this.conversionRepository = conversionRepository;
@@ -82,20 +93,30 @@ public class MileageApiController {
             HttpServletRequest request,
             @Valid @RequestBody MileagePreviewRequest body) {
         NormalizedClaims claims = RequestAttributes.requireClaims(request);
+        LocalDate expenseDate = parseMileageDate(body.date());
         MileageSettingsValidation settings = requireAddonSettings(claims.workspaceId());
-        MileageCalculation calculation = calculation(body.miles(), body.rate(), settings);
+        RateChoice rateChoice = calculation(claims.workspaceId(), expenseDate, body.miles(), body.rate(), settings);
+        MileageCalculation calculation = rateChoice.calculation();
+        MileageRateResolution resolution = rateChoice.resolution();
         return ResponseEntity.ok(new MileagePreviewResponse(
                 calculation.milesText(),
                 calculation.rateText(),
                 calculation.calculatedAmountText(),
-                calculation.roundedAmountText()));
+                calculation.roundedAmountText(),
+                resolution.source(),
+                resolution.policyId(),
+                resolution.policyName(),
+                resolution.warnings()));
     }
 
     @GetMapping("/create-context")
     public ResponseEntity<MileageCreateContextResponse> createContext(HttpServletRequest request) {
         NormalizedClaims claims = RequestAttributes.requireClaims(request);
         MileageSettingsValidation settings = settingsService.validateForAddonCreate(claims.workspaceId());
-        return ResponseEntity.ok(MileageCreateContextResponse.from(settings));
+        MileageRateResolution resolution = settings.complete()
+                ? ratePolicyService.resolveRate(claims.workspaceId(), dateRangeResolver.today(claims), settings)
+                : null;
+        return ResponseEntity.ok(MileageCreateContextResponse.from(settings, resolution));
     }
 
     @PostMapping(value = "/expenses", consumes = MediaType.APPLICATION_JSON_VALUE)
@@ -124,9 +145,12 @@ public class MileageApiController {
             MileageSettingsValidation settings,
             CreateMileageExpenseRequest request,
             MultipartFile file) throws IOException, InterruptedException {
-        MileageCalculation calculation = calculation(request.miles(), request.rate(), settings);
         UUID conversionId = UUID.randomUUID();
         LocalDate expenseDate = parseExpenseDate(request.date());
+        TripEvidence tripEvidence = validateTripEvidence(request);
+        RateChoice rateChoice = calculation(workspaceId, expenseDate, request.miles(), request.rate(), settings);
+        MileageCalculation calculation = rateChoice.calculation();
+        MileageRateResolution resolution = rateChoice.resolution();
         String note = noteService.buildConvertedNote(
                 request.notes(),
                 calculation,
@@ -184,6 +208,8 @@ public class MileageApiController {
                 expenseDate,
                 settings,
                 calculation,
+                resolution,
+                tripEvidence,
                 persistedMarker);
         conversionRepository.saveAndFlush(conversion);
         if (!Objects.equals(persistedNote, note)) {
@@ -205,7 +231,10 @@ public class MileageApiController {
                 calculation.milesText(),
                 calculation.rateText(),
                 calculation.calculatedAmountText(),
-                calculation.roundedAmountText());
+                calculation.roundedAmountText(),
+                resolution.source(),
+                resolution.policyId(),
+                resolution.policyName());
     }
 
     private JsonNode createClockifyExpense(String workspaceId, CreateFlatExpenseCommand command, MultipartFile file)
@@ -239,11 +268,37 @@ public class MileageApiController {
         }
     }
 
-    private MileageCalculation calculation(String miles, String requestedRate, MileageSettingsValidation settings) {
-        String rate = settings.allowUserRateOverride() && requestedRate != null && !requestedRate.isBlank()
-                ? requestedRate
-                : settings.rate().toPlainString();
-        return calculator.calculate(miles, rate, settings.roundingMode());
+    private static LocalDate parseMileageDate(String raw) {
+        String cleaned = blankToNull(raw);
+        if (cleaned == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "date must use YYYY-MM-DD");
+        }
+        try {
+            return LocalDate.parse(cleaned);
+        } catch (DateTimeParseException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "date must use YYYY-MM-DD", e);
+        }
+    }
+
+    private RateChoice calculation(
+            String workspaceId,
+            LocalDate expenseDate,
+            String miles,
+            String requestedRate,
+            MileageSettingsValidation settings) {
+        if (settings.allowUserRateOverride() && requestedRate != null && !requestedRate.isBlank()) {
+            MileageCalculation calculation = calculator.calculate(miles, requestedRate, settings.roundingMode());
+            return new RateChoice(MileageRateResolution.userOverride(calculation.rate()), calculation);
+        }
+        MileageRateResolution resolution = ratePolicyService.resolveRate(workspaceId, expenseDate, settings);
+        if (resolution.rate() == null) {
+            List<String> warnings = resolution.warnings() == null ? List.of("rate is required") : resolution.warnings();
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Mileage settings are incomplete: " + String.join(", ", warnings));
+        }
+        return new RateChoice(
+                resolution,
+                calculator.calculate(miles, resolution.rate().toPlainString(), settings.roundingMode()));
     }
 
     private static BigDecimal clockifyExpenseAmount(
@@ -272,7 +327,13 @@ public class MileageApiController {
                 safe.get("miles"),
                 safe.get("rate"),
                 parseBoolean(safe.get("billable")),
-                safe.get("notes"));
+                safe.get("notes"),
+                safe.get("tripOrigin"),
+                safe.get("tripDestination"),
+                safe.get("tripPurpose"),
+                safe.get("odometerStart"),
+                safe.get("odometerEnd"),
+                safe.get("policyExceptionReason"));
     }
 
     private static void applyAddonFormConversion(
@@ -284,6 +345,8 @@ public class MileageApiController {
             LocalDate expenseDate,
             MileageSettingsValidation settings,
             MileageCalculation calculation,
+            MileageRateResolution resolution,
+            TripEvidence tripEvidence,
             String marker) {
         conversion.setWorkspaceId(workspaceId);
         conversion.setExpenseId(expenseId);
@@ -297,12 +360,74 @@ public class MileageApiController {
         conversion.setExpenseDate(expenseDate);
         conversion.setMiles(calculation.miles());
         conversion.setRate(calculation.rate());
+        conversion.setRateSource(resolution.source());
+        conversion.setRatePolicyId(resolution.policyId());
+        conversion.setRatePolicyName(resolution.policyName());
         conversion.setCalculatedAmount(calculation.calculatedAmount());
         conversion.setRoundedAmount(calculation.roundedAmount());
         conversion.setRoundingMode(calculation.roundingMode().name());
+        conversion.setTripOrigin(tripEvidence.tripOrigin());
+        conversion.setTripDestination(tripEvidence.tripDestination());
+        conversion.setTripPurpose(tripEvidence.tripPurpose());
+        conversion.setOdometerStart(tripEvidence.odometerStart());
+        conversion.setOdometerEnd(tripEvidence.odometerEnd());
+        conversion.setPolicyExceptionReason(tripEvidence.policyExceptionReason());
         conversion.setStatus(MileageConversionStatus.CONVERTED);
         conversion.setNoteMarker(marker);
         conversion.setConvertedAt(Instant.now());
+    }
+
+    private static TripEvidence validateTripEvidence(CreateMileageExpenseRequest request) {
+        BigDecimal odometerStart = parseOptionalOdometer("odometerStart", request.odometerStart());
+        BigDecimal odometerEnd = parseOptionalOdometer("odometerEnd", request.odometerEnd());
+        if (odometerStart != null && odometerEnd != null && odometerEnd.compareTo(odometerStart) < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "odometerEnd must be greater than or equal to odometerStart");
+        }
+        return new TripEvidence(
+                trimEvidence("tripOrigin", request.tripOrigin()),
+                trimEvidence("tripDestination", request.tripDestination()),
+                trimEvidence("tripPurpose", request.tripPurpose()),
+                odometerStart,
+                odometerEnd,
+                trimEvidence("policyExceptionReason", request.policyExceptionReason()));
+    }
+
+    private static String trimEvidence(String field, String value) {
+        String cleaned = blankToNull(value);
+        if (cleaned == null) {
+            return null;
+        }
+        if (cleaned.length() > 256) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, field + " must be 256 characters or fewer");
+        }
+        return cleaned;
+    }
+
+    private static BigDecimal parseOptionalOdometer(String field, String raw) {
+        String cleaned = blankToNull(raw);
+        if (cleaned == null) {
+            return null;
+        }
+        if (cleaned.length() > com.cake.clockify.addon.mileage.calculation.MileageDecimalPolicy.MAX_DECIMAL_TEXT_LENGTH) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, field + " must be 32 characters or fewer");
+        }
+        if (cleaned.contains("e") || cleaned.contains("E")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, field + " must be a plain decimal number");
+        }
+        try {
+            BigDecimal value = new BigDecimal(cleaned);
+            if (value.compareTo(BigDecimal.ZERO) <= 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, field + " must be greater than zero");
+            }
+            int scale = Math.max(value.stripTrailingZeros().scale(), 0);
+            if (scale > 6) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, field + " supports at most 6 decimal places");
+            }
+            return value;
+        } catch (NumberFormatException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, field + " must be a decimal number", e);
+        }
     }
 
     private static void validateReceipt(MultipartFile file) {
@@ -354,5 +479,21 @@ public class MileageApiController {
     private static String safeFileName(String fileName) {
         String value = blankToNull(fileName);
         return value == null ? "receipt" : value;
+    }
+
+    private record RateChoice(
+            MileageRateResolution resolution,
+            MileageCalculation calculation
+    ) {
+    }
+
+    private record TripEvidence(
+            String tripOrigin,
+            String tripDestination,
+            String tripPurpose,
+            BigDecimal odometerStart,
+            BigDecimal odometerEnd,
+            String policyExceptionReason
+    ) {
     }
 }

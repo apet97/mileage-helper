@@ -22,7 +22,7 @@
   function mileagePayload() {
     const createContext = app.state.createContext;
     const rateAllowed = Boolean(createContext.allowUserRateOverride);
-    return {
+    const payload = {
       date: app.formValue("field-date"),
       projectId: resolveProjectId(app.formValue("field-project")),
       miles: app.formValue("field-miles"),
@@ -30,6 +30,19 @@
       billable: app.element("field-billable").checked,
       notes: app.formValue("field-notes") || null
     };
+    addOptionalField(payload, "tripOrigin", app.formValue("field-trip-origin"));
+    addOptionalField(payload, "tripDestination", app.formValue("field-trip-destination"));
+    addOptionalField(payload, "tripPurpose", app.formValue("field-trip-purpose"));
+    addOptionalField(payload, "odometerStart", app.formValue("field-odometer-start"));
+    addOptionalField(payload, "odometerEnd", app.formValue("field-odometer-end"));
+    addOptionalField(payload, "policyExceptionReason", app.formValue("field-policy-exception-reason"));
+    return payload;
+  }
+
+  function addOptionalField(payload, key, value) {
+    if (value !== "") {
+      payload[key] = value;
+    }
   }
 
   function applyCreateContext(data) {
@@ -62,6 +75,7 @@
     if (submit) {
       submit.disabled = !createContext.complete;
     }
+    updateRateSourceHint(createContext);
   }
 
   function loadCreateContext() {
@@ -84,8 +98,9 @@
     app.apiFetch("/api/mileage/preview", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ miles: payload.miles, rate: payload.rate })
+      body: JSON.stringify({ date: payload.date, miles: payload.miles, rate: payload.rate })
     }).then(result => {
+      updateRateSourceHint(result);
       const target = app.element("preview-result");
       const unit = app.state.createContext.unit || "mile";
       target.replaceChildren();
@@ -97,6 +112,52 @@
       secondary.textContent = "Expense amount: " + result.roundedAmount;
       target.append(primary, secondary);
     }).catch(error => app.toast(error.message, "error")).finally(() => app.setBusy(button, false));
+  }
+
+  function refreshEffectiveRate() {
+    const context = app.state.createContext || {};
+    if (!context.complete) {
+      return Promise.resolve();
+    }
+    const payload = mileagePayload();
+    if (!payload.date) {
+      return Promise.resolve();
+    }
+    if (context.allowUserRateOverride && payload.rate) {
+      updateRateSourceHint({ rateSource: "USER_OVERRIDE" });
+      return Promise.resolve();
+    }
+    return app.apiFetch("/api/mileage/preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date: payload.date, miles: payload.miles || "1", rate: null })
+    }).then(updateRateSourceHint).catch(() => {});
+  }
+
+  function updateRateSourceHint(data) {
+    const target = app.element("rate-source-hint");
+    if (!target) {
+      return;
+    }
+    const text = rateSourceText(data || {});
+    target.textContent = text;
+    target.hidden = !text;
+  }
+
+  function rateSourceText(data) {
+    if (data.rateSource === "POLICY" && data.ratePolicyName) {
+      return "Policy: " + data.ratePolicyName;
+    }
+    if (data.rateSource === "POLICY") {
+      return "Policy rate";
+    }
+    if (data.rateSource === "USER_OVERRIDE") {
+      return "Custom rate";
+    }
+    if (data.rateSource === "SETTINGS_FALLBACK") {
+      return "Workspace rate";
+    }
+    return "";
   }
 
   function setCreateBusy(busy) {
@@ -179,6 +240,13 @@
     app.element("field-rate").value = "";
     app.element("field-notes").value = "";
     app.element("field-receipt").value = "";
+    ["field-trip-origin", "field-trip-destination", "field-trip-purpose",
+      "field-odometer-start", "field-odometer-end", "field-policy-exception-reason"].forEach(id => {
+      const field = app.element(id);
+      if (field) {
+        field.value = "";
+      }
+    });
     const target = app.element("preview-result");
     if (target) {
       target.replaceChildren();
@@ -226,6 +294,8 @@
     applyCreateContext,
     loadCreateContext,
     previewMileage,
+    refreshEffectiveRate,
+    updateRateSourceHint,
     createMileage,
     loadProjects,
     resolveProjectId

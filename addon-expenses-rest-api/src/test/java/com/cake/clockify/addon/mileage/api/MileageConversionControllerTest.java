@@ -6,6 +6,7 @@ import com.cake.clockify.addon.mileage.audit.MileageConversion;
 import com.cake.clockify.addon.mileage.audit.MileageConversionRepository;
 import com.cake.clockify.addon.mileage.audit.MileageConversionSource;
 import com.cake.clockify.addon.mileage.audit.MileageConversionStatus;
+import com.cake.clockify.addon.mileage.audit.MileageSkipReason;
 import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseGateway;
 import com.cake.clockify.addon.mileage.clockify.ClockifyProjectOption;
 import com.cake.clockify.addon.mileage.clockify.ClockifyUserOption;
@@ -309,6 +310,20 @@ class MileageConversionControllerTest {
     }
 
     @Test
+    void conversionDetailIncludesPlainWorkflowBlockerLabels() throws Exception {
+        MileageConversion conversion = conversion("ws-admin");
+        conversion.setStatus(MileageConversionStatus.SKIPPED);
+        conversion.setSkipReason(MileageSkipReason.FINALIZED_OR_LOCKED);
+        when(conversionRepository.findByIdAndWorkspaceId(CONVERSION_ID, "ws-admin"))
+                .thenReturn(Optional.of(conversion));
+
+        mockMvc.perform(get("/api/mileage/conversions/{id}", CONVERSION_ID)
+                        .requestAttr(RequestAttributes.NORMALIZED_CLAIMS, claims("ADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.workflowBlockers[0]").value("Expense is locked or finalized"));
+    }
+
+    @Test
     void adminCanReadConversionDetailWithoutUserId() throws Exception {
         when(conversionRepository.findByIdAndWorkspaceId(CONVERSION_ID, "ws-admin"))
                 .thenReturn(Optional.of(conversionWithoutUser("ws-admin")));
@@ -347,7 +362,7 @@ class MileageConversionControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(content().contentType("text/csv;charset=UTF-8"))
                 .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION, containsString("mileage-mine.csv")))
-                .andExpect(content().string(containsString("expense_id,source,source_label,status,user_id,user_name,project_id,project_name,miles,rate,calculated_amount,expense_amount,rounding_mode,expense_date,updated_at,converted_at,note_marker")))
+                .andExpect(content().string(containsString("expense_id,source,source_label,status,user_id,user_name,project_id,project_name,miles,rate,rate_source,rate_policy_id,rate_policy_name,calculated_amount,expense_amount,currency,rounding_mode,expense_date,updated_at,converted_at,trip_origin,trip_destination,trip_purpose,odometer_start,odometer_end,policy_exception_reason,note_marker")))
                 .andExpect(content().string(containsString("2026-05-24")))
                 .andExpect(content().string(containsString("\"project, \"\"north\"\"")))
                 .andExpect(content().string(containsString("\"[MileageAddon:converted:v1 id=quoted \"\"marker\"\"]\"")));

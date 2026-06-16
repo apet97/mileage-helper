@@ -14,6 +14,8 @@ import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseSnapshot;
 import com.cake.clockify.addon.mileage.clockify.UpdateFlatExpenseCommand;
 import com.cake.clockify.addon.mileage.metrics.MileageConversionMetrics;
 import com.cake.clockify.addon.mileage.note.MileageNoteService;
+import com.cake.clockify.addon.mileage.policy.MileageRatePolicyService;
+import com.cake.clockify.addon.mileage.policy.MileageRateResolution;
 import com.cake.clockify.addon.mileage.settings.MileageSettingsService;
 import com.cake.clockify.addon.mileage.settings.MileageSettingsValidation;
 import com.cake.clockify.client.ClockifyApiException;
@@ -35,6 +37,7 @@ import java.util.UUID;
 @Service
 public class MileageConversionService {
     private final MileageSettingsService settingsService;
+    private final MileageRatePolicyService ratePolicyService;
     private final ClockifyExpenseGateway gateway;
     private final MileageConversionRepository conversionRepository;
     private final MileageConversionReservationRepository reservationRepository;
@@ -47,6 +50,7 @@ public class MileageConversionService {
     @Autowired
     public MileageConversionService(
             MileageSettingsService settingsService,
+            MileageRatePolicyService ratePolicyService,
             ClockifyExpenseGateway gateway,
             MileageConversionRepository conversionRepository,
             MileageConversionReservationRepository reservationRepository,
@@ -56,6 +60,7 @@ public class MileageConversionService {
             MileageConversionMetrics metrics,
             Clock clock) {
         this.settingsService = settingsService;
+        this.ratePolicyService = ratePolicyService;
         this.gateway = gateway;
         this.conversionRepository = conversionRepository;
         this.reservationRepository = reservationRepository;
@@ -105,6 +110,8 @@ public class MileageConversionService {
             }
             ClockifyExpenseSnapshot expense = gateway.getExpense(claims.workspaceId(), cleanedExpenseId);
             applySnapshot(conversion, expense);
+            MileageRateResolution rateResolution =
+                    ratePolicyService.resolveRate(claims.workspaceId(), conversion.getExpenseDate(), settings);
 
             if (source == MileageConversionSource.WEBHOOK_RESTORED
                     && (wasSuccessfullyConverted || noteService.hasMileageMarker(expense.notes()))) {
@@ -117,9 +124,8 @@ public class MileageConversionService {
 
             EligibilityDecision decision = eligibilityService.evaluate(settings, expense, wasSuccessfullyConverted);
             if (decision.dryRun()) {
-                MileageCalculation calculation = calculator.calculate(expense.quantity().toPlainString(),
-                        settings.rate().toPlainString(), settings.roundingMode());
-                applyCalculation(conversion, settings, calculation, null);
+                MileageCalculation calculation = calculate(expense.quantity().toPlainString(), settings, rateResolution);
+                applyCalculation(conversion, settings, calculation, rateResolution, null);
                 conversion.setStatus(MileageConversionStatus.DRY_RUN);
                 conversion.setSkipReason(MileageSkipReason.DRY_RUN);
                 clearFailure(conversion);
@@ -134,8 +140,7 @@ public class MileageConversionService {
                 return recordOutcome(result(conversion, decision.message()));
             }
 
-            MileageCalculation calculation = calculator.calculate(expense.quantity().toPlainString(),
-                    settings.rate().toPlainString(), settings.roundingMode());
+            MileageCalculation calculation = calculate(expense.quantity().toPlainString(), settings, rateResolution);
             String marker = noteService.marker(conversion.getId());
             String note = noteService.buildConvertedNote(
                     expense.notes(),
@@ -144,7 +149,7 @@ public class MileageConversionService {
                     conversion.getId(),
                     settings.noteTemplate(),
                     clockifyCategoryCharge(expense));
-            applyCalculation(conversion, settings, calculation, marker);
+            applyCalculation(conversion, settings, calculation, rateResolution, marker);
             conversion.setStatus(MileageConversionStatus.CONVERTING);
             conversionRepository.saveAndFlush(conversion);
 
@@ -273,10 +278,14 @@ public class MileageConversionService {
             MileageConversion conversion,
             MileageSettingsValidation settings,
             MileageCalculation calculation,
+            MileageRateResolution resolution,
             String marker) {
         conversion.setTargetCategoryId(settings.outputCategoryId());
         conversion.setMiles(calculation.miles());
         conversion.setRate(calculation.rate());
+        conversion.setRateSource(resolution.source());
+        conversion.setRatePolicyId(resolution.policyId());
+        conversion.setRatePolicyName(resolution.policyName());
         conversion.setCalculatedAmount(calculation.calculatedAmount());
         conversion.setRoundedAmount(calculation.roundedAmount());
         conversion.setRoundingMode(calculation.roundingMode().name());
@@ -320,6 +329,14 @@ public class MileageConversionService {
     private static BigDecimal clockifyCategoryCharge(ClockifyExpenseSnapshot expense) {
         BigDecimal total = expense.total();
         return total == null ? null : total.movePointLeft(2);
+    }
+
+    private MileageCalculation calculate(
+            String miles,
+            MileageSettingsValidation settings,
+            MileageRateResolution rateResolution) {
+        BigDecimal rate = rateResolution.rate() == null ? settings.rate() : rateResolution.rate();
+        return calculator.calculate(miles, rate.toPlainString(), settings.roundingMode());
     }
 
     private static String blankToNull(String value) {

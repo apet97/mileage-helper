@@ -14,6 +14,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -37,6 +38,9 @@ class MileageConversionCsvExporterTest {
         assertThat(csv).startsWith(MileageConversionCsvExporter.CSV_HEADER + "\n");
         assertThat(csv).contains("\"'=HYPERLINK(\"\"https://evil.example\"\",\"\"x\"\")\"");
         assertThat(csv).contains("\"project, \"\"north\"\"\",\"North, \"\"Route\"\"\"");
+        assertThat(csv).contains(",0.655,POLICY,00000000-0000-0000-0000-000000000706,2026 mileage rate,24.497,");
+        assertThat(csv).contains("24.497,24.50,,HALF_UP");
+        assertThat(csv).contains("HQ,Client site,Install support,1200,1225,Storm detour");
         assertThat(csv).contains("\"[MileageAddon:converted:v1 id=quoted \"\"marker\"\"]\"");
     }
 
@@ -92,12 +96,21 @@ class MileageConversionCsvExporterTest {
         conversion.setProjectId("project-1");
         conversion.setMiles(new BigDecimal("37.4000"));
         conversion.setRate(new BigDecimal("0.6550"));
+        conversion.setRateSource("POLICY");
+        conversion.setRatePolicyId(UUID.fromString("00000000-0000-0000-0000-000000000706"));
+        conversion.setRatePolicyName("2026 mileage rate");
         conversion.setCalculatedAmount(new BigDecimal("24.4970"));
         conversion.setRoundedAmount(new BigDecimal("24.50"));
         conversion.setRoundingMode("HALF_UP");
         conversion.setExpenseDate(LocalDate.parse("2026-05-24"));
         conversion.setUpdatedAt(Instant.parse("2026-05-24T10:01:00Z"));
         conversion.setConvertedAt(Instant.parse("2026-05-24T10:02:00Z"));
+        conversion.setTripOrigin("HQ");
+        conversion.setTripDestination("Client site");
+        conversion.setTripPurpose("Install support");
+        conversion.setOdometerStart(new BigDecimal("1200"));
+        conversion.setOdometerEnd(new BigDecimal("1225"));
+        conversion.setPolicyExceptionReason("Storm detour");
         conversion.setNoteMarker("[MileageAddon:converted:v1 id=1]");
         return conversion;
     }

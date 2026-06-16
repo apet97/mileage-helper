@@ -9,6 +9,7 @@ import com.cake.clockify.addon.mileage.audit.MileageConversionReservationReposit
 import com.cake.clockify.addon.mileage.audit.MileageConversionStatus;
 import com.cake.clockify.addon.mileage.audit.MileageSkipReason;
 import com.cake.clockify.addon.mileage.conversion.ConversionResult;
+import com.cake.clockify.addon.mileage.policy.MileageRatePolicyRepository;
 import com.cake.clockify.addon.mileage.settings.MileageSettingsRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -48,6 +49,7 @@ class MileageActuatorPrometheusTest {
     @MockBean MileageSettingsRepository mileageSettingsRepository;
     @MockBean MileageConversionRepository mileageConversionRepository;
     @MockBean MileageConversionReservationRepository mileageConversionReservationRepository;
+    @MockBean MileageRatePolicyRepository mileageRatePolicyRepository;
 
     @Autowired MockMvc mockMvc;
     @Autowired MileageConversionMetrics conversionMetrics;

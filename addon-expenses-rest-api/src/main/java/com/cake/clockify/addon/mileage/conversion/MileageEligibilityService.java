@@ -4,6 +4,8 @@ import com.cake.clockify.addon.mileage.audit.MileageSkipReason;
 import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseSnapshot;
 import com.cake.clockify.addon.mileage.note.MileageNoteService;
 import com.cake.clockify.addon.mileage.settings.MileageSettingsValidation;
+import com.cake.clockify.addon.mileage.workflow.MileageWorkflowPreflight;
+import com.cake.clockify.addon.mileage.workflow.MileageWorkflowPreflightService;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -11,10 +13,17 @@ import java.util.Objects;
 
 @Service
 public class MileageEligibilityService {
+    private final MileageWorkflowPreflightService preflightService;
+
+    public MileageEligibilityService(MileageWorkflowPreflightService preflightService) {
+        this.preflightService = preflightService;
+    }
+
     public EligibilityDecision evaluate(
             MileageSettingsValidation settings,
             ClockifyExpenseSnapshot expense,
             boolean successfulConversionExists) {
+        MileageWorkflowPreflight preflight = preflightService.evaluate(expense);
         if (!settings.enabled()) {
             return EligibilityDecision.skipped(MileageSkipReason.ADDON_DISABLED, "Mileage is disabled");
         }
@@ -43,13 +52,14 @@ public class MileageEligibilityService {
         if (expense.quantity().compareTo(BigDecimal.ZERO) <= 0) {
             return EligibilityDecision.skipped(MileageSkipReason.INVALID_QUANTITY, "Expense quantity must be greater than zero");
         }
-        if (Boolean.TRUE.equals(expense.locked())) {
-            return EligibilityDecision.skipped(MileageSkipReason.FINALIZED_OR_LOCKED, "Expense is locked or finalized");
+        if (preflight.blocked()) {
+            return EligibilityDecision.skipped(MileageSkipReason.FINALIZED_OR_LOCKED,
+                    String.join(", ", preflight.blockers()));
         }
         if (settings.dryRunMode()) {
             return EligibilityDecision.dryRunDecision();
         }
-        return EligibilityDecision.eligibleDecision();
+        return EligibilityDecision.eligibleDecision(preflight.warnings());
     }
 
     private static boolean hasText(String value) {

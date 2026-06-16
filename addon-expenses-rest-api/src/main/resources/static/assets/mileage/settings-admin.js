@@ -118,6 +118,7 @@
             : app.state.defaultMileageCategory ? "Default Mileage found" : "Needs configuration";
           applyRateDefaultHint();
           renderNotePreview();
+          return loadRatePolicies();
         });
       })
       .catch(error => app.toast(error.message, "error"));
@@ -259,6 +260,162 @@
       });
   }
 
+  function loadRatePolicies() {
+    const rows = app.element("rate-policy-rows");
+    const status = app.element("rate-policy-status");
+    const warnings = app.element("rate-policy-warnings");
+    if (!rows) {
+      return Promise.resolve();
+    }
+    rows.replaceChildren();
+    app.renderLoadingRow(rows, 7);
+    if (status) {
+      status.textContent = "Loading policies...";
+    }
+    if (warnings) {
+      warnings.replaceChildren();
+    }
+    return app.apiFetch("/api/mileage/rate-policies")
+      .then(data => {
+        const policies = data.policies || [];
+        rows.replaceChildren();
+        if (data.warning && warnings) {
+          const item = document.createElement("li");
+          item.textContent = data.warning;
+          warnings.appendChild(item);
+        }
+        if (!policies.length) {
+          app.renderEmptyRow(rows, 7, "No rate policies yet.", "");
+        } else {
+          policies.forEach(policy => appendRatePolicyRow(rows, policy));
+        }
+        if (status) {
+          status.textContent = policies.length + " policies";
+        }
+      })
+      .catch(error => {
+        app.renderErrorRow(rows, 7);
+        if (status) {
+          status.textContent = "Could not load policies";
+        }
+        app.toast(error.message, "error");
+      });
+  }
+
+  function appendRatePolicyRow(rows, policy) {
+    const row = rows.insertRow();
+    row.dataset.policyId = policy.id || "";
+    row.dataset.policy = JSON.stringify(policy);
+    app.appendTextCell(row, policy.name);
+    app.appendTextCell(row, policy.rate);
+    app.appendTextCell(row, app.formatExpenseDate(policy.effectiveFrom));
+    app.appendTextCell(row, policy.effectiveTo ? app.formatExpenseDate(policy.effectiveTo) : "Open");
+    app.appendTextCell(row, policy.active ? "Active" : "Inactive");
+    app.appendTextCell(row, app.formatDate(policy.updatedAt));
+    const actions = row.insertCell();
+    const edit = document.createElement("button");
+    edit.type = "button";
+    edit.textContent = "Edit";
+    edit.dataset.policyAction = "edit";
+    edit.dataset.policyId = policy.id || "";
+    const deactivate = document.createElement("button");
+    deactivate.type = "button";
+    deactivate.textContent = "Deactivate";
+    deactivate.dataset.policyAction = "deactivate";
+    deactivate.dataset.policyId = policy.id || "";
+    deactivate.disabled = !policy.active;
+    actions.append(edit, deactivate);
+    app.labelRow(row, ["Policy", "Rate", "From", "To", "Status", "Updated", "Actions"]);
+  }
+
+  function saveRatePolicy(event) {
+    event.preventDefault();
+    const button = app.element("btn-save-rate-policy");
+    app.setBusy(button, true, "Saving...");
+    const id = app.formValue("rate-policy-id");
+    const payload = {
+      name: app.formValue("rate-policy-name"),
+      rate: app.formValue("rate-policy-rate"),
+      effectiveFrom: app.formValue("rate-policy-effective-from") || null,
+      effectiveTo: app.formValue("rate-policy-effective-to") || null,
+      active: app.element("rate-policy-active") ? app.element("rate-policy-active").checked : true
+    };
+    const path = id ? "/api/mileage/rate-policies/" + encodeURIComponent(id) : "/api/mileage/rate-policies";
+    const method = id ? "PUT" : "POST";
+    return app.apiFetch(path, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    }).then(() => {
+      clearRatePolicyForm();
+      app.toast("Rate policy saved.");
+      return loadRatePolicies();
+    }).catch(error => app.toast(error.message, "error")).finally(() => app.setBusy(button, false));
+  }
+
+  function handleRatePolicyTableClick(event) {
+    const button = event.target.closest("[data-policy-action]");
+    if (!button) {
+      return;
+    }
+    const action = button.dataset.policyAction;
+    const id = button.dataset.policyId;
+    if (!id) {
+      return;
+    }
+    if (action === "edit") {
+      editRatePolicy(id);
+    } else if (action === "deactivate") {
+      deactivateRatePolicy(id, button);
+    }
+  }
+
+  function editRatePolicy(id) {
+    const row = Array.from(document.querySelectorAll("#rate-policy-rows tr"))
+      .find(candidate => candidate.dataset.policyId === id);
+    if (!row || !row.dataset.policy) {
+      return;
+    }
+    const policy = JSON.parse(row.dataset.policy);
+    app.element("rate-policy-id").value = policy.id || "";
+    app.element("rate-policy-name").value = policy.name || "";
+    app.element("rate-policy-rate").value = policy.rate || "";
+    app.element("rate-policy-effective-from").value = policy.effectiveFrom || "";
+    app.element("rate-policy-effective-to").value = policy.effectiveTo || "";
+    app.element("rate-policy-active").checked = Boolean(policy.active);
+    app.element("btn-save-rate-policy").textContent = "Save policy";
+    app.focusField("rate-policy-name");
+  }
+
+  function deactivateRatePolicy(id, button) {
+    app.setBusy(button, true, "Deactivating...");
+    return app.apiFetch("/api/mileage/rate-policies/" + encodeURIComponent(id), { method: "DELETE" })
+      .then(() => {
+        app.toast("Rate policy deactivated.");
+        return loadRatePolicies();
+      })
+      .catch(error => app.toast(error.message, "error"))
+      .finally(() => app.setBusy(button, false));
+  }
+
+  function clearRatePolicyForm() {
+    ["rate-policy-id", "rate-policy-name", "rate-policy-rate", "rate-policy-effective-from", "rate-policy-effective-to"]
+      .forEach(id => {
+        const node = app.element(id);
+        if (node) {
+          node.value = "";
+        }
+      });
+    const active = app.element("rate-policy-active");
+    if (active) {
+      active.checked = true;
+    }
+    const save = app.element("btn-save-rate-policy");
+    if (save) {
+      save.textContent = "Save policy";
+    }
+  }
+
   function loadDiagnostics() {
     const list = app.element("diagnostics-list");
     if (!list) {
@@ -348,6 +505,91 @@
     return Math.max(0, Math.round(value)) + "s";
   }
 
+  function loadInsights() {
+    const statusRows = app.element("insights-status-rows");
+    if (!statusRows) {
+      return Promise.resolve();
+    }
+    const query = app.rangeQuery("insights");
+    if (query === null) {
+      return Promise.resolve();
+    }
+    app.renderLoadingRow(statusRows, 2);
+    if (app.element("insights-skip-rows")) {
+      app.renderLoadingRow(app.element("insights-skip-rows"), 2);
+    }
+    if (app.element("insights-project-rows")) {
+      app.renderLoadingRow(app.element("insights-project-rows"), 4);
+    }
+    if (app.element("insights-user-rows")) {
+      app.renderLoadingRow(app.element("insights-user-rows"), 4);
+    }
+    return app.apiFetch("/api/mileage/insights?" + query.slice(1))
+      .then(renderInsights)
+      .catch(error => {
+        app.renderErrorRow(statusRows, 2);
+        app.toast(error.message, "error");
+      });
+  }
+
+  function renderInsights(data) {
+    setText("insights-total-miles", app.trimDecimal(data.totalConvertedMiles));
+    setText("insights-calculated-amount", data.totalCalculatedAmount || "0.00");
+    setText("insights-rounded-amount", data.totalRoundedAmount || "0.00");
+    setText("insights-failed-count", data.failedConversions || 0);
+    setText("insights-missing-purpose", data.rowsMissingTripPurpose || 0);
+    setText("insights-policy-exceptions", data.rowsWithPolicyExceptions || 0);
+    renderCountRows("insights-status-rows", data.statusCounts || [], "Status", "Rows", "No status rows.");
+    renderCountRows("insights-skip-rows", data.skipReasonCounts || [], "Reason", "Rows", "No skipped rows.");
+    renderTopRows("insights-project-rows", data.topProjects || [], "Project");
+    renderTopRows("insights-user-rows", data.topUsers || [], "User");
+  }
+
+  function setText(id, value) {
+    const node = app.element(id);
+    if (node) {
+      node.textContent = value == null || value === "" ? "0" : String(value);
+    }
+  }
+
+  function renderCountRows(id, items, keyLabel, countLabel, emptyText) {
+    const rows = app.element(id);
+    if (!rows) {
+      return;
+    }
+    rows.replaceChildren();
+    if (!items.length) {
+      app.renderEmptyRow(rows, 2, emptyText, "");
+      return;
+    }
+    items.forEach(item => {
+      const row = rows.insertRow();
+      app.appendTextCell(row, item.key);
+      app.appendTextCell(row, item.count);
+      app.labelRow(row, [keyLabel, countLabel]);
+    });
+  }
+
+  function renderTopRows(id, items, label) {
+    const rows = app.element(id);
+    if (!rows) {
+      return;
+    }
+    rows.replaceChildren();
+    if (!items.length) {
+      app.renderEmptyRow(rows, 4, "No converted rows.", "");
+      return;
+    }
+    items.forEach(item => {
+      const row = rows.insertRow();
+      app.appendTextCell(row, item.name || item.id);
+      app.appendTextCell(row, item.calculatedAmount);
+      app.appendTextCell(row, app.trimDecimal(item.miles));
+      app.appendTextCell(row, item.count);
+      app.labelRow(row, [label, "Amount", "Miles", "Rows"]);
+    });
+  }
+
   Object.assign(app, {
     loadCategories,
     appendOption,
@@ -359,6 +601,11 @@
     renderNotePreview,
     saveSettings,
     setupMileageCategory,
-    loadDiagnostics
+    loadRatePolicies,
+    saveRatePolicy,
+    handleRatePolicyTableClick,
+    clearRatePolicyForm,
+    loadDiagnostics,
+    loadInsights
   });
 })();

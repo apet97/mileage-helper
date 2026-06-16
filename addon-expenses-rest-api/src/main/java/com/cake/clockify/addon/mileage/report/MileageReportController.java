@@ -27,6 +27,7 @@ import java.io.IOException;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -68,7 +69,8 @@ public class MileageReportController {
             @RequestParam(required = false) String userId,
             @RequestParam(required = false) String scope,
             @RequestParam(required = false) String from,
-            @RequestParam(required = false) String to) {
+            @RequestParam(required = false) String to,
+            @RequestParam(required = false) String currency) {
         NormalizedClaims claims = RequestAttributes.requireClaims(request);
         String requesterId = claims.userId();
         if (requesterId == null || requesterId.isBlank()) {
@@ -88,23 +90,24 @@ public class MileageReportController {
                 ? nameResolver.allUserNamesById(workspaceId)
                 : Map.of();
         String label = includeUser ? "All users" : userLabel(userNames, targetUserId);
+        String currencyFilter = normalizeCurrency(currency);
 
         ClockifyExpenseListResult scan;
         try {
             scan = gateway.listExpensesForReport(workspaceId, targetUserId, range.from(), range.to());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return degraded(workspaceId, label, range, targetUserId, userNames, includeUser);
+            return degraded(workspaceId, label, range, targetUserId, userNames, includeUser, currencyFilter);
         } catch (IOException | ClockifyTransportException | ClockifyApiException e) {
-            return degraded(workspaceId, label, range, targetUserId, userNames, includeUser);
+            return degraded(workspaceId, label, range, targetUserId, userNames, includeUser, currencyFilter);
         }
         // Load CONVERTED conversions for exactly the scanned expense ids so every displayed expense
         // finds its override (no cap/sort mismatch between the conversion query and the merged display).
         Map<String, MileageConversion> conversions = conversionsByExpenseId(workspaceId, scan.items());
-        List<ReportRow> merged = ReportMerger.merge(scan.items(), conversions, userNames);
+        List<ReportRow> merged = filterByCurrency(ReportMerger.merge(scan.items(), conversions, userNames), currencyFilter);
         boolean rowCapHit = merged.size() > MAX_REPORT_ROWS;
         return ResponseEntity.ok(MileageReportRenderer.render(
-                label, range.from(), range.to(), cap(merged), includeUser, scan.truncated(), rowCapHit, false));
+                label, range.from(), range.to(), cap(merged), includeUser, scan.truncated(), rowCapHit, false, currencyFilter));
     }
 
     private Map<String, MileageConversion> conversionsByExpenseId(String workspaceId, List<ClockifyExpenseListItem> expenses) {
@@ -127,7 +130,7 @@ public class MileageReportController {
 
     private ResponseEntity<String> degraded(
             String workspaceId, String label, MileageDateRange range,
-            String targetUserId, Map<String, String> userNames, boolean includeUser) {
+            String targetUserId, Map<String, String> userNames, boolean includeUser, String currencyFilter) {
         Page<MileageConversion> page = queryService.convertedForReport(workspaceId, targetUserId, range, MAX_REPORT_ROWS);
         List<ReportRow> rows = ReportMerger.mileageOnly(
                 page.getContent(),
@@ -135,7 +138,7 @@ public class MileageReportController {
                 nameResolver.allProjectNamesById(workspaceId));
         boolean rowCapHit = page.getTotalElements() > MAX_REPORT_ROWS;
         return ResponseEntity.ok(MileageReportRenderer.render(
-                label, range.from(), range.to(), cap(rows), includeUser, false, rowCapHit, true));
+                label, range.from(), range.to(), cap(rows), includeUser, false, rowCapHit, true, currencyFilter));
     }
 
     private static List<ReportRow> cap(List<ReportRow> rows) {
@@ -149,5 +152,18 @@ public class MileageReportController {
 
     private static boolean hasText(String value) {
         return value != null && !value.isBlank();
+    }
+
+    private static List<ReportRow> filterByCurrency(List<ReportRow> rows, String currencyFilter) {
+        if (!hasText(currencyFilter)) {
+            return rows;
+        }
+        return rows.stream()
+                .filter(row -> !hasText(row.currency()) || currencyFilter.equalsIgnoreCase(row.currency()))
+                .toList();
+    }
+
+    private static String normalizeCurrency(String value) {
+        return hasText(value) ? value.trim().toUpperCase(Locale.ROOT) : null;
     }
 }

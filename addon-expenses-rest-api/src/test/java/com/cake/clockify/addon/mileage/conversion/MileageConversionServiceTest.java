@@ -13,8 +13,11 @@ import com.cake.clockify.addon.mileage.clockify.ClockifyExpenseSnapshot;
 import com.cake.clockify.addon.mileage.clockify.UpdateFlatExpenseCommand;
 import com.cake.clockify.addon.mileage.metrics.MileageConversionMetrics;
 import com.cake.clockify.addon.mileage.note.MileageNoteService;
+import com.cake.clockify.addon.mileage.policy.MileageRatePolicyService;
+import com.cake.clockify.addon.mileage.policy.MileageRateResolution;
 import com.cake.clockify.addon.mileage.settings.MileageSettingsService;
 import com.cake.clockify.addon.mileage.settings.MileageSettingsValidation;
+import com.cake.clockify.addon.mileage.workflow.MileageWorkflowPreflightService;
 import com.cake.clockify.client.ClockifyApiException;
 import com.cake.clockify.client.ClockifyTransportException;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -36,6 +39,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -45,6 +49,7 @@ import static org.mockito.Mockito.when;
 class MileageConversionServiceTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private MileageSettingsService settingsService;
+    private MileageRatePolicyService ratePolicyService;
     private ClockifyExpenseGateway gateway;
     private MileageConversionRepository conversionRepository;
     private MileageConversionReservationRepository reservationRepository;
@@ -54,20 +59,24 @@ class MileageConversionServiceTest {
     @BeforeEach
     void setUp() {
         settingsService = mock(MileageSettingsService.class);
+        ratePolicyService = mock(MileageRatePolicyService.class);
         gateway = mock(ClockifyExpenseGateway.class);
         conversionRepository = mock(MileageConversionRepository.class);
         reservationRepository = mock(MileageConversionReservationRepository.class);
         service = new MileageConversionService(
                 settingsService,
+                ratePolicyService,
                 gateway,
                 conversionRepository,
                 reservationRepository,
-                new MileageEligibilityService(),
+                new MileageEligibilityService(new MileageWorkflowPreflightService()),
                 new MileageCalculator(),
                 new MileageNoteService(),
                 new MileageConversionMetrics(new SimpleMeterRegistry()),
                 clock);
         when(conversionRepository.saveAndFlush(any(MileageConversion.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(ratePolicyService.resolveRate(anyString(), any(), any(MileageSettingsValidation.class)))
+                .thenAnswer(invocation -> settingsFallback(invocation.getArgument(2)));
     }
 
     @Test
@@ -86,6 +95,8 @@ class MileageConversionServiceTest {
         verify(conversionRepository, org.mockito.Mockito.atLeastOnce()).saveAndFlush(saved.capture());
         assertThat(saved.getAllValues().getLast().getStatus()).isEqualTo(MileageConversionStatus.CONVERTED);
         assertThat(saved.getAllValues().getLast().getExpenseDate()).isEqualTo(LocalDate.parse("2026-05-24"));
+        assertThat(saved.getAllValues().getLast().getTripPurpose()).isNull();
+        assertThat(saved.getAllValues().getLast().getOdometerStart()).isNull();
     }
 
     @Test
@@ -101,6 +112,47 @@ class MileageConversionServiceTest {
         ArgumentCaptor<MileageConversion> saved = ArgumentCaptor.forClass(MileageConversion.class);
         verify(conversionRepository, org.mockito.Mockito.atLeastOnce()).saveAndFlush(saved.capture());
         assertThat(saved.getAllValues().getLast().getMiles()).isEqualByComparingTo(new BigDecimal("37.4"));
+    }
+
+    @Test
+    void conversionUsesPolicyMatchingFetchedExpenseDate() throws Exception {
+        reservedConversion("exp-1", MileageConversionSource.WEBHOOK_CREATED, "EXPENSE_CREATED");
+        when(settingsService.validateForNativeConversion("ws-native")).thenReturn(settings(false));
+        UUID policyId = UUID.fromString("00000000-0000-0000-0000-000000000705");
+        when(ratePolicyService.resolveRate(eq("ws-native"), eq(LocalDate.parse("2026-05-24")), any(MileageSettingsValidation.class)))
+                .thenReturn(policyResolution(policyId, "2026 mileage rate", "0.700"));
+        when(gateway.getExpense("ws-native", "exp-1")).thenReturn(inputExpense("exp-1"));
+        when(gateway.updateFlatExpense(eq("ws-native"), eq("exp-1"), any(UpdateFlatExpenseCommand.class)))
+                .thenReturn(objectMapper.createObjectNode().put("id", "exp-1"));
+
+        service.convertIfEligible(claims(), "exp-1", MileageConversionSource.WEBHOOK_CREATED, "EXPENSE_CREATED");
+
+        ArgumentCaptor<MileageConversion> saved = ArgumentCaptor.forClass(MileageConversion.class);
+        verify(conversionRepository, org.mockito.Mockito.atLeastOnce()).saveAndFlush(saved.capture());
+        MileageConversion converted = saved.getAllValues().getLast();
+        assertThat(converted.getRate()).isEqualByComparingTo("0.700");
+        assertThat(converted.getCalculatedAmount()).isEqualByComparingTo("26.1800");
+        assertThat(converted.getRateSource()).isEqualTo("POLICY");
+        assertThat(converted.getRatePolicyId()).isEqualTo(policyId);
+        assertThat(converted.getRatePolicyName()).isEqualTo("2026 mileage rate");
+    }
+
+    @Test
+    void conversionFallsBackToSettingsWhenNoPolicyMatches() throws Exception {
+        reservedConversion("exp-1", MileageConversionSource.WEBHOOK_CREATED, "EXPENSE_CREATED");
+        when(settingsService.validateForNativeConversion("ws-native")).thenReturn(settings(false));
+        when(gateway.getExpense("ws-native", "exp-1")).thenReturn(inputExpense("exp-1"));
+        when(gateway.updateFlatExpense(eq("ws-native"), eq("exp-1"), any(UpdateFlatExpenseCommand.class)))
+                .thenReturn(objectMapper.createObjectNode().put("id", "exp-1"));
+
+        service.convertIfEligible(claims(), "exp-1", MileageConversionSource.WEBHOOK_CREATED, "EXPENSE_CREATED");
+
+        ArgumentCaptor<MileageConversion> saved = ArgumentCaptor.forClass(MileageConversion.class);
+        verify(conversionRepository, org.mockito.Mockito.atLeastOnce()).saveAndFlush(saved.capture());
+        MileageConversion converted = saved.getAllValues().getLast();
+        assertThat(converted.getRate()).isEqualByComparingTo("0.655");
+        assertThat(converted.getRateSource()).isEqualTo("SETTINGS_FALLBACK");
+        assertThat(converted.getRatePolicyId()).isNull();
     }
 
     @Test
@@ -150,7 +202,8 @@ class MileageConversionServiceTest {
                 "cat-mileage", "cat-mileage", RoundingMode.HALF_UP, true, true, false, false, false, null, List.of()));
         when(gateway.getExpense("ws-native", "exp-1")).thenReturn(new ClockifyExpenseSnapshot(
                 "exp-1", "ws-native", "user-1", "2026-05-24T12:00:00Z", "project-1", "task-1",
-                "cat-mileage", "Native mileage", new BigDecimal("1"), true, null, null, false));
+                "cat-mileage", "Native mileage", new BigDecimal("1"), true, null, null,
+                false, false, null, false));
         when(gateway.updateFlatExpense(eq("ws-native"), eq("exp-1"), any(UpdateFlatExpenseCommand.class)))
                 .thenReturn(objectMapper.createObjectNode().put("id", "exp-1"));
 
@@ -172,7 +225,8 @@ class MileageConversionServiceTest {
                 "cat-mileage", "cat-mileage", RoundingMode.HALF_UP, true, true, false, false, false, null, List.of()));
         when(gateway.getExpense("ws-native", "exp-1")).thenReturn(new ClockifyExpenseSnapshot(
                 "exp-1", "ws-native", "user-1", "2026-05-24T12:00:00Z", "project-1", "task-1",
-                "cat-mileage", "", new BigDecimal("12.4"), true, null, new BigDecimal("8990"), false));
+                "cat-mileage", "", new BigDecimal("12.4"), true, null, new BigDecimal("8990"),
+                false, false, null, false));
         when(gateway.updateFlatExpense(eq("ws-native"), eq("exp-1"), any(UpdateFlatExpenseCommand.class)))
                 .thenReturn(objectMapper.createObjectNode().put("id", "exp-1"));
 
@@ -393,7 +447,8 @@ class MileageConversionServiceTest {
         when(settingsService.validateForNativeConversion("ws-native")).thenReturn(settings(false));
         when(gateway.getExpense("ws-native", "exp-1")).thenReturn(new ClockifyExpenseSnapshot(
                 "exp-1", "other-ws", "user-1", "2026-05-24", "project-1", "task-1",
-                "cat-input", "Native mileage", new BigDecimal("37.4"), true, null, null, false));
+                "cat-input", "Native mileage", new BigDecimal("37.4"), true, null, null,
+                false, false, null, false));
 
         ConversionResult result = service.convertIfEligible(claims(), "exp-1", MileageConversionSource.WEBHOOK_CREATED, "EXPENSE_CREATED");
 
@@ -557,25 +612,52 @@ class MileageConversionServiceTest {
                 "cat-input", "cat-output", RoundingMode.HALF_UP, true, true, false, dryRun, false, null, List.of());
     }
 
+    private static MileageRateResolution settingsFallback(MileageSettingsValidation settings) {
+        return new MileageRateResolution(
+                settings.rate(),
+                settings.rate() == null ? null : settings.rate().stripTrailingZeros().toPlainString(),
+                MileageRateResolution.SOURCE_SETTINGS_FALLBACK,
+                null,
+                null,
+                null,
+                null,
+                List.of());
+    }
+
+    private static MileageRateResolution policyResolution(UUID id, String name, String rate) {
+        return new MileageRateResolution(
+                new BigDecimal(rate),
+                new BigDecimal(rate).stripTrailingZeros().toPlainString(),
+                MileageRateResolution.SOURCE_POLICY,
+                id,
+                name,
+                LocalDate.parse("2026-01-01"),
+                null,
+                List.of());
+    }
+
     private static ClockifyExpenseSnapshot inputExpense(String id) {
         return new ClockifyExpenseSnapshot(id, "ws-native", "user-1", "2026-05-24T12:00:00Z", "project-1", "task-1",
-                "cat-mileage", "Native mileage", new BigDecimal("37.4"), true, null, null, false);
+                "cat-mileage", "Native mileage", new BigDecimal("37.4"), true, null, null,
+                false, false, null, false);
     }
 
     private static ClockifyExpenseSnapshot distinctInputExpense(String id) {
         return new ClockifyExpenseSnapshot(id, "ws-native", "user-1", "2026-05-24T12:00:00Z", "project-1", "task-1",
-                "cat-input", "Native mileage", new BigDecimal("37.4"), true, null, null, false);
+                "cat-input", "Native mileage", new BigDecimal("37.4"), true, null, null,
+                false, false, null, false);
     }
 
     private static ClockifyExpenseSnapshot outputExpense(String id) {
         return new ClockifyExpenseSnapshot(id, "ws-native", "user-1", "2026-05-24", "project-1", "task-1",
-                "cat-output", "Converted mileage", null, true, null, new BigDecimal("24.50"), false);
+                "cat-output", "Converted mileage", null, true, null, new BigDecimal("24.50"),
+                false, false, null, false);
     }
 
     private static ClockifyExpenseSnapshot markedExpense(String id) {
         return new ClockifyExpenseSnapshot(id, "ws-native", "user-1", "2026-05-24", "project-1", "task-1",
                 "cat-input", "Native mileage [MileageAddon:converted:v1 id=00000000-0000-0000-0000-000000000123]",
-                new BigDecimal("37.4"), true, null, null, false);
+                new BigDecimal("37.4"), true, null, null, false, false, null, false);
     }
 
     private static MileageConversion existing(MileageConversionStatus status) {

@@ -8,6 +8,12 @@ public record CreateMileageExpenseRequest(
         @NotBlank String miles,
         String rate,
         Boolean billable,
-        String notes
+        String notes,
+        String tripOrigin,
+        String tripDestination,
+        String tripPurpose,
+        String odometerStart,
+        String odometerEnd,
+        String policyExceptionReason
 ) {
 }

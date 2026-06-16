@@ -1,8 +1,8 @@
 (function () {
   const app = window.MileageSettingsApp;
   const MINE_LABELS = ["Date", "Expense", "Source", "Status", "Miles", "Rate", "Amount", "Updated"];
-  const TEAM_LABELS = ["Date", "Expense", "User", "Source", "Status", "Miles", "Rate", "Amount", "Updated"];
-  const CONVERSION_LABELS = ["Date", "Expense", "Source", "User", "Status", "Miles", "Rate", "Amount", "Updated"];
+  const TEAM_LABELS = ["Date", "Expense", "User", "Source", "Status", "Miles", "Rate", "Policy", "Amount", "Updated"];
+  const CONVERSION_LABELS = ["Date", "Expense", "Source", "User", "Status", "Miles", "Rate", "Policy", "Amount", "Updated"];
 
   function loadMine() {
     const rows = app.element("mine-rows");
@@ -64,6 +64,9 @@
       app.appendTextCell(row, item.status);
       app.appendTextCell(row, app.trimDecimal(item.miles));
       app.appendTextCell(row, app.trimDecimal(item.rate));
+      if (includeUser) {
+        app.appendTextCell(row, ratePolicyLabel(item));
+      }
       app.appendAmountCell(row, item.calculatedAmount, item.roundedAmount);
       app.appendTextCell(row, app.formatDate(item.updatedAt));
       app.labelRow(row, labels);
@@ -97,6 +100,7 @@
         app.appendTextCell(row, conversionStatusText(item));
         app.appendTextCell(row, app.trimDecimal(item.miles));
         app.appendTextCell(row, app.trimDecimal(item.rate));
+        app.appendTextCell(row, ratePolicyLabel(item));
         app.appendAmountCell(row, item.calculatedAmount, item.roundedAmount);
         app.appendTextCell(row, app.formatDate(item.updatedAt));
         app.labelRow(row, CONVERSION_LABELS);
@@ -159,6 +163,22 @@
     return status + " — " + skipReasonLabel(item.skipReason);
   }
 
+  function ratePolicyLabel(item) {
+    if (item.ratePolicyName) {
+      return item.ratePolicyName;
+    }
+    if (item.rateSource === "USER_OVERRIDE") {
+      return "Custom";
+    }
+    if (item.rateSource === "SETTINGS_FALLBACK") {
+      return "Workspace";
+    }
+    if (item.rateSource === "POLICY") {
+      return "Policy";
+    }
+    return "";
+  }
+
   function skipReasonLabel(reason) {
     const labels = {
       ADDON_DISABLED: "Add-on disabled",
@@ -192,8 +212,10 @@
       return;
     }
     const reports = {
-      "btn-report-mine": ["mine", null],
-      "btn-report-team": ["team", "team-user-filter"]
+      "btn-report-mine": ["report", "mine", null],
+      "btn-report-team": ["report", "team", "team-user-filter"],
+      "btn-packet-mine": ["packet", "mine", null],
+      "btn-packet-team": ["packet", "team", "team-user-filter"]
     };
     const config = reports[button.id];
     if (!config) {
@@ -201,10 +223,12 @@
     }
     event.preventDefault();
     let userId = null;
-    if (config[1]) {
-      userId = app.formValue(config[1]); // empty selection => all users (reportPath omits userId)
+    if (config[2]) {
+      userId = app.formValue(config[2]); // empty selection => all users (printablePath omits userId)
     }
-    const path = app.reportPath(config[0], userId);
+    const path = config[0] === "packet"
+      ? app.packetPath(config[1], userId)
+      : app.reportPath(config[1], userId);
     if (path) {
       const reportWindow = window.open(path, "_blank");
       if (reportWindow) {

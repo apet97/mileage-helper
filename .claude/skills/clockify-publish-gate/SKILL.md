@@ -23,7 +23,11 @@ evidence for `addon-expenses-rest-api/docs/PRE_PUBLISH_CHECKLIST.md`.
    every current `/assets/mileage/settings*.js` file (`settings-date.js`,
    `settings-core.js`, `settings-ranges.js`, `settings-create.js`,
    `settings-admin.js`, `settings-tables.js`, and boot `settings.js`),
-   `/assets/mileage/icon.png`, and unauthenticated `/iframe/mileage` (expect 401 + no-store/CSP/HSTS).
+   `/assets/mileage/report.css`, `/assets/mileage/report.js`,
+   `/assets/mileage/packet.css`, `/assets/mileage/packet.js`,
+   `/assets/mileage/icon.png`, unauthenticated `/iframe/mileage`
+   (expect 401 + no-store/CSP/HSTS), unauthenticated `/iframe/report`,
+   and unauthenticated `/iframe/reimbursement-packet`.
    For OCI, capture the systemd restart time and fresh `journalctl` error scan. For Railway, use `railway deployment list` for the CURRENT deployment id — never reuse an old id.
 6. Write a dated evidence block (today's date, git sha, deployment id) and
    show it for pasting into PRE_PUBLISH_CHECKLIST.md. State explicitly if live
@@ -32,4 +36,4 @@ evidence for `addon-expenses-rest-api/docs/PRE_PUBLISH_CHECKLIST.md`.
 ## Hard rules
 - Never weaken a test to make the gate pass.
 - Never print secrets / tokens / receipt bytes.
-- Do not claim a deploy is live without post-deploy probes for every current settings JS asset.
+- Do not claim a deploy is live without post-deploy probes for every current settings JS asset plus report and packet assets/routes.

@@ -215,7 +215,70 @@ h2 {
   max-width: none;
 }
 
+.rate-policy-panel {
+  max-width: 1100px;
+}
+
+.rate-policy-panel .form-grid {
+  margin-bottom: 12px;
+}
+
+.rate-policy-panel .actions {
+  flex-wrap: wrap;
+}
+
+.insights-kpis {
+  margin-bottom: 16px;
+}
+
+.insights-kpis dl {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.insights-kpis div {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  padding: 10px 12px;
+}
+
+.insights-kpis dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.insights-kpis dd {
+  margin: 2px 0 0;
+  font-size: 18px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.insights-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
 .wide { grid-column: 1 / -1; }
+
+.evidence-fields {
+  padding: 12px;
+}
+
+.evidence-fields .form-grid {
+  gap: 12px;
+}
+
+.field-hint {
+  color: var(--muted);
+  font-size: 13px;
+  min-height: 18px;
+}
 
 label {
   display: grid;
@@ -727,6 +790,11 @@ tbody tr:last-child td { border-bottom: 0; }
   }
 
   .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .insights-kpis dl,
+  .insights-grid {
     grid-template-columns: 1fr;
   }
 

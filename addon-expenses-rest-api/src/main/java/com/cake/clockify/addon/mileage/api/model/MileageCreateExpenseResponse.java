@@ -8,6 +8,9 @@ public record MileageCreateExpenseResponse(
         String miles,
         String rate,
         String calculatedAmount,
-        String roundedAmount
+        String roundedAmount,
+        String rateSource,
+        UUID ratePolicyId,
+        String ratePolicyName
 ) {
 }

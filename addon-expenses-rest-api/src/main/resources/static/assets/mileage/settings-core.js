@@ -156,6 +156,8 @@
       app.loadMine();
     } else if (tab === "team" && app.state.userIsAdmin) {
       app.loadTeam();
+    } else if (tab === "insights" && app.state.userIsAdmin) {
+      app.loadInsights();
     } else if (tab === "admin-settings" && app.state.userIsAdmin) {
       app.loadSettings();
     } else if (tab === "conversion-log" && app.state.userIsAdmin) {

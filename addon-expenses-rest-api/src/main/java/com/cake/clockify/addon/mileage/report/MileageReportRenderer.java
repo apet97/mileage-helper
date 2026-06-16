@@ -25,15 +25,35 @@ public final class MileageReportRenderer {
             boolean scanTruncated,
             boolean rowCapHit,
             boolean degraded) {
+        return render(userLabel, from, to, rows, includeUser, scanTruncated, rowCapHit, degraded, null);
+    }
+
+    public static String render(
+            String userLabel,
+            LocalDate from,
+            LocalDate to,
+            List<ReportRow> rows,
+            boolean includeUser,
+            boolean scanTruncated,
+            boolean rowCapHit,
+            boolean degraded,
+            String currencyFilter) {
+        boolean includeCurrency = hasText(currencyFilter) || rows.stream().anyMatch(row -> hasText(row.currency()));
         int leadColumns = includeUser ? 4 : 3;
+        if (includeCurrency) {
+            leadColumns++;
+        }
         BigDecimal totalAmount = BigDecimal.ZERO;
 
         StringBuilder head = new StringBuilder("<tr><th>Date</th>");
         if (includeUser) {
             head.append("<th>User</th>");
         }
-        head.append("<th>Project</th><th>Category</th>")
-                .append("<th class=\"num\">Miles</th><th class=\"num\">Rate</th><th class=\"num\">Amount</th></tr>");
+        head.append("<th>Project</th><th>Category</th>");
+        if (includeCurrency) {
+            head.append("<th>Currency</th>");
+        }
+        head.append("<th class=\"num\">Miles</th><th class=\"num\">Rate</th><th class=\"num\">Amount</th></tr>");
 
         StringBuilder body = new StringBuilder();
         for (ReportRow row : rows) {
@@ -49,8 +69,11 @@ public final class MileageReportRenderer {
                 body.append("<td>").append(escape(row.userName())).append("</td>");
             }
             body.append("<td>").append(escape(row.projectName())).append("</td>")
-                    .append("<td>").append(escape(row.categoryName())).append("</td>")
-                    .append("<td class=\"num\">").append(row.mileage() ? escape(decimal(row.miles())) : "").append("</td>")
+                    .append("<td>").append(escape(row.categoryName())).append("</td>");
+            if (includeCurrency) {
+                body.append("<td>").append(escape(row.currency())).append("</td>");
+            }
+            body.append("<td class=\"num\">").append(row.mileage() ? escape(decimal(row.miles())) : "").append("</td>")
                     .append("<td class=\"num\">").append(row.mileage() ? escape(decimal(row.rate())) : "").append("</td>")
                     .append("<td class=\"num\">").append(escape(money(rowAmount))).append("</td>")
                     .append("</tr>\n");
@@ -133,6 +156,10 @@ public final class MileageReportRenderer {
 
     private static String text(Object value) {
         return value == null ? "" : String.valueOf(value);
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     private static String escape(String value) {

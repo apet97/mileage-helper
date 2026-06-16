@@ -17,7 +17,7 @@ class ReportMergerTest {
     void nativeExpenseWithoutConversionRendersNativeValues() {
         List<ReportRow> rows = ReportMerger.merge(
                 List.of(new ClockifyExpenseListItem("e2", "u2", LocalDate.parse("2026-05-04"),
-                        "", "cat-meals", "Meals", new BigDecimal("18.00"))),
+                        "", "cat-meals", "Meals", new BigDecimal("18.00"), "USD")),
                 Map.of(),
                 Map.of("u2", "Alan Turing"));
 
@@ -29,6 +29,7 @@ class ReportMergerTest {
         assertThat(row.miles()).isNull();
         assertThat(row.rate()).isNull();
         assertThat(row.userName()).isEqualTo("Alan Turing");
+        assertThat(row.currency()).isEqualTo("USD");
     }
 
     @Test
@@ -37,7 +38,7 @@ class ReportMergerTest {
 
         List<ReportRow> rows = ReportMerger.merge(
                 List.of(new ClockifyExpenseListItem("e1", "u1", LocalDate.parse("2026-05-03"),
-                        "North Route", "cat-mileage", "Mileage", new BigDecimal("7.25"))),
+                        "North Route", "cat-mileage", "Mileage", new BigDecimal("7.25"), "EUR")),
                 Map.of("e1", conversion),
                 Map.of("u1", "Ada Lovelace"));
 
@@ -48,6 +49,7 @@ class ReportMergerTest {
         assertThat(row.rate()).isEqualByComparingTo("7.2531");
         assertThat(row.amount()).isEqualByComparingTo("25.38585"); // OUR calculatedAmount, not the native 7.25
         assertThat(row.projectName()).isEqualTo("North Route");     // project still comes from the native expense
+        assertThat(row.currency()).isEqualTo("EUR");
     }
 
     @Test
@@ -73,6 +75,7 @@ class ReportMergerTest {
         assertThat(rows.get(0).amount()).isEqualByComparingTo("14.5");
         assertThat(rows.get(0).userName()).isEqualTo("Ada Lovelace");
         assertThat(rows.get(0).projectName()).isEqualTo("North Route"); // resolved from projectId, not dropped
+        assertThat(rows.get(0).currency()).isNull(); // no live Clockify expense row in degraded mode
     }
 
     private static MileageConversion conversion(String expenseId, String userId, String miles, String rate, String calc) {
@@ -88,6 +91,6 @@ class ReportMergerTest {
     }
 
     private static ClockifyExpenseListItem item(String id, String date) {
-        return new ClockifyExpenseListItem(id, "u", LocalDate.parse(date), "", "cat", "Cat", new BigDecimal("1.00"));
+        return new ClockifyExpenseListItem(id, "u", LocalDate.parse(date), "", "cat", "Cat", new BigDecimal("1.00"), null);
     }
 }

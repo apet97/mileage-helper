@@ -86,6 +86,7 @@ public class MileageIframeController {
                 + navButton("mine", "Mine", ICON_MINE, activeTab, false)
                 + (admin
                         ? navButton("team", "Team", ICON_TEAM, activeTab, true)
+                        + navButton("insights", "Insights", ICON_DIAGNOSTICS, activeTab, true)
                         + navButton("admin-settings", "Settings", ICON_SETTINGS, activeTab, true)
                         + navButton("conversion-log", "Conversions", ICON_CONVERSIONS, activeTab, true)
                         + navButton("diagnostics", "Diagnostics", ICON_DIAGNOSTICS, activeTab, true)
@@ -140,6 +141,18 @@ public class MileageIframeController {
                           <label><span>Project</span><input id="field-project" name="projectId" list="project-options" autocomplete="off" placeholder="Type to search projects (optional)"><datalist id="project-options"></datalist></label>
                           <label><span>Miles <abbr class="req" title="required" aria-hidden="true">*</abbr></span><input id="field-miles" name="miles" inputmode="decimal" required aria-required="true"></label>
                           <label id="rate-field-row"><span>Rate override</span><input id="field-rate" name="rate" inputmode="decimal" disabled></label>
+                          <div class="field-hint wide" id="rate-source-hint" aria-live="polite"></div>
+                          <fieldset class="wide evidence-fields">
+                            <legend>Trip evidence</legend>
+                            <div class="form-grid compact">
+                              <label><span>Purpose</span><input id="field-trip-purpose" name="tripPurpose" maxlength="256"></label>
+                              <label><span>From</span><input id="field-trip-origin" name="tripOrigin" maxlength="256"></label>
+                              <label><span>To</span><input id="field-trip-destination" name="tripDestination" maxlength="256"></label>
+                              <label><span>Odometer start</span><input id="field-odometer-start" name="odometerStart" inputmode="decimal"></label>
+                              <label><span>Odometer end</span><input id="field-odometer-end" name="odometerEnd" inputmode="decimal"></label>
+                              <label><span>Policy exception</span><input id="field-policy-exception-reason" name="policyExceptionReason" maxlength="256"></label>
+                            </div>
+                          </fieldset>
                           <label class="wide"><span>Notes</span><textarea id="field-notes" name="notes" rows="4"></textarea></label>
                           <label class="check-row"><input id="field-billable" name="billable" type="checkbox" checked><span>Billable</span></label>
                           <label class="wide"><span>Receipt</span><input id="field-receipt" name="file" type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/heic,application/pdf"></label>
@@ -163,6 +176,7 @@ public class MileageIframeController {
                                 <button type="button" id="btn-refresh-mine">Refresh</button>
                                 <button type="button" id="btn-export-mine">CSV</button>
                                 <button type="button" id="btn-report-mine">Report</button>
+                                <button type="button" id="btn-packet-mine">Packet</button>
                               </div>
                             </div>
                           </div>
@@ -175,6 +189,7 @@ public class MileageIframeController {
 
     private static String adminPanels(String activeTab) {
         return teamPanel("team".equals(activeTab))
+                + insightsPanel("insights".equals(activeTab))
                 + settingsPanel("admin-settings".equals(activeTab))
                 + conversionsPanel("conversion-log".equals(activeTab))
                 + diagnosticsPanel("diagnostics".equals(activeTab));
@@ -197,11 +212,61 @@ public class MileageIframeController {
                               <button type="button" id="btn-refresh-team">Refresh</button>
                               <button type="button" id="btn-export-team">CSV</button>
                               <button type="button" id="btn-report-team">Report</button>
+                              <button type="button" id="btn-packet-team">Packet</button>
                             </div>
                           </div>
                         </header>
-                        <div class="table-wrap"><table><thead><tr><th scope="col">Date</th><th scope="col">Expense</th><th scope="col">User</th><th scope="col">Source</th><th scope="col">Status</th><th scope="col">Miles</th><th scope="col">Rate</th><th scope="col">Amount</th><th scope="col">Updated</th></tr></thead><tbody id="team-rows"></tbody></table></div>
+                        <div class="table-wrap"><table><thead><tr><th scope="col">Date</th><th scope="col">Expense</th><th scope="col">User</th><th scope="col">Source</th><th scope="col">Status</th><th scope="col">Miles</th><th scope="col">Rate</th><th scope="col">Policy</th><th scope="col">Amount</th><th scope="col">Updated</th></tr></thead><tbody id="team-rows"></tbody></table></div>
                         <div class="pager" id="team-pager" hidden></div>
+                      </section>
+                """;
+    }
+
+    private static String insightsPanel(boolean active) {
+        return panelOpen("insights", active, true)
+                + """
+                        <header class="panel-heading">
+                          <div>
+                            <h1>Insights</h1>
+                            <p>Workspace mileage totals and exception trends.</p>
+                          </div>
+                          <div class="list-actions">
+                """
+                + dateRangeControls("insights")
+                + """
+                            <div class="actions">
+                              <button type="button" id="btn-refresh-insights">Refresh</button>
+                            </div>
+                          </div>
+                        </header>
+                        <section class="insights-kpis" aria-label="Mileage KPIs">
+                          <dl>
+                            <div><dt>Converted miles</dt><dd id="insights-total-miles">0</dd></div>
+                            <div><dt>Calculated amount</dt><dd id="insights-calculated-amount">0.00</dd></div>
+                            <div><dt>Expense amount</dt><dd id="insights-rounded-amount">0.00</dd></div>
+                            <div><dt>Failed</dt><dd id="insights-failed-count">0</dd></div>
+                            <div><dt>Missing purpose</dt><dd id="insights-missing-purpose">0</dd></div>
+                            <div><dt>Policy exceptions</dt><dd id="insights-policy-exceptions">0</dd></div>
+                          </dl>
+                        </section>
+                        <div class="insights-grid">
+                          <section class="history-panel" aria-labelledby="insights-status-title">
+                            <h2 id="insights-status-title">Status breakdown</h2>
+                            <div class="table-wrap"><table><thead><tr><th scope="col">Status</th><th scope="col">Rows</th></tr></thead><tbody id="insights-status-rows"></tbody></table></div>
+                          </section>
+                          <section class="history-panel" aria-labelledby="insights-skip-title">
+                            <h2 id="insights-skip-title">Skip reasons</h2>
+                            <div class="table-wrap"><table><thead><tr><th scope="col">Reason</th><th scope="col">Rows</th></tr></thead><tbody id="insights-skip-rows"></tbody></table></div>
+                          </section>
+                          <section class="history-panel" aria-labelledby="insights-project-title">
+                            <h2 id="insights-project-title">Top projects</h2>
+                            <div class="table-wrap"><table><thead><tr><th scope="col">Project</th><th scope="col">Amount</th><th scope="col">Miles</th><th scope="col">Rows</th></tr></thead><tbody id="insights-project-rows"></tbody></table></div>
+                          </section>
+                          <section class="history-panel" aria-labelledby="insights-user-title">
+                            <h2 id="insights-user-title">Top users</h2>
+                            <div class="table-wrap"><table><thead><tr><th scope="col">User</th><th scope="col">Amount</th><th scope="col">Miles</th><th scope="col">Rows</th></tr></thead><tbody id="insights-user-rows"></tbody></table></div>
+                          </section>
+                        </div>
                       </section>
                 """;
     }
@@ -231,6 +296,30 @@ public class MileageIframeController {
                           </fieldset>
                           <div class="actions wide"><button type="submit">Save Settings</button></div>
                         </form>
+                        <section class="history-panel rate-policy-panel" aria-labelledby="rate-policies-title">
+                          <div class="toolbar">
+                            <div>
+                              <h2 id="rate-policies-title">Rate policies</h2>
+                              <p>Effective mileage rates by expense date.</p>
+                            </div>
+                            <div class="actions"><button type="button" id="btn-refresh-rate-policies">Refresh</button></div>
+                          </div>
+                          <form id="rate-policy-form" class="form-grid compact">
+                            <input id="rate-policy-id" type="hidden">
+                            <label><span>Policy name</span><input id="rate-policy-name" name="name" maxlength="128"></label>
+                            <label><span>Rate</span><input id="rate-policy-rate" name="rate" inputmode="decimal"></label>
+                            <label><span>Effective from</span><input id="rate-policy-effective-from" name="effectiveFrom" type="date"></label>
+                            <label><span>Effective to</span><input id="rate-policy-effective-to" name="effectiveTo" type="date"></label>
+                            <label class="check-row"><input id="rate-policy-active" name="active" type="checkbox" checked><span>Active</span></label>
+                            <div class="actions align-end">
+                              <button type="submit" id="btn-save-rate-policy">Save policy</button>
+                              <button type="button" id="btn-cancel-rate-policy">Cancel</button>
+                            </div>
+                          </form>
+                          <span id="rate-policy-status" class="status-text"></span>
+                          <ul class="warnings" id="rate-policy-warnings"></ul>
+                          <div class="table-wrap"><table><thead><tr><th scope="col">Policy</th><th scope="col">Rate</th><th scope="col">From</th><th scope="col">To</th><th scope="col">Status</th><th scope="col">Updated</th><th scope="col">Actions</th></tr></thead><tbody id="rate-policy-rows"></tbody></table></div>
+                        </section>
                       </section>
                 """;
     }
@@ -254,7 +343,7 @@ public class MileageIframeController {
                             </div>
                           </div>
                         </header>
-                        <div class="table-wrap"><table><thead><tr><th scope="col">Date</th><th scope="col">Expense</th><th scope="col">Source</th><th scope="col">User</th><th scope="col">Status</th><th scope="col">Miles</th><th scope="col">Rate</th><th scope="col">Amount</th><th scope="col">Updated</th></tr></thead><tbody id="conversion-rows"></tbody></table></div>
+                        <div class="table-wrap"><table><thead><tr><th scope="col">Date</th><th scope="col">Expense</th><th scope="col">Source</th><th scope="col">User</th><th scope="col">Status</th><th scope="col">Miles</th><th scope="col">Rate</th><th scope="col">Policy</th><th scope="col">Amount</th><th scope="col">Updated</th></tr></thead><tbody id="conversion-rows"></tbody></table></div>
                         <div class="pager" id="conversion-pager" hidden></div>
                       </section>
                 """;

@@ -23,7 +23,7 @@ import java.util.function.Function;
 @Component
 public class MileageConversionCsvExporter {
     public static final String HEADER_EXPORT_TRUNCATED = "X-Mileage-Export-Truncated";
-    static final String CSV_HEADER = "expense_id,source,source_label,status,user_id,user_name,project_id,project_name,miles,rate,calculated_amount,expense_amount,rounding_mode,expense_date,updated_at,converted_at,note_marker";
+    static final String CSV_HEADER = "expense_id,source,source_label,status,user_id,user_name,project_id,project_name,miles,rate,rate_source,rate_policy_id,rate_policy_name,calculated_amount,expense_amount,currency,rounding_mode,expense_date,updated_at,converted_at,trip_origin,trip_destination,trip_purpose,odometer_start,odometer_end,policy_exception_reason,note_marker";
     private static final MediaType CSV_MEDIA_TYPE = new MediaType("text", "csv", StandardCharsets.UTF_8);
     private static final int DEFAULT_CSV_PAGE_SIZE = 1_000;
     private static final int DEFAULT_CSV_MAX_ROWS = 100_000;
@@ -139,12 +139,22 @@ public class MileageConversionCsvExporter {
                     projectName(conversion.getProjectId(), projectNamesById),
                     decimalText(conversion.getMiles()),
                     decimalText(conversion.getRate()),
+                    conversion.getRateSource(),
+                    conversion.getRatePolicyId(),
+                    conversion.getRatePolicyName(),
                     decimalText(conversion.getCalculatedAmount()),
                     roundedText(conversion.getRoundedAmount()),
+                    null,
                     conversion.getRoundingMode(),
                     conversion.getExpenseDate(),
                     conversion.getUpdatedAt(),
                     conversion.getConvertedAt(),
+                    conversion.getTripOrigin(),
+                    conversion.getTripDestination(),
+                    conversion.getTripPurpose(),
+                    decimalText(conversion.getOdometerStart()),
+                    decimalText(conversion.getOdometerEnd()),
+                    conversion.getPolicyExceptionReason(),
                     conversion.getNoteMarker());
             written++;
         }

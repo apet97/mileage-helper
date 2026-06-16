@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.util.Locale;
 
 class ClockifyExpenseJsonMapper {
     private static final String MILEAGE_CATEGORY_NAME = "Mileage";
@@ -33,7 +34,10 @@ class ClockifyExpenseJsonMapper {
                 node != null && node.has("billable") && !node.get("billable").isNull() ? node.get("billable").asBoolean() : null,
                 text(node, "fileId"),
                 decimal(node == null ? null : node.get("total")),
-                node != null && node.has("locked") && !node.get("locked").isNull() ? node.get("locked").asBoolean() : null);
+                booleanValue(node, "locked"),
+                booleanValue(node, "finalized"),
+                firstText(node, "approvalStatus", "approvalState"),
+                booleanValue(node, "invoiced"));
     }
 
     ObjectNode createBody(CreateFlatExpenseCommand command) {
@@ -100,7 +104,8 @@ class ClockifyExpenseJsonMapper {
                 nestedText(item, "project", "name"),
                 nestedText(item, "category", "id"),
                 nestedText(item, "category", "name"),
-                centsToMajor(decimal(item == null ? null : item.get("total"))));
+                centsToMajor(decimal(item == null ? null : item.get("total"))),
+                currencyCode(item));
     }
 
     ArrayNode arrayNode(JsonNode root, String field) {
@@ -162,12 +167,40 @@ class ClockifyExpenseJsonMapper {
         return node.get(field).asText();
     }
 
+    private static String firstText(JsonNode node, String... fields) {
+        for (String field : fields) {
+            String value = text(node, field);
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private static Boolean booleanValue(JsonNode node, String field) {
+        return node != null && node.has(field) && !node.get(field).isNull() ? node.get(field).asBoolean() : null;
+    }
+
     private static String nestedText(JsonNode item, String objectField, String key) {
         if (item == null) {
             return null;
         }
         JsonNode object = item.get(objectField);
         return object == null || object.isNull() ? null : text(object, key);
+    }
+
+    private static String currencyCode(JsonNode item) {
+        String direct = firstText(item, "currency", "currencyCode");
+        String nested = nestedText(item, "currency", "code");
+        String value = direct == null ? nested : direct;
+        return normalizeCurrency(value);
+    }
+
+    private static String normalizeCurrency(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim().toUpperCase(Locale.ROOT);
     }
 
     private static LocalDate parseExpenseDate(String value) {

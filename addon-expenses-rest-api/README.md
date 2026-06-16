@@ -8,7 +8,7 @@ This module is the implemented product module inside the standalone repository. 
 
 ## Scope
 
-- Settings store only mileage configuration per workspace.
+- Settings store mileage configuration and effective-dated rate policies per workspace.
 - Settings use one `Mileage` unit category, fixed unit `mile`, fixed `HALF_UP` rounding, and rate override disabled by default.
 - Setup can adopt an existing Clockify `Mileage` UNIT/mile category and derive the local rate from Clockify `unitPrice` cents when no rate is saved yet.
 - Settings rate validation uses the same decimal bounds as create and preview, and saving settings returns warning messages when the best-effort Clockify category price sync fails.
@@ -16,15 +16,19 @@ This module is the implemented product module inside the standalone repository. 
 - Clockify remains the source of truth for expenses, receipts, approvals, reports, budgets, and invoices.
 - Mileage, rate, and money values are handled with `BigDecimal`.
 - Manual mileage creation defaults `billable` to true when omitted and derives the user from verified token claims.
+- Manual mileage creation can store audit-only trip evidence (`tripOrigin`, `tripDestination`, `tripPurpose`, `odometerStart`, `odometerEnd`, `policyExceptionReason`) without changing Clockify notes or mileage calculation.
+- Preview, add-on create, and native conversion resolve rate policies by expense date and audit the resulting rate source/policy identity.
 - Receipt uploads use the shared Clockify client multipart helper so Expenses and Files upload paths share field-name validation, filename sanitization, and content-type fallback behavior.
 - Rate override on the main page is available only when workspace settings allow it; otherwise the configured workspace rate is used and shown as read-only context.
-- Regular users see only `Mine`; admins also see `Team`, `Settings`, `Conversions`, and `Diagnostics`.
+- Regular users see only `Mine`; admins also see `Team`, `Settings`, `Conversions`, `Diagnostics`, and `Insights`.
 - Mileage lists and CSV exports default to this US week, Sunday through Saturday, with presets for custom ranges, this/last month, this/last week, and this/last year.
+- Reimbursement packets render printable/CSV audit-row exports with filters for scope, user, project, status, deleted rows, and exceptions-only review.
 - The UI date presets and default create date use the Clockify claim timezone through `/assets/mileage/settings-date.js`, falling back to the browser-local date only when the claim timezone is absent or invalid.
 - Generated Clockify notes are deterministic and exact, for example `Mileage reimbursement: 1 mile x 0.725 = 0.725. Created/converted by Mileage for Clockify.` Idempotency trusts the hidden marker or canonical generated mileage line, not public signature text alone.
 - Add-on previews and mileage tables show full `calculatedAmount` decimals first, with the rounded Clockify expense amount shown as secondary context.
 - Mine and Team lists/CSVs exclude audit rows marked `DELETED`; the admin Conversions view/export keeps them as audit history.
 - Diagnostics reports setup checklist items and operational webhook queue health; stale pending jobs and failed jobs surface as warnings before publish.
+- Insights summarizes conversion health, missing trip purpose, policy exceptions, status/skip counts, and top projects/users from `mileage_conversion` without adding Prometheus tags.
 - The admin Conversions table renders `SKIPPED` rows with plain-language skip reason labels.
 - Expense webhooks tolerate both full expense payloads with `id` and reference payloads containing `expenseId`.
 
@@ -35,7 +39,7 @@ This module is the implemented product module inside the standalone repository. 
 - Runtime: OCI VM with `mileage-for-clockify.service` behind Caddy.
 - Railway deployment ID: historical only unless Railway is explicitly restored; use `railway deployment list` only for Railway runs.
 - Dated deployment evidence belongs in the pre-publish checklist after each deploy; old deployment IDs are historical evidence, not current truth.
-- Hosted rechecks, dated 2026-05-27: a pre-deploy check showed health and manifest passing while `/assets/mileage/settings-date.js` returned `404`, proving production was still serving an older deployment; after deploying latest `main`, health, manifest, settings assets, icon, and unauthenticated iframe probes passed. New deploys that include static asset or report changes must probe every current `/assets/mileage/settings*.js` asset, `/assets/mileage/report.css`, `/assets/mileage/report.js`, `/assets/mileage/icon.png`, unauthenticated `/iframe/mileage`, and unauthenticated `/iframe/report`. Clockify reinstall, settings load, mileage create/use, and delete-list behavior were last user-tested on 2026-05-26.
+- Hosted rechecks, dated 2026-05-27: a pre-deploy check showed health and manifest passing while `/assets/mileage/settings-date.js` returned `404`, proving production was still serving an older deployment; after deploying latest `main`, health, manifest, settings assets, icon, and unauthenticated iframe probes passed. New deploys that include static asset, report, or packet changes must probe every current `/assets/mileage/settings*.js` asset, `/assets/mileage/report.css`, `/assets/mileage/report.js`, `/assets/mileage/packet.css`, `/assets/mileage/packet.js`, `/assets/mileage/icon.png`, unauthenticated `/iframe/mileage`, unauthenticated `/iframe/report`, and unauthenticated `/iframe/reimbursement-packet`. Clockify reinstall, settings load, mileage create/use, and delete-list behavior were last user-tested on 2026-05-26.
 - Expanded live Clockify API smoke on 2026-05-27 used local secrets only and proved workspace/user/category reads plus sacrificial Mileage receipt expense create, fetch, full update, delete, and post-delete non-success (`400`). Follow-up receipt probes created sacrificial PNG and valid generated PDF receipts, observed `fileId`, downloaded nonzero binary content through the expense file endpoint, then deleted both expenses. A malformed hand-written PDF fixture returned zero bytes and should not be used as product evidence.
 - Local hardening review on 2026-05-27 covered multipart receipt/header sanitization, timezone claim alias parity, focused client/security tests, date-helper static asset checks, and `gitleaks` proof.
 - Live Clockify smoke is optional and requires local secrets. Never commit or echo API keys/tokens. If not run, final output must say it was skipped.

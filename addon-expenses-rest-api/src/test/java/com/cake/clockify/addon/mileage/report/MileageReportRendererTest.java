@@ -67,6 +67,41 @@ class MileageReportRendererTest {
     }
 
     @Test
+    void rendersCurrencyColumnWhenAnyRowHasCurrency() {
+        String html = MileageReportRenderer.render(
+                "All users", FROM, TO,
+                List.of(
+                        native_("e1", "2026-05-03", "Ada", "Route", "Meals", "18.00", "USD"),
+                        mileage("e2", "2026-05-04", "Ada", "Route", "1", "7.25", "7.25")),
+                true, false, false, false);
+
+        assertThat(html).contains("<th>Currency</th>");
+        assertThat(html).contains("<td>USD</td>");
+        assertThat(html).contains("<th colspan=\"5\">Total</th>");
+    }
+
+    @Test
+    void omitsCurrencyColumnWhenAllRowsHaveBlankCurrency() {
+        String html = MileageReportRenderer.render(
+                "All users", FROM, TO,
+                List.of(native_("e1", "2026-05-03", "Ada", "Route", "Meals", "18.00")),
+                true, false, false, false);
+
+        assertThat(html).doesNotContain("<th>Currency</th>");
+    }
+
+    @Test
+    void rendersCurrencyColumnWhenCurrencyFilterIsActiveEvenIfRowsAreUnknownCurrency() {
+        String html = MileageReportRenderer.render(
+                "All users", FROM, TO,
+                List.of(mileage("e1", "2026-05-03", "Ada", "Route", "1", "7.25", "7.25")),
+                true, false, false, false, "USD");
+
+        assertThat(html).contains("<th>Currency</th>");
+        assertThat(html).contains("<th colspan=\"5\">Total</th>");
+    }
+
+    @Test
     void showsDegradedScanAndRowCapNotices() {
         String html = MileageReportRenderer.render(
                 "All users", FROM, TO,
@@ -80,11 +115,16 @@ class MileageReportRendererTest {
 
     private static ReportRow mileage(String id, String date, String user, String project, String miles, String rate, String amount) {
         return new ReportRow(id, LocalDate.parse(date), "u", user, project, "Mileage", true,
-                new BigDecimal(miles), new BigDecimal(rate), new BigDecimal(amount));
+                new BigDecimal(miles), new BigDecimal(rate), new BigDecimal(amount), null);
     }
 
     private static ReportRow native_(String id, String date, String user, String project, String category, String amount) {
+        return native_(id, date, user, project, category, amount, null);
+    }
+
+    private static ReportRow native_(
+            String id, String date, String user, String project, String category, String amount, String currency) {
         return new ReportRow(id, LocalDate.parse(date), "u", user, project, category, false,
-                null, null, new BigDecimal(amount));
+                null, null, new BigDecimal(amount), currency);
     }
 }

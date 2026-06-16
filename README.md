@@ -20,9 +20,12 @@ Users log mileage from a Clockify sidebar UI and have it created as a proper exp
 - **Honest notes** — the converted note **preserves any user-typed note** and reconciles the add-on's calculated amount with the real Clockify category charge, e.g. `12.4 miles x 7.25123 = 89.915252 (Clockify category charge: 89.90)`.
 - **Async, built for scale** — webhooks are verified, de-duplicated, and queued in Postgres; a worker drains them with `SELECT … FOR UPDATE SKIP LOCKED`, so Clockify never waits on a conversion or retries on a timeout.
 - **Loop-safe** — the add-on's own write fires another webhook, which the conversion guard correctly skips; the Conversions table shows the skip reason in plain language.
+- **Policy-aware rates** — admins can maintain effective-dated mileage rate policies; every preview, create, and native conversion audits the rate source and policy identity used.
+- **Trip evidence** — manual mileage creates can capture purpose, origin/destination, odometer readings, and exception reason as audit-only evidence without changing Clockify notes.
 - **Observable** — Prometheus counters/gauges for conversion outcomes, queue depth, and worker latency at `/actuator/prometheus` (low-cardinality tags only — no PII).
 - **Secure by default** — installation tokens stay server-side, CSP/HSTS/Permissions-Policy headers, OWASP dependency-check gate (fail on CVSS ≥ 7.0), and workspace isolation on every query.
-- **Printable expense report** — `GET /iframe/report` renders a print-to-PDF report of **all** Clockify expenses (no PDF library); mileage expenses show the add-on's reconciled miles/rate/amount, everything else shows native Clockify values. Admins get all users by default (or filter to one); members get their own. Falls back to reconciled-mileage-only with a banner if Clockify is unreachable.
+- **Printable expense report + packet** — `GET /iframe/report` renders a print-to-PDF report of **all** Clockify expenses (no PDF library); mileage expenses show the add-on's reconciled miles/rate/amount, everything else shows native Clockify values. `GET /iframe/reimbursement-packet` and `/api/mileage/reimbursement-packet.csv` produce audit-row reimbursement packets. Admins get all users by default (or filter to one); members get their own. Falls back to reconciled-mileage-only with a banner if Clockify is unreachable.
+- **Admin insights** — `GET /api/mileage/insights` summarizes converted miles/amounts, failures, missing trip purpose, policy exceptions, skip reasons, and top projects/users for the selected range.
 - **Sensible defaults** — fresh workspaces start at a `0.725` per-mile rate, and the converted-note template is admin-editable in Settings. Notes stay idempotent through the hidden marker or canonical generated mileage line; public signature text alone is not trusted.
 
 ## How conversion works
@@ -47,7 +50,7 @@ A small Maven multi-module project: one product module plus the minimal platform
 
 | Module | Responsibility |
 | --- | --- |
-| [`addon-expenses-rest-api/`](addon-expenses-rest-api/) | **Product module** — add-on source, server-rendered iframe UI, manifest, settings, conversion, async worker, Prometheus metrics, Dockerfile & compose. |
+| [`addon-expenses-rest-api/`](addon-expenses-rest-api/) | **Product module** — add-on source, server-rendered iframe UI, manifest, settings, rate policies, trip evidence, reports/packets, insights, conversion, async worker, Prometheus metrics, Dockerfile & compose. |
 | [`addon-core/`](addon-core/) | Shared add-on auth, lifecycle routing, manifest controller, security headers, async webhook dispatch. |
 | [`addon-db/`](addon-db/) | Flyway / JPA persistence: installation context, encrypted tokens, settings, webhook events, async job queue. |
 | [`clockify-rest-client/`](clockify-rest-client/) | Typed Clockify REST client with endpoint-provenance-backed route behavior. |
@@ -117,9 +120,9 @@ docker compose -f addon-expenses-rest-api/docker-compose.yml \
 
 ## API surface
 
-- **UI** — `GET /iframe/mileage`, `GET /iframe/settings`, `GET /iframe/report` (printable per-user reimbursement report)
-- **User** — `GET /api/mileage/create-context`, `GET /api/mileage/mine`, `GET /api/mileage/mine.csv`, `POST /api/mileage/preview`, `POST /api/mileage/expenses`
-- **Admin** — settings, Mileage category repair, diagnostics, category options, user options, team list/export, conversion list/detail/retry/export under `/api/mileage`. Diagnostics includes a setup checklist plus webhook queue health; Team and Conversions views (and their CSVs) accept an optional `userId` filter backed by `GET /api/mileage/options/users`.
+- **UI** — `GET /iframe/mileage`, `GET /iframe/settings`, `GET /iframe/report`, `GET /iframe/reimbursement-packet`
+- **User** — `GET /api/mileage/create-context`, `GET /api/mileage/mine`, `GET /api/mileage/mine.csv`, `POST /api/mileage/preview`, `POST /api/mileage/expenses`, packet CSV/HTML for own rows.
+- **Admin** — settings, rate policies, Mileage category repair, diagnostics, category options, user options, team list/export, conversion list/detail/retry/export, reimbursement packet export, and insights under `/api/mileage`. Diagnostics includes a setup checklist plus webhook queue health; Team and Conversions views (and their CSVs) accept an optional `userId` filter backed by `GET /api/mileage/options/users`.
 - **Webhooks** — `EXPENSE_CREATED`, `EXPENSE_UPDATED`, `EXPENSE_DELETED`, `EXPENSE_RESTORED`
 - **Ops** — `GET /manifest`, `GET /actuator/health`, `GET /actuator/prometheus`
 

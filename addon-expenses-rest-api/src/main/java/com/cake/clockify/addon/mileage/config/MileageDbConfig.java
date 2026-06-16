@@ -9,12 +9,14 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 @ConditionalOnExpression("!'${spring.autoconfigure.exclude:}'.contains('DataSourceAutoConfiguration')")
 @EnableJpaRepositories(basePackages = {
         "com.cake.clockify.addon.mileage.settings",
-        "com.cake.clockify.addon.mileage.audit"
+        "com.cake.clockify.addon.mileage.audit",
+        "com.cake.clockify.addon.mileage.policy"
 })
 @EntityScan(basePackages = {
         "com.cake.clockify.addon.db.entity",
         "com.cake.clockify.addon.mileage.settings",
-        "com.cake.clockify.addon.mileage.audit"
+        "com.cake.clockify.addon.mileage.audit",
+        "com.cake.clockify.addon.mileage.policy"
 })
 public class MileageDbConfig {
 }

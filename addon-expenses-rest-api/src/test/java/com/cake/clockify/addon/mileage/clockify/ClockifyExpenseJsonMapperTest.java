@@ -59,6 +59,7 @@ class ClockifyExpenseJsonMapperTest {
         row.put("userId", "user-1");
         row.put("date", "2026-05-24T12:00:00Z");
         row.put("total", 8990);
+        row.put("currencyCode", "usd");
         row.putObject("category").put("id", "cat-mileage").put("name", "Mileage");
         row.putObject("project").put("id", "project-1").put("name", "North Route");
 
@@ -69,5 +70,43 @@ class ClockifyExpenseJsonMapperTest {
         assertThat(item.categoryId()).isEqualTo("cat-mileage");
         assertThat(item.projectName()).isEqualTo("North Route");
         assertThat(item.amount()).isEqualByComparingTo("89.90");
+        assertThat(item.currency()).isEqualTo("USD");
+    }
+
+    @Test
+    void reportExpenseRowMapsNestedCurrencyCode() {
+        var row = objectMapper.createObjectNode();
+        row.put("id", "exp-1");
+        row.put("userId", "user-1");
+        row.put("date", "2026-05-24T12:00:00Z");
+        row.put("total", 8990);
+        row.putObject("currency").put("code", "eur");
+
+        ClockifyExpenseListItem item = mapper.expenseListItem(row);
+
+        assertThat(item.currency()).isEqualTo("EUR");
+    }
+
+    @Test
+    void expenseSnapshotMapsWorkflowFieldsWhenPresent() {
+        var row = objectMapper.createObjectNode();
+        row.put("id", "exp-1");
+        row.put("workspaceId", "ws-1");
+        row.put("userId", "user-1");
+        row.put("date", "2026-05-24T12:00:00Z");
+        row.put("categoryId", "cat-mileage");
+        row.put("quantity", "12.4");
+        row.put("billable", true);
+        row.put("locked", true);
+        row.put("finalized", true);
+        row.put("approvalStatus", "SUBMITTED");
+        row.put("invoiced", true);
+
+        ClockifyExpenseSnapshot snapshot = mapper.expenseSnapshot(row);
+
+        assertThat(snapshot.locked()).isTrue();
+        assertThat(snapshot.finalized()).isTrue();
+        assertThat(snapshot.approvalStatus()).isEqualTo("SUBMITTED");
+        assertThat(snapshot.invoiced()).isTrue();
     }
 }

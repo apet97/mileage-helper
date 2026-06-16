@@ -35,12 +35,13 @@ final class ReportMerger {
                 rows.add(new ReportRow(
                         expense.expenseId(), expense.date(), expense.userId(), userName,
                         expense.projectName(), MILEAGE_CATEGORY_LABEL, true,
-                        conversion.getMiles(), conversion.getRate(), orZero(conversion.getCalculatedAmount())));
+                        conversion.getMiles(), conversion.getRate(), orZero(conversion.getCalculatedAmount()),
+                        expense.currency()));
             } else {
                 rows.add(new ReportRow(
                         expense.expenseId(), expense.date(), expense.userId(), userName,
                         expense.projectName(), expense.categoryName(), false,
-                        null, null, orZero(expense.amount())));
+                        null, null, orZero(expense.amount()), expense.currency()));
             }
         }
         rows.sort(ROW_ORDER);
@@ -60,7 +61,7 @@ final class ReportMerger {
                     conversion.getExpenseId(), conversion.getExpenseDate(), conversion.getUserId(),
                     userName(conversion.getUserId(), userNamesById),
                     projectName(conversion.getProjectId(), projectNamesById), MILEAGE_CATEGORY_LABEL, true,
-                    conversion.getMiles(), conversion.getRate(), orZero(conversion.getCalculatedAmount())));
+                    conversion.getMiles(), conversion.getRate(), orZero(conversion.getCalculatedAmount()), null));
         }
         rows.sort(ROW_ORDER);
         return rows;

@@ -109,14 +109,17 @@ class MileageSecurityTest {
         assertThat(html).contains("id=\"mine-range-from\"");
         assertThat(html).contains("id=\"mine-range-to\"");
         assertThat(html).doesNotContain("data-tab-target=\"team\"");
+        assertThat(html).doesNotContain("data-tab-target=\"insights\"");
         assertThat(html).doesNotContain("data-tab-target=\"admin-settings\"");
         assertThat(html).doesNotContain("data-tab-target=\"conversion-log\"");
         assertThat(html).doesNotContain("data-tab-target=\"diagnostics\"");
         assertThat(html).doesNotContain("id=\"tab-team\"");
+        assertThat(html).doesNotContain("id=\"tab-insights\"");
         assertThat(html).doesNotContain("id=\"tab-admin-settings\"");
         assertThat(html).doesNotContain("id=\"tab-conversion-log\"");
         assertThat(html).doesNotContain("id=\"tab-diagnostics\"");
         assertThat(html).doesNotContain("id=\"team-range-preset\"");
+        assertThat(html).doesNotContain("id=\"insights-range-preset\"");
         assertThat(html).doesNotContain("id=\"conversion-range-preset\"");
     }
 
@@ -126,11 +129,13 @@ class MileageSecurityTest {
 
         assertThat(html).contains("data-tab-target=\"mine\"");
         assertThat(html).contains("data-tab-target=\"team\"");
+        assertThat(html).contains("data-tab-target=\"insights\"");
         assertThat(html).contains("data-tab-target=\"admin-settings\"");
         assertThat(html).contains("data-tab-target=\"conversion-log\"");
         assertThat(html).contains("data-tab-target=\"diagnostics\"");
         assertThat(html).contains("id=\"mine-range-preset\"");
         assertThat(html).contains("id=\"team-range-preset\"");
+        assertThat(html).contains("id=\"insights-range-preset\"");
         assertThat(html).contains("id=\"conversion-range-preset\"");
         assertThat(html).contains("<option value=\"this_week\" selected>This week</option>");
         assertThat(html).contains("<option value=\"custom\">Custom</option>");
@@ -149,6 +154,7 @@ class MileageSecurityTest {
 
         assertThat(html).contains("<section class=\"tab-panel active\" id=\"tab-mine\" role=\"tabpanel\" aria-labelledby=\"tab-btn-mine\" tabindex=\"0\">");
         assertThat(html).contains("<section class=\"tab-panel\" hidden id=\"tab-team\" role=\"tabpanel\" aria-labelledby=\"tab-btn-team\" tabindex=\"0\" data-admin-only=\"true\">");
+        assertThat(html).contains("<section class=\"tab-panel\" hidden id=\"tab-insights\" role=\"tabpanel\" aria-labelledby=\"tab-btn-insights\" tabindex=\"0\" data-admin-only=\"true\">");
         assertThat(html).contains("<section class=\"tab-panel\" hidden id=\"tab-admin-settings\" role=\"tabpanel\" aria-labelledby=\"tab-btn-admin-settings\" tabindex=\"0\" data-admin-only=\"true\">");
         assertThat(html).contains("<section class=\"tab-panel\" hidden id=\"tab-conversion-log\" role=\"tabpanel\" aria-labelledby=\"tab-btn-conversion-log\" tabindex=\"0\" data-admin-only=\"true\">");
         assertThat(html).contains("<section class=\"tab-panel\" hidden id=\"tab-diagnostics\" role=\"tabpanel\" aria-labelledby=\"tab-btn-diagnostics\" tabindex=\"0\" data-admin-only=\"true\">");
@@ -211,6 +217,20 @@ class MileageSecurityTest {
     }
 
     @Test
+    void mileageCreateFormExposesCompactTripEvidenceFields() {
+        String html = new MileageIframeController().mileage(requestWithRole("ADMIN")).getBody();
+
+        assertThat(html).contains("id=\"field-trip-purpose\"");
+        assertThat(html).contains("id=\"field-trip-origin\"");
+        assertThat(html).contains("id=\"field-trip-destination\"");
+        assertThat(html).contains("id=\"field-odometer-start\"");
+        assertThat(html).contains("id=\"field-odometer-end\"");
+        assertThat(html).contains("id=\"field-policy-exception-reason\"");
+        assertThat(html).doesNotContain("<style");
+        assertThat(html).doesNotContain("onclick=");
+    }
+
+    @Test
     void mileageCreateFormDefaultsBillableAndGroupsRateOverride() {
         String html = new MileageIframeController().mileage(requestWithRole("ADMIN")).getBody();
 
@@ -236,6 +256,19 @@ class MileageSecurityTest {
         assertThat(javascript).doesNotContain("field-task");
         assertThat(javascript).doesNotContain("taskId");
     }
+
+    @Test
+    void mileageJavascriptSendsTripEvidenceFields() throws Exception {
+        String javascript = settingsJavascript();
+
+        assertThat(javascript).contains("addOptionalField(payload, \"tripOrigin\", app.formValue(\"field-trip-origin\"))");
+        assertThat(javascript).contains("addOptionalField(payload, \"tripDestination\", app.formValue(\"field-trip-destination\"))");
+        assertThat(javascript).contains("addOptionalField(payload, \"tripPurpose\", app.formValue(\"field-trip-purpose\"))");
+        assertThat(javascript).contains("addOptionalField(payload, \"odometerStart\", app.formValue(\"field-odometer-start\"))");
+        assertThat(javascript).contains("addOptionalField(payload, \"odometerEnd\", app.formValue(\"field-odometer-end\"))");
+        assertThat(javascript).contains("addOptionalField(payload, \"policyExceptionReason\", app.formValue(\"field-policy-exception-reason\"))");
+    }
+
 
     @Test
     void mileageJavascriptLoadsCreateContextBeforeAllowingRateOverride() throws Exception {
@@ -324,6 +357,8 @@ class MileageSecurityTest {
         assertThat(javascript).contains("/api/mileage/mine?pageSize=50\" + query");
         assertThat(javascript).contains("const query = app.rangeQuery(\"team\")");
         assertThat(javascript).contains("/api/mileage/team?pageSize=50\" + query");
+        assertThat(javascript).contains("const query = app.rangeQuery(\"insights\")");
+        assertThat(javascript).contains("/api/mileage/insights?\" + query.slice(1)");
         assertThat(javascript).contains("const query = app.rangeQuery(\"conversion\")");
         assertThat(javascript).contains("/api/mileage/conversions?pageSize=50\" + query");
         assertThat(javascript).contains("document.addEventListener(\"click\", app.handleCsvExport)");
@@ -421,6 +456,46 @@ class MileageSecurityTest {
     }
 
     @Test
+    void settingsIframeExposesAdminRatePolicyControls() {
+        String html = new MileageIframeController().settings(requestWithRole("OWNER")).getBody();
+
+        assertThat(html).contains("id=\"rate-policy-form\"");
+        assertThat(html).contains("id=\"rate-policy-name\"");
+        assertThat(html).contains("id=\"rate-policy-rate\"");
+        assertThat(html).contains("id=\"rate-policy-effective-from\"");
+        assertThat(html).contains("id=\"rate-policy-effective-to\"");
+        assertThat(html).contains("id=\"rate-policy-active\"");
+        assertThat(html).contains("id=\"rate-policy-rows\"");
+        assertThat(html).doesNotContain("<style");
+        assertThat(html).doesNotContain("onclick=");
+    }
+
+    @Test
+    void mileageJavascriptLoadsSavesAndDeactivatesRatePolicies() throws Exception {
+        String javascript = settingsJavascript();
+
+        assertThat(javascript).contains("/api/mileage/rate-policies");
+        assertThat(javascript).contains("function loadRatePolicies");
+        assertThat(javascript).contains("function saveRatePolicy");
+        assertThat(javascript).contains("function handleRatePolicyTableClick");
+        assertThat(javascript).contains("rate-policy-form");
+        assertThat(javascript).contains("rate-policy-id");
+        assertThat(javascript).contains("data-policy-action");
+        assertThat(javascript).contains("method: \"DELETE\"");
+    }
+
+    @Test
+    void mileageJavascriptLoadsAdminInsights() throws Exception {
+        String javascript = settingsJavascript();
+
+        assertThat(javascript).contains("function loadInsights");
+        assertThat(javascript).contains("/api/mileage/insights");
+        assertThat(javascript).contains("insights-total-miles");
+        assertThat(javascript).contains("insights-project-rows");
+        assertThat(javascript).contains("app.loadInsights()");
+    }
+
+    @Test
     void mileageJavascriptLoadsAndSavesNoteTemplate() throws Exception {
         String javascript = settingsJavascript();
 
@@ -443,11 +518,23 @@ class MileageSecurityTest {
     }
 
     @Test
-    void mineAndTeamPanelsExposeReportButtons() {
+    void packetJavascriptStripsAuthTokenAndWiresPrint() throws Exception {
+        String javascript = Files.readString(Path.of("src/main/resources/static/assets/mileage/packet.js"));
+
+        assertThat(javascript).contains("auth_token");
+        assertThat(javascript).contains("history.replaceState");
+        assertThat(javascript).contains("window.print()");
+        assertThat(javascript).contains("btn-print");
+    }
+
+    @Test
+    void mineAndTeamPanelsExposeReportAndPacketButtons() {
         String html = new MileageIframeController().mileage(requestWithRole("OWNER")).getBody();
 
         assertThat(html).contains("id=\"btn-report-mine\"");
         assertThat(html).contains("id=\"btn-report-team\"");
+        assertThat(html).contains("id=\"btn-packet-mine\"");
+        assertThat(html).contains("id=\"btn-packet-team\"");
         assertThat(html).doesNotContain("onclick=");
         assertThat(html).doesNotContain("auth_token=");
     }
@@ -457,7 +544,10 @@ class MileageSecurityTest {
         String javascript = settingsJavascript();
 
         assertThat(javascript).contains("function handleReportClick");
-        assertThat(javascript).contains("/iframe/report?from=");
+        assertThat(javascript).contains("printablePath(\"/iframe/report\"");
+        assertThat(javascript).contains("/iframe/reimbursement-packet");
+        assertThat(javascript).contains("basePath + \"?from=\"");
+        assertThat(javascript).contains("app.packetPath");
         assertThat(javascript).contains("window.open");
         assertThat(javascript).contains("document.addEventListener(\"click\", app.handleReportClick)");
     }

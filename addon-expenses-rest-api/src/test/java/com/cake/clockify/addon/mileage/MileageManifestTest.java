@@ -6,6 +6,7 @@ import com.cake.clockify.addon.db.service.AddonSettingsService;
 import com.cake.clockify.addon.db.service.ClockifyClientFactory;
 import com.cake.clockify.addon.mileage.audit.MileageConversionRepository;
 import com.cake.clockify.addon.mileage.audit.MileageConversionReservationRepository;
+import com.cake.clockify.addon.mileage.policy.MileageRatePolicyRepository;
 import com.cake.clockify.addon.mileage.settings.MileageSettingsRepository;
 import com.cake.clockify.addonsdk.clockify.model.ClockifyManifest;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -52,6 +53,7 @@ class MileageManifestTest {
     @MockBean MileageSettingsRepository mileageSettingsRepository;
     @MockBean MileageConversionRepository mileageConversionRepository;
     @MockBean MileageConversionReservationRepository mileageConversionReservationRepository;
+    @MockBean MileageRatePolicyRepository mileageRatePolicyRepository;
 
     @Autowired MockMvc mockMvc;
     @Autowired ObjectMapper objectMapper;
